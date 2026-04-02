@@ -1,0 +1,107 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+  viewBox="0 0 512 512" width="512" height="512" shape-rendering="geometricPrecision">
+  <defs>
+    <!-- App background gradient — matches --bg / --card palette -->
+    <radialGradient id="bgGrad" cx="42%" cy="28%" r="72%">
+      <stop offset="0%"   stop-color="#1c4530"/>
+      <stop offset="55%"  stop-color="#0d2318"/>
+      <stop offset="100%" stop-color="#07150f"/>
+    </radialGradient>
+
+    <!-- Gold ring gradient — matches --gold2 / --gold palette -->
+    <linearGradient id="goldRing" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%"   stop-color="#f2dd97"/>
+      <stop offset="40%"  stop-color="#d6b05a"/>
+      <stop offset="100%" stop-color="#9a7020"/>
+    </linearGradient>
+
+    <!-- Bottom fade: transparent → dark, for text bar -->
+    <linearGradient id="bottomFade" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#07150f" stop-opacity="0"/>
+      <stop offset="55%"  stop-color="#07150f" stop-opacity="0.82"/>
+      <stop offset="100%" stop-color="#07150f" stop-opacity="0.97"/>
+    </linearGradient>
+
+    <!-- Vignette — darkens edges so white background of JPEG blends away -->
+    <radialGradient id="vignette" cx="50%" cy="48%" r="52%">
+      <stop offset="0%"   stop-color="#07150f" stop-opacity="0"/>
+      <stop offset="80%"  stop-color="#07150f" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#07150f" stop-opacity="0.72"/>
+    </radialGradient>
+
+    <!-- Clip to iOS-style rounded square -->
+    <clipPath id="roundClip">
+      <rect width="512" height="512" rx="110" ry="110"/>
+    </clipPath>
+
+    <!-- Drop shadow for gator -->
+    <filter id="gatorShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10"
+        flood-color="#000000" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <!-- ── CLIPPED CONTENT ── -->
+  <g clip-path="url(#roundClip)">
+
+    <!-- 1. Dark green background -->
+    <rect width="512" height="512" fill="url(#bgGrad)"/>
+
+    <!-- 2. Subtle fairway green grass hint at bottom -->
+    <ellipse cx="256" cy="560" rx="300" ry="120" fill="#1a4a2a" opacity="0.35"/>
+
+    <!-- 3. Gator image — multiply blend makes white disappear into dark bg -->
+    <image href="./gator2.jpeg"
+      x="-5" y="18" width="522" height="430"
+      preserveAspectRatio="xMidYMid meet"
+      style="mix-blend-mode:multiply"
+      filter="url(#gatorShadow)"/>
+
+    <!-- 4. Vignette overlay — blends edges clean -->
+    <rect width="512" height="512" fill="url(#vignette)"/>
+
+    <!-- 5. Bottom bar gradient for text -->
+    <rect x="0" y="370" width="512" height="142" fill="url(#bottomFade)"/>
+
+    <!-- 6. Gold divider line above text -->
+    <line x1="56" y1="438" x2="456" y2="438"
+      stroke="#d6b05a" stroke-width="1" stroke-opacity="0.45"/>
+
+    <!-- 7. "CHUBBS!" wordmark in gold serif -->
+    <text x="256" y="488"
+      font-family="Georgia, 'Times New Roman', serif"
+      font-size="64"
+      font-weight="bold"
+      fill="url(#goldRing)"
+      text-anchor="middle"
+      letter-spacing="6"
+      dominant-baseline="auto">CHUBBS!</text>
+
+    <!-- 8. Tiny subtitle -->
+    <text x="256" y="506"
+      font-family="'Segoe UI', Arial, sans-serif"
+      font-size="16"
+      fill="#a8b8ad"
+      text-anchor="middle"
+      letter-spacing="3"
+      dominant-baseline="auto">GOLF · CPI</text>
+
+  </g>
+
+  <!-- ── BORDER RINGS (outside clip, drawn on top) ── -->
+
+  <!-- Outer gold ring -->
+  <rect x="4" y="4" width="504" height="504" rx="108" ry="108"
+    fill="none"
+    stroke="url(#goldRing)"
+    stroke-width="7"
+    opacity="0.9"/>
+
+  <!-- Inner thin accent ring -->
+  <rect x="16" y="16" width="480" height="480" rx="97" ry="97"
+    fill="none"
+    stroke="#f2dd97"
+    stroke-width="1"
+    opacity="0.18"/>
+
+</svg>

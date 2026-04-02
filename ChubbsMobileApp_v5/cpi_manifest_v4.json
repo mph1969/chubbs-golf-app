@@ -13,6 +13,12 @@
   ],
   "icons": [
     {
+      "src": "./ChubbsGatorIcon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
       "src": "./ChubbsIcon4.png",
       "sizes": "512x512",
       "type": "image/png",
