@@ -1,0 +1,3862 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chubbs! · Golf Scorer</title>
+  <meta name="theme-color" content="#07150f" />
+  <link rel="manifest" href="./cpi_manifest_v4.json" />
+  <link rel="apple-touch-icon" href="./ChubbsIcon4.png" />
+  <link rel="icon" href="./ChubbsIcon4.png" type="image/png" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <style>
+    :root{
+      --bg:#07150f;
+      --bg2:#0c2017;
+      --card:#10261c;
+      --card2:#163526;
+      --line:rgba(255,255,255,0.08);
+      --line2:rgba(214,176,90,0.35);
+      --text:#f4efe2;
+      --muted:#a8b8ad;
+      --gold:#d6b05a;
+      --gold2:#f2dd97;
+      --green:#2aa36a;
+      --red:#d16b5d;
+      --blue:#79b0e3;
+      --chip:#1a392b;
+      --shadow:0 16px 40px rgba(0,0,0,0.34);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:
+      radial-gradient(circle at top, rgba(214,176,90,0.10), transparent 28%),
+      linear-gradient(180deg,#05110c 0%,#0b1d15 100%);
+      color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;}
+    body{min-height:100vh}
+    a{color:inherit}
+    .app{max-width:560px;margin:0 auto;padding:16px 14px 96px}
+    .hero{display:flex;gap:14px;align-items:center;padding:14px;border:1px solid var(--line2);
+      background:linear-gradient(180deg,rgba(214,176,90,0.08),rgba(16,38,28,0.92));border-radius:24px;
+      box-shadow:var(--shadow);position:sticky;top:0;z-index:5;backdrop-filter:blur(10px)}
+    .badge{width:110px;height:110px;flex:0 0 110px;border-radius:22px;overflow:hidden;background:#0a2418;border:1px solid rgba(214,176,90,0.35);object-fit:cover;}
+    .tagline{margin-top:7px;font-size:13px;color:var(--text);min-height:18px;}
+    .tagline span{color:var(--gold2);font-weight:700}
+    #tagline-text{transition:opacity 0.5s ease;}
+    .hero h1{margin:0;font-size:27px;line-height:1.02;font-family:Georgia,serif;color:var(--gold2)}
+    .hero .sub{margin-top:6px;font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+    .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+    .tab-btn{padding:10px 8px;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--muted);
+      border-radius:14px;font-weight:700;font-size:12px;cursor:pointer}
+    .tab-btn.active{background:rgba(214,176,90,0.14);border-color:var(--gold);color:var(--gold2)}
+    .section{display:none}
+    .section.active{display:block}
+    .card{background:linear-gradient(180deg,rgba(16,38,28,0.95),rgba(10,25,18,0.97));border:1px solid var(--line);
+      border-radius:22px;padding:14px;margin-bottom:12px;box-shadow:var(--shadow)}
+    details{margin-bottom:12px}
+    details summary::-webkit-details-marker{display:none}
+    details summary .card{margin-bottom:0}
+    details[open] summary .card{border-radius:22px 22px 0 0;border-bottom-color:transparent}
+    details[open]>:not(summary){margin-top:-1px}
+    .section-title{font-size:18px;color:var(--gold2);font-family:Georgia,serif}
+    .small{font-size:12px;color:var(--muted);line-height:1.45}
+    .event-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+    .focus{margin-top:10px;padding:10px 12px;border-radius:16px;background:rgba(121,176,227,0.08);border:1px solid rgba(121,176,227,0.2);color:#dfeeff;font-size:13px}
+    .stack{display:grid;gap:10px}
+    label{display:block;font-size:12px;color:var(--muted);margin-bottom:6px;font-weight:700;text-transform:uppercase;letter-spacing:.08em}
+    input,select,button{font:inherit}
+    input[type="text"],input[type="number"],select{width:100%;padding:12px;border-radius:14px;border:1px solid var(--line);
+      background:#0b1b14;color:var(--text)}
+    .btn{padding:11px 14px;border-radius:14px;border:1px solid var(--line);background:#12251b;color:var(--text);cursor:pointer;font-weight:700}
+    .btn.gold{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#251800;border:none}
+    .btn.blue{background:rgba(121,176,227,0.12);border-color:rgba(121,176,227,0.3);color:#dcecff}
+    .btn.ghost{background:transparent}
+    .btn.slim{padding:8px 11px;font-size:13px}
+    .btn.full{width:100%}
+    .btn.warn{background:rgba(209,107,93,0.12);border-color:rgba(209,107,93,0.35);color:#ffe3de}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .grid-3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+    .status{padding:10px 12px;border-radius:16px;font-size:13px;line-height:1.45}
+    .status.ok{background:rgba(42,163,106,0.10);border:1px solid rgba(42,163,106,0.35);color:#d9ffea}
+    .status.warn{background:rgba(209,107,93,0.10);border:1px solid rgba(209,107,93,0.32);color:#ffe3de}
+    .status.info{background:rgba(121,176,227,0.10);border:1px solid rgba(121,176,227,0.32);color:#dcecff}
+    .player-card{padding:12px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid var(--line)}
+    .player-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px}
+    .player-name{font-weight:800;font-size:14px}
+    .hcp-badge{padding:4px 8px;border-radius:999px;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.28);color:var(--gold2);font-size:11px;font-weight:800}
+    .stepper{display:grid;grid-template-columns:42px 1fr 42px;gap:8px;align-items:center}
+    .stepper button{height:42px;border:none;border-radius:12px;background:#173224;color:var(--gold2);font-size:22px;cursor:pointer}
+    .stepper .val{height:42px;border-radius:12px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;background:#0b1b14}
+    .stepper .val.empty{color:#5f7268}
+    .holebar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
+    .hole-chip{padding:7px 10px;border-radius:999px;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.25);font-size:12px;color:var(--gold2);font-weight:800}
+    .hole-nav{display:flex;gap:8px;flex-wrap:wrap}
+    .hole-nav .btn{min-width:76px}
+    .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:10px 0}
+    .meta-grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:10px 0}
+    .meta{padding:10px;border-radius:16px;background:rgba(255,255,255,0.03);border:1px solid var(--line)}
+    .meta .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+    .meta .v{font-size:18px;font-weight:800;margin-top:5px}
+    .driver-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+    .driver-btn{padding:10px;border-radius:14px;border:1px solid var(--line);background:#13261c;color:var(--text);cursor:pointer;text-align:left}
+    .driver-btn.on{border-color:var(--gold);background:rgba(214,176,90,0.12);color:var(--gold2)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:9px 6px;border-bottom:1px solid var(--line);font-size:12px;text-align:center;vertical-align:top}
+    th{color:var(--muted);font-weight:700}
+    td.left,th.left{text-align:left}
+    .summary-row{display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 0;border-bottom:1px solid var(--line)}
+    .summary-row:last-child{border-bottom:none}
+    .summary-row .n{font-weight:700}
+    .summary-row .s{color:var(--gold2);font-weight:800}
+    .course-editor{display:grid;grid-template-columns:44px 1fr 1fr;gap:8px}
+    .course-editor .hdr{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;padding-bottom:4px}
+    .hole-num{display:flex;align-items:center;justify-content:center;height:42px;border-radius:12px;background:rgba(255,255,255,0.03);border:1px solid var(--line);font-size:12px;font-weight:800}
+    .leader{font-size:13px}
+    .leader .rank{display:inline-flex;width:28px;height:28px;align-items:center;justify-content:center;border-radius:999px;background:rgba(214,176,90,0.12);color:var(--gold2);font-weight:800;margin-right:8px}
+    .rule-list{display:grid;gap:8px}
+    .rule{padding:10px 12px;border-radius:16px;background:rgba(255,255,255,0.03);border:1px solid var(--line);font-size:13px;line-height:1.45}
+    .muted{color:var(--muted)}
+    .tight{margin-top:6px}
+    .toolbar{display:flex;gap:8px;flex-wrap:wrap}
+    .empty-note{padding:12px;border-radius:16px;background:rgba(255,255,255,0.03);border:1px dashed var(--line);font-size:13px;color:var(--muted)}
+    .pills{display:flex;gap:8px;flex-wrap:wrap}
+    .pill{padding:6px 10px;border-radius:999px;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.22);font-size:12px;color:var(--gold2);font-weight:700}
+    .cards-wrap{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .play-card{min-width:48px;padding:10px 8px;border-radius:14px;background:#f6f1e3;color:#1b180f;text-align:center;
+      font-weight:800;box-shadow:0 8px 16px rgba(0,0,0,0.2)}
+    .play-card.red{color:#b32020}
+    .winner{border-color:var(--gold);background:rgba(214,176,90,0.12)}
+    .inline-note{font-size:11px;color:var(--muted);margin-top:6px;line-height:1.35}
+    .footer-note{margin-top:12px;font-size:11px;color:var(--muted);line-height:1.45}
+
+    textarea{width:100%;padding:12px;border-radius:14px;border:1px solid var(--line);background:#0b1b14;color:var(--text);min-height:116px;resize:vertical}
+    input[type="file"]{width:100%;padding:10px;border-radius:14px;border:1px dashed var(--line);background:#0b1b14;color:var(--muted)}
+    .upload-grid{display:grid;gap:10px}
+    .course-note{margin-top:8px;font-size:12px;color:var(--muted);line-height:1.45}
+    .editor-head{display:grid;grid-template-columns:44px 1fr 1fr;gap:8px;margin-bottom:6px}
+    .editor-input{width:100%;padding:10px;border-radius:12px;border:1px solid var(--line);background:#0b1b14;color:var(--text);text-align:center}
+
+    .mode-banner{margin:12px 0 0}
+    .mode-banner .status{display:flex;justify-content:space-between;align-items:center;gap:10px}
+    .mode-banner .toolbar{flex-shrink:0}
+    .flag-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(209,107,93,0.35);background:rgba(209,107,93,0.08);color:#ffd8d2;font-size:12px;font-weight:800;cursor:pointer}
+    .flag-btn.on{background:rgba(209,107,93,0.22);border-color:#ff9f93;color:#fff4f1}
+    .join-box{display:grid;gap:10px}
+    .join-box textarea{min-height:84px}
+    .pill.red{background:rgba(209,107,93,0.12);border-color:rgba(209,107,93,0.28);color:#ffd8d2}
+    .readonly-chip{padding:6px 10px;border-radius:999px;background:rgba(121,176,227,0.12);border:1px solid rgba(121,176,227,0.28);font-size:12px;color:#dcecff;font-weight:700}
+    .location-actions{display:flex;gap:8px;flex-wrap:wrap}
+
+    @media (max-width:460px){
+      .hero h1{font-size:24px}
+      .tabs{grid-template-columns:repeat(2,1fr)}
+      .grid-2,.grid-3,.event-grid,.meta-grid,.meta-grid-4{grid-template-columns:1fr}
+      .driver-grid{grid-template-columns:1fr}
+    }
+    /* ── Toast notifications ── */
+    .toast-wrap{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:9000;display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;width:calc(100% - 32px);max-width:480px}
+    .toast{padding:12px 18px;border-radius:16px;font-size:13px;font-weight:700;line-height:1.4;box-shadow:0 8px 28px rgba(0,0,0,0.45);pointer-events:auto;animation:toastIn 0.22s ease;transition:opacity 0.3s}
+    .toast.ok{background:#1e6644;border:1px solid #2aa36a;color:#d9ffea}
+    .toast.err{background:#5c2020;border:1px solid #d16b5d;color:#ffe3de}
+    .toast.info{background:#14334d;border:1px solid #79b0e3;color:#dcecff}
+    @keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    /* ── Confirm overlay ── */
+    .confirm-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9500;display:flex;align-items:flex-end;justify-content:center;padding:20px;animation:toastIn 0.18s ease}
+    .confirm-box{background:#10261c;border:1px solid rgba(214,176,90,0.4);border-radius:24px;padding:20px;width:100%;max-width:480px;box-shadow:0 20px 48px rgba(0,0,0,0.6)}
+    .confirm-msg{font-size:15px;font-weight:700;line-height:1.45;margin-bottom:16px;color:var(--text)}
+    /* Integrated par button inside stepper */
+    button.val{background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.3);color:var(--gold2);cursor:pointer;font-size:18px;font-weight:800}
+    button.val:active{background:rgba(214,176,90,0.22)}
+    /* Inline clear × after stepper */
+    .stepper-clr{height:36px;min-width:34px;border-radius:10px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:14px;cursor:pointer;flex-shrink:0}
+    .stepper-clr:active{background:rgba(209,107,93,0.12);color:#ffd8d2}
+    /* Player card left-border accent by position */
+    .player-card.p0{border-left:3px solid #2aa36a}
+    .player-card.p1{border-left:3px solid #79b0e3}
+    .player-card.p2{border-left:3px solid #d6b05a}
+    .player-card.p3{border-left:3px solid #e07060}
+    /* Leaderboard: away (not on this device) players */
+    .player-card.away{opacity:0.45}
+    /* To-par running total coloring */
+    .meta.tp-under{background:rgba(42,163,106,0.12);border-color:rgba(42,163,106,0.4)}
+    .meta.tp-under .v{color:#a5f0c5}
+    .meta.tp-even{background:rgba(214,176,90,0.10);border-color:rgba(214,176,90,0.4)}
+    .meta.tp-even .v{color:var(--gold2)}
+    .meta.tp-over{background:rgba(209,107,93,0.12);border-color:rgba(209,107,93,0.4)}
+    .meta.tp-over .v{color:#ffb5ae}
+    /* 3-putt flag button: safe (green) vs last (red) */
+    .flag-btn.safe{background:rgba(42,163,106,0.15);border-color:rgba(42,163,106,0.5);color:#a5f0c5}
+    .flag-btn.safe:hover{background:rgba(42,163,106,0.25)}
+    /* Hero hole indicator chip */
+    #hole-chip-hero{flex-shrink:0;padding:8px 10px;border-radius:14px;border:1px solid rgba(214,176,90,0.35);background:rgba(214,176,90,0.10);color:var(--gold2);font-size:11px;font-weight:800;text-align:center;line-height:1.3;text-transform:uppercase;letter-spacing:.06em;min-width:48px}
+    #hole-chip-hero .hnum{font-size:20px;font-family:Georgia,serif;letter-spacing:0;text-transform:none;display:block}
+    /* Firebase sync badge */
+    .sync-badge{display:flex;align-items:center;gap:5px;font-size:10px;font-weight:800;letter-spacing:.06em;padding:5px 9px;border-radius:999px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.04);color:var(--muted)}
+    .sync-badge.live{color:#a5f0c5;border-color:rgba(42,163,106,0.4);background:rgba(42,163,106,0.10)}
+    .sync-badge.err{color:#ffb5ae;border-color:rgba(209,107,93,0.35);background:rgba(209,107,93,0.08)}
+    .sync-dot{width:6px;height:6px;border-radius:50%;background:currentColor;flex-shrink:0}
+    .sync-badge.live .sync-dot{animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    /* Admin sub-tabs */
+    .admin-tab-nav{display:flex;gap:6px;flex-wrap:wrap;padding:10px 0 6px}
+    .admin-tab-btn{padding:7px 12px;border-radius:12px;border:1px solid var(--line);background:transparent;color:var(--muted);font-weight:700;font-size:12px;cursor:pointer;transition:all 0.15s}
+    .admin-tab-btn.active{background:rgba(214,176,90,0.12);border-color:rgba(214,176,90,0.35);color:var(--gold2)}
+    /* Jacket & achievement badges */
+    .jacket-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}
+    .jbadge{padding:3px 8px;border-radius:999px;font-size:12px;line-height:1.5;white-space:nowrap;font-weight:700}
+    .jbadge.gold{background:rgba(214,176,90,0.18);border:1px solid rgba(214,176,90,0.45);color:var(--gold2)}
+    .jbadge.clown{background:rgba(209,107,93,0.12);border:1px solid rgba(209,107,93,0.35);color:#ffd8d2}
+    .jbadge.scram{background:rgba(42,163,106,0.12);border:1px solid rgba(42,163,106,0.3);color:#a5f0c5}
+    .jbadge.role{background:rgba(121,176,227,0.10);border:1px solid rgba(121,176,227,0.28);color:#dcecff;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
+    /* Mini badge for leaderboard rank */
+    .rank-badge{font-size:11px;margin-left:3px;vertical-align:middle}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="hero">
+      <img class="badge" src="./ChubbsIcon4.png" alt="Chubbs Peterson Invitational" />
+      <div style="flex:1;min-width:0">
+        <h1>Chubbs!</h1>
+        <div class="sub" id="hero-event-sub">Golf scorer</div>
+        <div class="tagline"><span id="tagline-text">Tap it in. Track it clean. Play for the jacket.</span></div>
+      </div>
+      <button id="master-btn" onclick="toggleMasterMode()" title="Admin / master view" style="flex-shrink:0;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;border-radius:10px;line-height:1;opacity:0.55;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.55'">⚙️</button>
+      <div id="hole-chip-hero" style="display:none"></div>
+      <div id="sync-badge" class="sync-badge" style="display:none"></div>
+    </header>
+
+    <div id="pendingEventBanner" style="display:none"></div>
+    <div id="modeBanner" class="mode-banner"></div>
+    <nav class="tabs" id="tabs"></nav>
+    <section id="setup" class="section"></section>
+    <section id="day1" class="section"></section>
+    <section id="day2" class="section"></section>
+    <section id="leaderboard" class="section"></section>
+    <section id="about" class="section"></section>
+    <footer id="app-footer" style="text-align:center;padding:18px 0 10px;border-top:1px solid var(--line);margin-top:8px"></footer>
+  <!-- Live view paywall overlay -->
+  <div id="live-paywall" style="display:none;position:fixed;inset:0;background:var(--bg,#07150f);z-index:9998;
+       overflow-y:auto;padding:24px 20px 40px">
+    <div style="max-width:380px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:32px;margin-bottom:8px">🏆</div>
+        <div style="font-size:20px;font-weight:900;color:var(--gold2)">Live Leaderboard</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px">Follow the scores in real time</div>
+      </div>
+      <div style="background:rgba(214,176,90,0.07);border:1px solid rgba(214,176,90,0.3);border-radius:14px;padding:16px;margin-bottom:16px">
+        <div style="font-size:13px;color:var(--fg);line-height:1.6">
+          Tip the dev a beer to unlock live scores all weekend.<br/>
+          <span style="font-size:12px;color:var(--muted)">① Save QR to photos &nbsp;② WeChat → Pay &nbsp;③ Photo Library / QR code &nbsp;④ Scan &amp; pay</span>
+        </div>
+      </div>
+      <div style="text-align:center;margin-bottom:16px">
+        <img src="./mph_pay_code.jpeg" alt="WeChat Pay"
+          onclick="showQrOverlay('./mph_pay_code.jpeg','① Save to photos  ② WeChat → Pay  ③ Photo Library / QR code  ④ Scan & pay')"
+          style="width:140px;height:auto;border-radius:10px;cursor:pointer;border:1px solid var(--gold);display:inline-block" />
+        <div style="font-size:11px;color:var(--muted);margin-top:6px">Tap to enlarge · WeChat Pay · any amount</div>
+      </div>
+      <button onclick="unlockLiveView()"
+        style="width:100%;padding:16px;background:var(--gold2);color:#07150f;border:none;border-radius:14px;
+               font-size:16px;font-weight:900;cursor:pointer;letter-spacing:.03em">
+        ✓ I've paid — Unlock live view
+      </button>
+      <button onclick="document.getElementById('live-paywall').style.display='none';leaveJoinMode()"
+        style="width:100%;margin-top:10px;padding:12px;background:transparent;border:1px solid var(--line);
+               border-radius:14px;color:var(--muted);font-size:13px;cursor:pointer">
+        No thanks, exit
+      </button>
+      <div style="text-align:center;margin-top:16px;font-size:11px;color:var(--muted);opacity:.6">
+        Honour system · no verification · just be cool 🤙
+      </div>
+    </div>
+  </div>
+
+  <!-- Generic QR full-screen overlay -->
+  <div id="qr-overlay" onclick="this.style.display='none'"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;
+           align-items:center;justify-content:center;flex-direction:column;gap:16px">
+    <img id="qr-overlay-img" src="" alt="QR Code"
+      style="width:260px;height:auto;border-radius:16px;object-fit:contain;background:#fff;padding:12px;max-width:85vw" />
+    <div id="qr-overlay-caption" style="color:#fff;font-size:13px;opacity:.7;text-align:center;padding:0 24px"></div>
+  </div>
+  </div>
+
+<script>
+
+const STORAGE_KEY    = 'cpi_chubbshub_v4';
+const ROSTER_KEY     = 'cpi_roster_v1';
+const HISTORY_KEY    = 'cpi_history_v1';
+const PIN_KEY        = 'cpi_admin_pin';
+const LIVE_VIEW_KEY  = 'cpi_live_unlocked'; // localStorage flag — set after honour-system payment
+const LB_UNLOCK_KEY  = 'cpi_lb_unlocked';   // localStorage flag — full leaderboard unlocked after donation
+
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBbuOgOICrb_nt64fCdfOMY-Nn1ySDKIu4",
+  authDomain:        "chubbs-golf.firebaseapp.com",
+  databaseURL:       "https://chubbs-golf-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "chubbs-golf",
+  storageBucket:     "chubbs-golf.firebasestorage.app",
+  messagingSenderId: "462454481032",
+  appId:             "1:462454481032:web:6ddc74ffb7ff543f3b3f3d"
+};
+const SYNC = {
+  enabled:      false,
+  db:           null,
+  eventId:      null,
+  remoteGroups: {},   // {groupId: {players, holes, hole, ts}}
+  remoteTeams:  {},   // {teamId:  {players, holes, hole, teamName, ts}}
+  listeners:    [],   // [{ref, fn}] for teardown
+  status:       'offline' // 'offline' | 'live' | 'err'
+};
+
+// ── CPI member roster with ChubbsHub achievement data (source: chubbshub.com) ─
+// gold=Sunday Stableford wins, clown=lowest Stableford, scram=scramble team wins
+// Jacket history is seeded on first load; manual edits in admin roster form always win
+const ROSTER = [
+  {name:'KASPER',  hcp:4,  gold:0, clown:0, scram:0, roles:['Golfing Advisor']},
+  {name:'DIEGO',   hcp:11, gold:2, clown:0, scram:3, roles:[]},   // S1:Nov,May; scram S3:Nov,Jan,S4:Feb
+  {name:'AARON',   hcp:14, gold:1, clown:0, scram:0, roles:[]},   // S2:Feb
+  {name:'AKI',     hcp:15, gold:1, clown:0, scram:3, roles:[]},   // S2:Jan; scram S3:Dec,Jan,Feb
+  {name:'RYAN N',  hcp:15, gold:1, clown:0, scram:2, roles:['Sensibility Rep']}, // S2:May; scram S4:Oct,Jan
+  {name:'LUKE',    hcp:16, gold:4, clown:0, scram:3, roles:['Chair']}, // S1:Sep,Jan; S3:Sep,May; scram S3:Oct,Apr,May
+  {name:'JULIUS',  hcp:17, gold:0, clown:0, scram:1, roles:[]},   // scram S3:Sep
+  {name:'JACK S',  hcp:19, gold:4, clown:1, scram:2, roles:['Quota Hire']}, // S1:Feb,Jun; S2:Nov,Dec; clown S2:Jan; scram S3:Sep,Nov
+  {name:'MIKE W',  hcp:19, gold:2, clown:1, scram:2, roles:[]},   // S2:Oct; S3:Nov; clown S1:Jan; scram S3:Dec,S4:Nov
+  {name:'KEVIN A', hcp:20, gold:2, clown:1, scram:0, roles:[]},   // S3:Jan; S4:Dec; clown S2:Apr
+  {name:'POS',     hcp:20, gold:1, clown:2, scram:1, roles:[]},   // S1:Mar; clown S1:Sep(shared),S3:May; scram S3:Feb
+  {name:'JAMIE',   hcp:22, gold:3, clown:0, scram:2, roles:[]},   // S2:Jun; S3:Mar; S4:Oct; scram S4:Dec,Jan
+  {name:'HANSON',  hcp:22, gold:1, clown:0, scram:1, roles:[]},   // S4:Sep; scram S3:Sep
+  {name:'DARYL',   hcp:24, gold:0, clown:1, scram:0, roles:[]},   // clown S1:Sep(shared)
+  {name:'MARK',    hcp:25, gold:1, clown:0, scram:0, roles:['Co-chair']}, // S1:Dec
+  {name:'ADAM',    hcp:25, gold:0, clown:0, scram:0, roles:[]},
+  {name:'ANTHONY', hcp:25, gold:0, clown:1, scram:2, roles:[]},   // clown S2:May; scram S3:Oct,Jun
+  {name:'JAMES S', hcp:25, gold:1, clown:0, scram:0, roles:[]},   // S3:Feb
+  {name:'STUART',  hcp:25, gold:0, clown:1, scram:1, roles:[]},   // clown S1:May; scram S3:Apr
+  {name:'JACK M',  hcp:26, gold:1, clown:0, scram:0, roles:[]},   // S2:Mar
+  {name:'SPENNY',  hcp:27, gold:0, clown:0, scram:0, roles:['Co-chair']},
+  {name:'JORDAN',  hcp:28, gold:1, clown:0, scram:3, roles:[]},   // S3:Oct; scram S3:Jun,S4:Oct,Dec
+  {name:'STEVE',   hcp:28, gold:0, clown:1, scram:3, roles:[]},   // clown S3:Oct; scram S3:Nov,Mar,S4:Nov
+  {name:'TAPAS',   hcp:28, gold:0, clown:1, scram:1, roles:[]},   // clown S2:Dec; scram S3:Dec
+  {name:'TERRY',   hcp:28, gold:1, clown:1, scram:2, roles:['Scramble Chair']}, // S2:Apr; clown S4:Dec; scram S4:Sep,Jan
+  {name:'MATTY B', hcp:29, gold:0, clown:0, scram:0, roles:[]},
+  {name:'ROSS',    hcp:29, gold:1, clown:0, scram:1, roles:[]},   // S3:Jun; scram S3:Dec
+  {name:'ANDY',    hcp:30, gold:1, clown:0, scram:1, roles:[]},   // S1:Apr; scram S3:Jan
+  {name:'RICARDO', hcp:30, gold:0, clown:0, scram:2, roles:[]},   // scram S3:Sep,S4:Nov
+  {name:'TONY',    hcp:30, gold:0, clown:0, scram:1, roles:[]},   // scram S3:Feb
+  {name:'RYAN S',  hcp:32, gold:0, clown:3, scram:0, roles:[]},   // clown S2:Oct,S3:Apr,S3:Dec(shared)
+  {name:'DAVE P',  hcp:36, gold:1, clown:0, scram:1, roles:[]},   // S3:Apr; scram S3:Jun
+  {name:'MILSON',  hcp:36, gold:0, clown:2, scram:1, roles:[]},   // clown S2:Sep,Feb; scram S3:May
+];
+
+// Achievement seeds for players imported via event.json (not in base ROSTER above)
+// Applied by seedJacketHistory() using exact name match — safe to add new entries here
+const JACKET_SEEDS = [
+  {match:'nick',   gold:1, clown:1, scram:1, roles:[]},   // gold S4:Feb; clown S3:Mar; scram S4:Dec,Jan
+  {match:'matt',   gold:1, clown:0, scram:2, roles:[]},   // gold S4:Nov; scram S4:Sep,Oct
+  {match:'graeme', gold:0, clown:1, scram:0, roles:[]},   // clown S4:Jan
+];
+
+
+function defaultManualPlayers(){
+  return [{name:'PLAYER 1',hcp:0},{name:'PLAYER 2',hcp:0},{name:'PLAYER 3',hcp:0},{name:'PLAYER 4',hcp:0}];
+}
+function padPlayers(arr){
+  const src = Array.isArray(arr) ? arr : [];
+  const out = src.slice(0,4).map((p, idx) => ({
+    playerId:p && p.playerId ? String(p.playerId) : '',
+    name:String((p && (p.name || p.shortName || p.displayName || p.fullName)) || `Player ${idx+1}`).trim().toUpperCase(),
+    hcp:Number.isFinite(parseInt(p && p.hcp !== undefined ? p.hcp : p && p.playingHandicap, 10)) ? Math.max(0, parseInt(p && p.hcp !== undefined ? p.hcp : p && p.playingHandicap, 10)) : 0
+  }));
+  while(out.length < 4) out.push({playerId:'', name:`PLAYER ${out.length+1}`, hcp:0});
+  return out;
+}
+
+
+const PALM_NINES = {
+  A: {
+    code:'A',
+    name:'Lychee',
+    holes:[
+      {par:4,si:7},{par:4,si:9},{par:5,si:5},{par:3,si:15},{par:5,si:13},{par:4,si:3},{par:4,si:11},{par:3,si:17},{par:4,si:1}
+    ]
+  },
+  B: {
+    code:'B',
+    name:'Lake',
+    holes:[
+      {par:4,si:16},{par:5,si:6},{par:4,si:5},{par:4,si:2},{par:3,si:18},{par:5,si:12},{par:4,si:4},{par:3,si:14},{par:4,si:10}
+    ]
+  },
+  C: {
+    code:'C',
+    name:'River',
+    holes:[
+      {par:4,si:2},{par:5,si:10},{par:3,si:14},{par:4,si:16},{par:4,si:6},{par:3,si:18},{par:4,si:12},{par:4,si:4},{par:5,si:8}
+    ]
+  }
+};
+
+function blankCourseHoles(){
+  return Array.from({length:18}, () => ({par:null,si:null}));
+}
+
+function palmComboHoles(front, back){
+  const frontHoles = (PALM_NINES[front] && Array.isArray(PALM_NINES[front].holes)) ? PALM_NINES[front].holes : [];
+  const backHoles = (PALM_NINES[back] && Array.isArray(PALM_NINES[back].holes)) ? PALM_NINES[back].holes : [];
+  return [...frontHoles, ...backHoles].map(h => ({par: Number.isInteger(h.par) ? h.par : null, si: Number.isInteger(h.si) ? h.si : null}));
+}
+
+function blankScrambleHoles(){
+  return Array.from({length:18}, () => ({gross:null, driver:null}));
+}
+function blankStablefordHoles(){
+  return Array.from({length:18}, () => ({
+    gross:[null,null,null,null],
+    putts:[null,null,null,null],
+    puttStamp:[null,null,null,null],
+    lastPenaltyOverride:null
+  }));
+}
+
+const COURSE_LIBRARY = {
+  palmIsland:{name:'Palm Island', club:'Huizhou Palm Island Resort Golf Club', city:'Huizhou', note:'Use the A/B/C selector below. Palm Island A, B and C are preloaded from your scorecard image.', holes:blankCourseHoles()},
+  birdsNest:{
+    name:"Bird's Nest",
+    club:'Birds Resort (Former Huizhou Golf & Resort Club)',
+    city:'Huizhou',
+    note:'Preloaded from your scorecard image plus hole-by-hole stroke index data. Review tee details if your group is not using the default routing.',
+    holes:[
+      {par:4,si:9},{par:5,si:17},{par:3,si:11},{par:4,si:3},{par:4,si:15},{par:3,si:7},{par:5,si:13},{par:4,si:1},{par:4,si:5},
+      {par:4,si:10},{par:5,si:18},{par:4,si:6},{par:3,si:16},{par:4,si:2},{par:4,si:14},{par:3,si:12},{par:5,si:8},{par:4,si:4}
+    ]
+  },
+  firestone:{name:'Firestone', club:'Shenzhen Firestone Golf Club', city:'Shenzhen', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  gaoming:{
+    name:'Gaoming',
+    club:'Gaoming Silver Ocean Golf Club',
+    city:'Foshan',
+    note:'Preloaded from the Gaoming scorecard. Check tee color before the round if your group is not on the default card.',
+    holes:[
+      {par:4,si:3},{par:5,si:9},{par:3,si:13},{par:4,si:1},{par:5,si:7},{par:3,si:5},{par:4,si:15},{par:4,si:17},{par:4,si:11},
+      {par:5,si:2},{par:4,si:4},{par:3,si:12},{par:4,si:18},{par:4,si:6},{par:3,si:8},{par:4,si:14},{par:5,si:16},{par:4,si:10}
+    ]
+  },
+  junan:{name:'Junan', club:'Foshan Junan Country Garden Golf Village', city:'Foshan', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  lotusHill:{name:'Lotus Hill', club:'Guangzhou Lotus Hill Golf Resort', city:'Guangzhou', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  mountain:{
+    name:'Nansha Mountain',
+    club:'Guangzhou Nansha Golf Club',
+    city:'Guangzhou',
+    note:'Preloaded from the earlier Nansha build.',
+    holes:[
+      {par:4,si:7},{par:4,si:17},{par:4,si:1},{par:3,si:9},{par:4,si:5},{par:5,si:11},{par:4,si:3},{par:5,si:13},{par:3,si:15},
+      {par:4,si:14},{par:3,si:18},{par:4,si:4},{par:4,si:6},{par:5,si:10},{par:4,si:2},{par:4,si:16},{par:3,si:12},{par:5,si:8}
+    ]
+  },
+  valley:{
+    name:'Nansha Valley',
+    club:'Guangzhou Nansha Golf Club',
+    city:'Guangzhou',
+    note:'Preloaded from the earlier Nansha build.',
+    holes:[
+      {par:5,si:3},{par:4,si:11},{par:3,si:15},{par:4,si:13},{par:4,si:9},{par:4,si:7},{par:4,si:1},{par:3,si:17},{par:5,si:5},
+      {par:5,si:4},{par:4,si:14},{par:4,si:10},{par:3,si:16},{par:4,si:8},{par:4,si:6},{par:5,si:2},{par:3,si:18},{par:4,si:12}
+    ]
+  },
+  qingyuan:{name:'Qingyuan Holiday Islands', club:'Qingyuan Holiday Islands Golf Club', city:'Qingyuan', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  tangspring:{name:'Tangspring', club:'Huizhou Tangspring Golf Club', city:'Huizhou', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  yinli:{
+    name:'Yinli',
+    club:'Yinli Foreign Investors Golf Club',
+    city:'Dongguan',
+    note:'Preloaded from your Yinli scorecard image. Review if your group is not using the standard 18-hole routing.',
+    holes:[
+      {par:4,si:11},{par:4,si:8},{par:3,si:16},{par:5,si:4},{par:4,si:18},{par:4,si:6},{par:4,si:13},{par:3,si:10},{par:5,si:3},
+      {par:4,si:15},{par:4,si:9},{par:3,si:17},{par:5,si:5},{par:4,si:12},{par:3,si:14},{par:4,si:2},{par:4,si:1},{par:5,si:7}
+    ]
+  },
+  zhaoqing:{name:'Zhaoqing', club:'Zhaoqing Resort Golf Club', city:'Zhaoqing', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  zhuhai:{name:'Zhuhai', club:'Zhuhai Golden Golf', city:'Zhuhai', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()}
+};
+
+const COURSE_ORDER = ['palmIsland','birdsNest','firestone','gaoming','junan','lotusHill','mountain','valley','qingyuan','tangspring','yinli','zhaoqing','zhuhai'];
+
+const COURSE_LOCATIONS = {
+  palmIsland:{zhClub:'惠州棕榈岛高尔夫俱乐部', zhAddress:'广东省惠州市惠阳区高尔夫路一号', enAddress:'Huiyang, Huizhou, Guangdong, China'},
+  birdsNest:{zhClub:'惠州候鸟高尔夫球场', zhAddress:'广东省惠州市惠东县大岭镇十二托', enAddress:'Daling, Huidong, Huizhou, Guangdong, China'},
+  firestone:{zhClub:'深圳光明高尔夫球会', zhAddress:'广东省深圳市光明新区体育公园路', enAddress:'Guangming, Shenzhen, Guangdong, China'},
+  gaoming:{zhClub:'佛山高明银海高尔夫俱乐部', zhAddress:'广东省佛山高明区杨和镇大沙水库侧', enAddress:'Yanghe, Gaoming, Foshan, Guangdong, China'},
+  junan:{zhClub:'佛山顺德均安碧桂园俱乐部', zhAddress:'广东省佛山市顺德区均安区翠湖路1号', enAddress:'Shunde, Foshan, Guangdong, China'},
+  lotusHill:{zhClub:'广州番禺莲花山高尔夫俱乐部', zhAddress:'广东省广州市番禺区石楼镇利丰大道', enAddress:'Panyu, Guangzhou, Guangdong, China'},
+  mountain:{zhClub:'广州南沙高尔夫-山场(CD场)', zhAddress:'广东省广州市南沙区下湾西街65号', enAddress:'Nansha, Guangzhou, Guangdong, China'},
+  valley:{zhClub:'广州南沙高尔夫-山场(CD场)', zhAddress:'广东省广州市南沙区下湾西街65号', enAddress:'Nansha, Guangzhou, Guangdong, China'},
+  qingyuan:{zhClub:'清远市假日半岛高尔夫球会 (27洞)', zhAddress:'广东省清远市广清高速公路狮岭路段山前大道碧桂园假日半岛', enAddress:'Qingyuan, Guangdong, China'},
+  tangspring:{zhClub:'惠州汤泉高尔夫俱乐部', zhAddress:'广东省惠州市博罗县汤泉', enAddress:'Boluo, Huizhou, Guangdong, China'},
+  yinli:{zhClub:'东莞银利外商高尔夫俱乐部', zhAddress:'广东省东莞市清溪镇', enAddress:'Qingxi, Dongguan, Guangdong, China'},
+  zhaoqing:{zhClub:'金立肇庆高尔夫俱乐部', zhAddress:'广东省肇庆高要市回龙镇', enAddress:'Gaoyao, Zhaoqing, Guangdong, China'},
+  zhuhai:{zhClub:'珠海金湾高尔夫俱乐部', zhAddress:'广东省珠海市金湾区金海岸金湾大道', enAddress:'Jinwan, Zhuhai, Guangdong, China'}
+};
+
+
+const DEFAULT_STATE = {
+  event:{
+    name:'Chubbs Peterson Invitational',
+    satDate:'',
+    sunDate:'',
+    sat:'Saturday · 12:00',
+    sun:'Sunday · 08:00'
+  },
+  roundCourses:{
+    day1:{courseId:'palmIsland', palmIsland:{front:'A', back:'B'}},
+    day2:{courseId:'palmIsland', palmIsland:{front:'A', back:'B'}}
+  },
+  courseId:'palmIsland',
+  palmIsland:{front:'A', back:'B'},
+  courses: JSON.parse(JSON.stringify(COURSE_LIBRARY)),
+  players: defaultManualPlayers(),
+  day1Players: defaultManualPlayers(),
+  day2Players: defaultManualPlayers(),
+  eventBundle:null,
+  eventPlayerId:'',
+  day1TeamId:'',
+  day2GroupId:'',
+  options:{
+    threePuttPoker:true,
+    pokerMode:'digital',
+    ante:50,
+    penalty3:10,
+    penalty4:20
+  },
+  scramble:{teamName:'', hole:0, holes:blankScrambleHoles()},
+  stableford:{hole:0, holes:blankStablefordHoles()},
+  poker:{
+    stampCounter:0,
+    digitalDeal:null
+  },
+  ui:{tab:'setup', locationLang:'zh', courseEditorTarget:'day1', day1Revealed:false, adminTab:'players'}
+};
+
+function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
+function mergeState(base, incoming){
+  if(Array.isArray(base)) return Array.isArray(incoming) ? incoming : base;
+  if(base && typeof base === 'object'){
+    const out = {...base};
+    for(const key of Object.keys(base)){
+      if(incoming && Object.prototype.hasOwnProperty.call(incoming, key)){
+        out[key] = mergeState(base[key], incoming[key]);
+      }
+    }
+    return out;
+  }
+  return incoming !== undefined ? incoming : base;
+}
+function loadState(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return deepClone(DEFAULT_STATE);
+    return mergeState(deepClone(DEFAULT_STATE), JSON.parse(raw));
+  }catch(e){
+    console.warn('load failed', e);
+    return deepClone(DEFAULT_STATE);
+  }
+}
+let readOnlyMode = false;
+let masterMode = localStorage.getItem('cpi_master') === '1';
+let holeWarning      = null;  // {day, msg} — transient, not persisted
+let rosterEditId     = null;
+let rosterNewMode    = false;
+let adminPinVerified = false; // session flag — cleared on reload
+
+function showToast(msg, type='ok', duration=2800){
+  let wrap = document.getElementById('toast-wrap');
+  if(!wrap){
+    wrap = document.createElement('div');
+    wrap.id = 'toast-wrap';
+    wrap.className = 'toast-wrap';
+    document.body.appendChild(wrap);
+  }
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => {
+    el.style.opacity = '0';
+    setTimeout(() => el.remove(), 320);
+  }, duration);
+}
+function showConfirm(msg, onConfirm){
+  document.getElementById('confirm-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'confirm-overlay';
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `<div class="confirm-box"><div class="confirm-msg">${msg}</div><div class="grid-2"><button class="btn warn full" id="confirm-yes">Continue</button><button class="btn full" id="confirm-no">Cancel</button></div></div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('confirm-yes').onclick = () => { overlay.remove(); onConfirm(); };
+  document.getElementById('confirm-no').onclick = () => overlay.remove();
+  overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
+}
+function toggleMasterMode(){
+  if(masterMode){
+    masterMode = false;
+    localStorage.setItem('cpi_master', '0');
+    renderAll();
+    return;
+  }
+  const pin = loadAdminPin();
+  if(pin && !adminPinVerified){ showAdminPinPrompt(); return; }
+  masterMode = true;
+  localStorage.setItem('cpi_master', '1');
+  renderAll();
+  checkPendingEvent();
+}
+function loadAdminPin(){ return localStorage.getItem(PIN_KEY) || ''; }
+function setAdminTab(tab){ state.ui.adminTab = tab; saveState(); renderAll(); }
+function toParClass(n){
+  if(typeof n !== 'number') return '';
+  return n < 0 ? 'tp-under' : n === 0 ? 'tp-even' : 'tp-over';
+}
+function renderMasterBtn(){
+  const btn = document.getElementById('master-btn');
+  const chip = document.getElementById('hole-chip-hero');
+  const tab = state.ui.tab;
+  const showChip = (tab === 'day1' || tab === 'day2') && !masterMode;
+  const showGear = !showChip && (tab === 'setup' || masterMode);
+  if(btn){
+    btn.style.display = showGear ? '' : 'none';
+    btn.style.opacity = masterMode ? '1' : '0.55';
+  }
+  if(chip){
+    chip.style.display = showChip ? '' : 'none';
+    if(showChip){
+      const holeNum = tab === 'day1' ? state.scramble.hole + 1 : state.stableford.hole + 1;
+      chip.innerHTML = `Hole<span class="hnum">${holeNum}</span>`;
+    }
+  }
+}
+function revealDay1(){
+  showConfirm('Show Day 1 scramble results? This cannot be undone on this device.', () => {
+    state.ui.day1Revealed = true;
+    saveState(); renderAll();
+  });
+}
+function leaderboardPlayers(){
+  const groupPlayers = currentPlayers('stableford');
+  const roster = loadRoster(); // for badge data
+  const rp = pid => roster.find(r => r.playerId === String(pid)) || null;
+  if(!hasImportedEvent()){
+    return groupPlayers.map((p, idx) => {
+      const r = rp(p.playerId);
+      return {name:fmtName(p.name,idx), hcp:p.hcp, groupIdx:idx, inGroup:true, source:'local',
+        goldJackets:r?r.goldJackets||0:0, clownJackets:r?r.clownJackets||0:0,
+        scrambleWins:r?r.scrambleWins||0:0, roles:r?r.roles||[]:[], ...playerTotals(idx)};
+    });
+  }
+  return state.eventBundle.players.map(ep => {
+    const label = ep.displayName || ep.shortName || ep.fullName || ep.playerId || '?';
+    const hcp   = ep.playingHandicap || 0;
+    const r     = rp(ep.playerId);
+    const badges = {
+      goldJackets:  r ? r.goldJackets  || 0 : 0,
+      clownJackets: r ? r.clownJackets || 0 : 0,
+      scrambleWins: r ? r.scrambleWins || 0 : 0,
+      roles:        r ? r.roles        || [] : []
+    };
+    // 1. Local group
+    const localIdx = groupPlayers.findIndex(gp => String(gp.playerId) === String(ep.playerId));
+    if(localIdx >= 0) return {name:label, hcp, groupIdx:localIdx, inGroup:true, source:'local', ...badges, ...playerTotals(localIdx)};
+    // 2. Remote group via Firebase
+    for(const groupData of Object.values(SYNC.remoteGroups)){
+      const hasPlayer = Array.isArray(groupData.players) &&
+        groupData.players.some(p => String(p.playerId||p.name||'') === String(ep.playerId));
+      if(hasPlayer) return {name:label, hcp, groupIdx:-1, inGroup:false, source:'remote', ...badges, ...playerTotalsFromRemote(ep.playerId, groupData)};
+    }
+    // 3. No data yet
+    return {name:label, hcp, groupIdx:-1, inGroup:false, source:'none', ...badges, points:0, gross:0, back9:0, putts3plus:0, entered:0, pokerCards:0, pokerPenalty:0};
+  });
+}
+function parseEventDate(dateStr){
+  if(!dateStr) return null;
+  const mdy = String(dateStr).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if(mdy) return new Date(parseInt(mdy[3]), parseInt(mdy[1])-1, parseInt(mdy[2]));
+  const ymd = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(ymd) return new Date(parseInt(ymd[1]), parseInt(ymd[2])-1, parseInt(ymd[3]));
+  return null;
+}
+function formatEventDate(dateStr, weekdayFmt){
+  const d = parseEventDate(dateStr);
+  if(!d) return dateStr || '';
+  return d.toLocaleDateString('en-GB', {weekday: weekdayFmt || 'short', day:'numeric', month:'short'});
+}
+function toInputDate(dateStr){
+  const d = parseEventDate(dateStr);
+  if(!d) return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function copyPlayerLink(playerId){
+  const base = (location.href.split('?')[0]).split('#')[0];
+  const link = `${base}?player=${encodeURIComponent(playerId)}`;
+  navigator.clipboard.writeText(link).then(() => {
+    const el = document.getElementById(`plink-${CSS.escape(playerId)}`);
+    if(el){ const orig=el.textContent; el.textContent='Copied!'; setTimeout(()=>el.textContent=orig,2000); }
+  });
+}
+function saveState(){
+  if(readOnlyMode) return;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  pushToFirebase();
+}
+
+// ── Firebase sync ──────────────────────────────────────────────────────────
+function initFirebase(){
+  try{
+    if(typeof firebase === 'undefined') return;
+    if(firebase.apps.length === 0) firebase.initializeApp(FIREBASE_CONFIG);
+    SYNC.db      = firebase.database();
+    SYNC.enabled = true;
+  }catch(e){ console.warn('[Sync] init failed:', e.message); }
+}
+function syncTeardown(){
+  SYNC.listeners.forEach(({ref, fn}) => { try{ ref.off('value', fn); }catch(e){} });
+  SYNC.listeners    = [];
+  SYNC.remoteGroups = {};
+  SYNC.remoteTeams  = {};
+  SYNC.status       = 'offline';
+  updateSyncBadge();
+}
+function initSync(eventId){
+  if(!SYNC.enabled || !SYNC.db || !eventId) return;
+  if(SYNC.eventId === eventId && SYNC.status === 'live') return;
+  syncTeardown();
+  SYNC.eventId = eventId;
+
+  // Push event bundle so ?watch= viewers can load player/group data
+  if(!readOnlyMode && hasImportedEvent()){
+    SYNC.db.ref(`/events/${eventId}/bundle`).set({
+      players:           state.eventBundle.players,
+      day2Groups:        state.eventBundle.day2Groups       || [],
+      day1ScrambleTeams: state.eventBundle.day1ScrambleTeams|| [],
+      event:             state.eventBundle.event            || {},
+      options:           state.eventBundle.options          || {},
+      ts: Date.now()
+    }).catch(()=>{});
+  }
+
+  const listen = (path, cb) => {
+    const ref = SYNC.db.ref(path);
+    const fn  = snap => cb(snap.val() || {});
+    ref.on('value', fn, () => { SYNC.status = 'err'; updateSyncBadge(); });
+    SYNC.listeners.push({ref, fn});
+  };
+  listen(`/events/${eventId}/groups`, data => {
+    SYNC.remoteGroups = data;
+    SYNC.status = 'live';
+    updateSyncBadge();
+    renderLeaderboard();
+  });
+  listen(`/events/${eventId}/teams`, data => {
+    SYNC.remoteTeams = data;
+    renderLeaderboard();
+  });
+}
+function pushToFirebase(){
+  if(!SYNC.enabled || !SYNC.db || readOnlyMode || !hasImportedEvent()) return;
+  const eventId = state.eventBundle.event && state.eventBundle.event.eventId;
+  if(!eventId) return;
+  if(SYNC.eventId !== eventId) initSync(eventId);
+  const now = Date.now();
+  const gid = state.day2GroupId;
+  const tid = state.day1TeamId;
+  if(gid) SYNC.db.ref(`/events/${eventId}/groups/${gid}`).set({
+    players: state.day2Players,
+    holes:   state.stableford.holes,
+    hole:    state.stableford.hole,
+    ts:      now
+  }).catch(()=>{});
+  if(tid) SYNC.db.ref(`/events/${eventId}/teams/${tid}`).set({
+    players:  state.day1Players,
+    holes:    state.scramble.holes,
+    hole:     state.scramble.hole,
+    teamName: state.scramble.teamName,
+    ts:       now
+  }).catch(()=>{});
+}
+function checkPendingEvent(){
+  // Only runs in organiser/admin mode — shows a notification when a new event
+  // was sent from ChubbsAdmin via /pending_events/. Does not auto-import.
+  if(!masterMode || !SYNC.enabled || !SYNC.db) return;
+  SYNC.db.ref('/pending_events').once('value', snap => {
+    if(!snap.exists()) return;
+    const pending = snap.val();
+    const entries = Object.entries(pending);
+    if(!entries.length) return;
+    // Use the most recently published pending event
+    const [eid, bundle] = entries.reduce((best, cur) =>
+      ((cur[1]._publishedAt || 0) > (best[1]._publishedAt || 0) ? cur : best)
+    );
+    const name = (bundle.event && (bundle.event.displayName || bundle.event.name)) || eid;
+    const pub  = bundle._publishedAt ? new Date(bundle._publishedAt).toLocaleString() : '';
+    const el   = document.getElementById('pendingEventBanner');
+    if(!el) return;
+    el.innerHTML = `
+      <div class="status info" style="display:flex;align-items:center;gap:12px;margin:0;border-radius:0;padding:10px 14px">
+        <div style="flex:1;min-width:0">
+          <strong>Event ready to import</strong><br/>
+          <span class="small">${name}${pub ? ' · sent ' + pub : ''}</span>
+        </div>
+        <button class="btn gold slim" data-readonly="allow" onclick="importPendingEvent('${eid}')">Import</button>
+        <button class="btn ghost slim" data-readonly="allow" onclick="dismissPendingEvent('${eid}')">✕</button>
+      </div>`;
+    el.style.display = 'block';
+  });
+}
+function importPendingEvent(eid){
+  if(!SYNC.enabled || !SYNC.db) return;
+  SYNC.db.ref(`/pending_events/${eid}`).once('value', snap => {
+    if(!snap.exists()){ showToast('Event no longer available.', 'err'); return; }
+    const bundle = snap.val();
+    // Strip admin metadata before importing
+    const { _publishedAt, _publishedBy, ...cleanBundle } = bundle;
+    applyImportedEventBundle(cleanBundle, null);
+    // Remove from pending so it won't show again
+    SYNC.db.ref(`/pending_events/${eid}`).remove().catch(()=>{});
+    document.getElementById('pendingEventBanner').style.display = 'none';
+    showToast('Event imported from cloud.', 'ok');
+  });
+}
+function dismissPendingEvent(eid){
+  if(SYNC.enabled && SYNC.db){
+    SYNC.db.ref(`/pending_events/${eid}`).remove().catch(()=>{});
+  }
+  document.getElementById('pendingEventBanner').style.display = 'none';
+}
+function playerTotalsFromRemote(playerId, groupData){
+  const course   = activeCourse('day2');
+  const players  = Array.isArray(groupData.players) ? groupData.players : [];
+  const pidx     = players.findIndex(p => String(p.playerId||p.name||'') === String(playerId));
+  if(pidx < 0) return {gross:0,points:0,entered:0,back9:0,pokerCards:0,pokerPenalty:0,putts3plus:0};
+  const hcp = players[pidx].hcp || 0;
+  let gross=0,points=0,entered=0,back9=0,pokerCards=0,pokerPenalty=0,putts3plus=0;
+  (Array.isArray(groupData.holes) ? groupData.holes : []).forEach((hole, hIdx) => {
+    const score = Array.isArray(hole.gross) ? hole.gross[pidx] : null;
+    const ch    = course.holes && course.holes[hIdx];
+    if(typeof score==='number' && ch && Number.isInteger(ch.par) && Number.isInteger(ch.si)){
+      entered++; gross += score;
+      const pts = stablefordPoints(score, ch.par, shotsReceived(hcp, ch.si)) || 0;
+      points += pts;
+      if(hIdx >= 9) back9 += pts;
+    }
+    const putts = Array.isArray(hole.putts) ? hole.putts[pidx] : null;
+    if(putts===0)       pokerCards += 2;
+    else if(putts===1)  pokerCards += 1;
+    if(putts===3)       pokerPenalty += state.options.penalty3;
+    else if(putts>=4)   pokerPenalty += state.options.penalty4;
+    if(putts>=3)        putts3plus++;
+  });
+  return {gross,points,entered,back9,pokerCards,pokerPenalty,putts3plus};
+}
+function updateSyncBadge(){
+  const el = document.getElementById('sync-badge');
+  if(!el) return;
+  if(!SYNC.enabled){ el.style.display='none'; return; }
+  el.style.display = 'flex';
+  if(SYNC.status==='live'){
+    el.className = 'sync-badge live';
+    el.innerHTML = '<span class="sync-dot"></span>LIVE';
+  } else if(SYNC.status==='err'){
+    el.className = 'sync-badge err';
+    el.innerHTML = '<span class="sync-dot"></span>OFFLINE';
+  } else {
+    el.className = 'sync-badge';
+    el.innerHTML = '<span class="sync-dot"></span>…';
+  }
+}
+function copyLiveViewLink(){
+  const eventId = hasImportedEvent() && state.eventBundle.event && state.eventBundle.event.eventId;
+  if(!eventId){ showToast('Import an event first.','warn'); return; }
+  const base = location.href.split('?')[0].split('#')[0];
+  navigator.clipboard.writeText(`${base}?watch=${encodeURIComponent(eventId)}`)
+    .then(()=>showToast('Live view link copied — share with anyone!','ok'));
+}
+// ── End Firebase sync ──────────────────────────────────────────────────────
+
+
+function migrateState(loaded){
+  const out = loaded || deepClone(DEFAULT_STATE);
+  const legacyCourseId = out.courseId && COURSE_LIBRARY[out.courseId] ? out.courseId : 'palmIsland';
+  const legacyPalm = out.palmIsland || {front:'A', back:'B'};
+  const safeFront = ['A','B','C'].includes(legacyPalm.front) ? legacyPalm.front : 'A';
+  const safeBack = ['A','B','C'].includes(legacyPalm.back) && legacyPalm.back !== safeFront
+    ? legacyPalm.back
+    : (['A','B','C'].find(code => code !== safeFront) || 'B');
+
+  if(!out.roundCourses || typeof out.roundCourses !== 'object'){
+    out.roundCourses = {
+      day1:{courseId:legacyCourseId, palmIsland:{front:safeFront, back:safeBack}},
+      day2:{courseId:legacyCourseId, palmIsland:{front:safeFront, back:safeBack}}
+    };
+  }
+
+  ['day1','day2'].forEach(day => {
+    const slot = out.roundCourses[day] || {};
+    const courseId = slot.courseId && COURSE_LIBRARY[slot.courseId] ? slot.courseId : legacyCourseId;
+    const palm = slot.palmIsland || {};
+    const front = ['A','B','C'].includes(palm.front) ? palm.front : safeFront;
+    let back = ['A','B','C'].includes(palm.back) ? palm.back : safeBack;
+    if(back === front) back = ['A','B','C'].find(code => code !== front) || (front === 'A' ? 'B' : 'A');
+    out.roundCourses[day] = {courseId, palmIsland:{front, back}};
+  });
+
+  if(!out.ui || typeof out.ui !== 'object') out.ui = {};
+  if(out.ui.courseEditorTarget !== 'day2') out.ui.courseEditorTarget = 'day1';
+  return out;
+}
+
+let state = migrateState(loadState());
+
+function hasImportedEvent(){
+  return !!(state.eventBundle && Array.isArray(state.eventBundle.players) && state.eventBundle.players.length);
+}
+function currentPlayers(day){
+  const source = day === 'scramble' ? state.day1Players : state.day2Players;
+  return padPlayers(source && source.length ? source : state.players);
+}
+function syncManualLineups(){
+  if(hasImportedEvent()) return;
+  const manual = padPlayers(state.players);
+  state.players = padPlayers(manual);
+  state.day1Players = padPlayers(manual);
+  state.day2Players = padPlayers(manual);
+}
+function setPlayerName(slot, value){
+  state.players[slot].name = String(value || '').toUpperCase();
+  syncManualLineups();
+  saveState();
+  renderAll();
+}
+function scoresDirty(){
+  const scrambleDirty = state.scramble.holes.some(h => typeof h.gross === 'number' || h.driver !== null);
+  const stablefordDirty = state.stableford.holes.some(h => h.gross.some(v => typeof v === 'number') || h.putts.some(v => typeof v === 'number'));
+  return scrambleDirty || stablefordDirty;
+}
+function resetRoundData(teamName=''){
+  state.scramble = {teamName:teamName || '', hole:0, holes:blankScrambleHoles()};
+  state.stableford = {hole:0, holes:blankStablefordHoles()};
+  state.poker = {stampCounter:0, digitalDeal:null};
+}
+function findEventPlayerCatalog(bundle, playerId){
+  const players = Array.isArray(bundle && bundle.players) ? bundle.players : [];
+  return players.find(p => String(p.playerId) === String(playerId)) || null;
+}
+function hydrateLineupPlayers(playerIds, bundle){
+  const ids = Array.isArray(playerIds) ? playerIds : [];
+  const catalog = Array.isArray(bundle && bundle.players) ? bundle.players : [];
+  const mapped = ids.map(pid => {
+    const match = catalog.find(p => String(p.playerId) === String(pid));
+    if(!match) return {playerId:String(pid || ''), name:String(pid || '').toUpperCase(), hcp:0};
+    return {
+      playerId:String(match.playerId || ''),
+      name:String(match.shortName || match.displayName || match.fullName || match.playerId || '').toUpperCase(),
+      hcp:Number.isFinite(parseInt(match.playingHandicap, 10)) ? Math.max(0, parseInt(match.playingHandicap, 10)) : 0
+    };
+  });
+  return padPlayers(mapped);
+}
+function activeEventDay1Team(){
+  if(!hasImportedEvent()) return null;
+  const teams = Array.isArray(state.eventBundle.day1ScrambleTeams) ? state.eventBundle.day1ScrambleTeams : [];
+  return teams.find(t => String(t.teamId) === String(state.day1TeamId)) || teams[0] || null;
+}
+function activeEventDay2Group(){
+  if(!hasImportedEvent()) return null;
+  const groups = Array.isArray(state.eventBundle.day2Groups) ? state.eventBundle.day2Groups : [];
+  return groups.find(g => String(g.groupId) === String(state.day2GroupId)) || groups[0] || null;
+}
+function currentEventPlayer(){
+  if(!hasImportedEvent()) return null;
+  return findEventPlayerCatalog(state.eventBundle, state.eventPlayerId) || state.eventBundle.players[0] || null;
+}
+function normalizeEventBundle(raw){
+  const data = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if(!data || typeof data !== 'object') throw new Error('Event data is empty.');
+  if(!data.event || typeof data.event !== 'object') throw new Error('Missing event block in event.json.');
+  if(!Array.isArray(data.players) || !data.players.length) throw new Error('Missing players array in event.json.');
+
+  const normalizedPlayers = data.players.map(player => ({
+    ...player,
+    playerId:String(player.playerId || '').trim()
+  })).filter(player => player.playerId);
+
+  const normalizeLineup = (item, kind) => {
+    const ids = Array.isArray(item && item.playerIds) ? item.playerIds.map(v => String(v || '').trim()).filter(Boolean) : [];
+    const scorerPlayerId = String((item && item.scorerPlayerId) || ids[0] || '').trim();
+    return {
+      ...(item || {}),
+      [`${kind}Id`]: String((item && item[`${kind}Id`]) || '').trim(),
+      playerIds: ids,
+      scorerPlayerId
+    };
+  };
+
+  const ev = data.event || {};
+  return {
+    version:data.version || 2,
+    event:{
+      ...ev,
+      day1CourseId: ev.day1CourseId || ev.courseId || 'palmIsland',
+      day1CourseLabel: ev.day1CourseLabel || ev.courseLabel || '',
+      day1PalmIslandFront: ev.day1PalmIslandFront || ev.palmIslandFront || 'A',
+      day1PalmIslandBack: ev.day1PalmIslandBack || ev.palmIslandBack || 'B',
+      day2CourseId: ev.day2CourseId || ev.courseId || 'palmIsland',
+      day2CourseLabel: ev.day2CourseLabel || ev.courseLabel || '',
+      day2PalmIslandFront: ev.day2PalmIslandFront || ev.palmIslandFront || 'A',
+      day2PalmIslandBack: ev.day2PalmIslandBack || ev.palmIslandBack || 'B'
+    },
+    options:data.options || {},
+    players:normalizedPlayers,
+    day1ScrambleTeams:Array.isArray(data.day1ScrambleTeams) ? data.day1ScrambleTeams.map(item => normalizeLineup(item, 'team')) : [],
+    day2Groups:Array.isArray(data.day2Groups) ? data.day2Groups.map(item => normalizeLineup(item, 'group')) : []
+  };
+}
+function applyImportedEventBundle(bundle, requestedPlayerId){
+  if(scoresDirty()){
+    showConfirm('Importing event data will reset current scramble and Stableford scores. Continue?', () => _doApplyBundle(bundle, requestedPlayerId));
+    return;
+  }
+  _doApplyBundle(bundle, requestedPlayerId);
+}
+// ── Roster helpers ────────────────────────────────────────────────────────
+function loadRoster(){
+  try { return JSON.parse(localStorage.getItem(ROSTER_KEY) || '[]'); } catch(e){ return []; }
+}
+function saveRoster(arr){
+  localStorage.setItem(ROSTER_KEY, JSON.stringify(arr));
+}
+function genPlayerId(displayName){
+  const base = (displayName || 'Player').trim().replace(/\s+/g,'').slice(0,12);
+  const existing = loadRoster().map(p => p.playerId);
+  if(!existing.includes(base)) return base;
+  for(let i = 2; i < 99; i++){ if(!existing.includes(base + i)) return base + i; }
+  return base + Date.now();
+}
+function upsertRosterPlayer(p){
+  const arr = loadRoster();
+  const idx = arr.findIndex(r => r.playerId === p.playerId);
+  if(idx >= 0) arr[idx] = {...arr[idx], ...p};
+  else arr.push(p);
+  saveRoster(arr);
+}
+function deleteRosterPlayer(id){
+  saveRoster(loadRoster().filter(r => r.playerId !== id));
+}
+function sortRoster(){
+  const arr = loadRoster().sort((a,b) => (a.displayName||a.fullName||a.playerId||'').localeCompare(b.displayName||b.fullName||b.playerId||''));
+  saveRoster(arr);
+}
+function setRosterEdit(id){
+  rosterEditId  = id;
+  rosterNewMode = false;
+  renderAll();
+}
+function setRosterNew(v){
+  rosterNewMode = v;
+  rosterEditId  = null;
+  renderAll();
+}
+function cancelRosterEdit(){
+  rosterEditId  = null;
+  rosterNewMode = false;
+  renderAll();
+}
+function saveRosterForm(existingId){
+  const get = id => (document.getElementById(id) || {}).value || '';
+  const displayName = get('rf-display').trim();
+  if(!displayName){ showToast('Display name is required.', 'warn'); return; }
+  const hcp = parseInt(get('rf-hcp'), 10);
+  const playerId = existingId || genPlayerId(displayName);
+  const gold  = parseInt(get('rf-gold'),  10);
+  const clown = parseInt(get('rf-clown'), 10);
+  const scram = parseInt(get('rf-scram'), 10);
+  const roleStr = get('rf-role').trim();
+  upsertRosterPlayer({
+    playerId,
+    displayName,
+    fullName:      get('rf-full').trim()  || displayName,
+    shortName:     get('rf-short').trim() || displayName,
+    playingHandicap: Number.isFinite(hcp) ? hcp : 0,
+    defaultTee:    get('rf-tee').trim()   || 'Blue',
+    wechatName:    get('rf-wechat').trim(),
+    goldJackets:   Number.isFinite(gold)  ? Math.max(0,gold)  : 0,
+    clownJackets:  Number.isFinite(clown) ? Math.max(0,clown) : 0,
+    scrambleWins:  Number.isFinite(scram) ? Math.max(0,scram) : 0,
+    roles:         roleStr ? roleStr.split(',').map(s=>s.trim()).filter(Boolean) : []
+  });
+  rosterEditId  = null;
+  rosterNewMode = false;
+  renderAll();
+}
+function confirmDeleteRoster(id, name){
+  showConfirm(`Remove ${name} from the roster?`, () => {
+    deleteRosterPlayer(id);
+    rosterEditId = null;
+    renderAll();
+  });
+}
+function rosterFormHtml(p, isNew){
+  return `
+    <div class="stack tight" style="margin-top:10px">
+      <div class="grid-2 tight">
+        <div>
+          <label>Display name *</label>
+          <input id="rf-display" type="text" value="${escHtml(p.displayName||'')}" placeholder="e.g. Tmoney" />
+        </div>
+        <div>
+          <label>Short name</label>
+          <input id="rf-short" type="text" value="${escHtml(p.shortName||'')}" placeholder="e.g. Terry" />
+        </div>
+      </div>
+      <div>
+        <label>Full name</label>
+        <input id="rf-full" type="text" value="${escHtml(p.fullName||'')}" placeholder="e.g. Terry Madill" />
+      </div>
+      <div class="grid-2 tight">
+        <div>
+          <label>Playing handicap</label>
+          <input id="rf-hcp" type="number" min="0" max="54" step="1" value="${p.playingHandicap != null ? p.playingHandicap : ''}" placeholder="0–54" />
+        </div>
+        <div>
+          <label>Default tee</label>
+          <input id="rf-tee" type="text" value="${escHtml(p.defaultTee||'Blue')}" placeholder="Blue" />
+        </div>
+      </div>
+      <div>
+        <label>WeChat name</label>
+        <input id="rf-wechat" type="text" value="${escHtml(p.wechatName||'')}" placeholder="WeChat ID or name" />
+      </div>
+      <div class="grid-2 tight">
+        <div>
+          <label>🥇 Gold jackets</label>
+          <input id="rf-gold" type="number" min="0" max="20" step="1" value="${p.goldJackets||0}" />
+        </div>
+        <div>
+          <label>🤡 Clown jackets</label>
+          <input id="rf-clown" type="number" min="0" max="20" step="1" value="${p.clownJackets||0}" />
+        </div>
+      </div>
+      <div class="grid-2 tight">
+        <div>
+          <label>⛳ Scramble wins</label>
+          <input id="rf-scram" type="number" min="0" max="30" step="1" value="${p.scrambleWins||0}" />
+        </div>
+        <div>
+          <label>Role / title</label>
+          <input id="rf-role" type="text" value="${escHtml((p.roles||[]).join(', '))}" placeholder="e.g. Chair" />
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn gold" style="flex:1" onclick="saveRosterForm(${isNew ? 'null' : `'${escHtml(p.playerId||'')}'`})">${isNew ? 'Add to Roster' : 'Save Changes'}</button>
+        <button class="btn ghost" onclick="cancelRosterEdit()">Cancel</button>
+      </div>
+      ${!isNew ? `<button class="btn ghost" style="color:#ffb5ae;margin-top:2px;width:100%" onclick="confirmDeleteRoster('${escHtml(p.playerId||'')}','${escHtml(p.displayName||p.fullName||p.playerId||'player')}')">Remove from roster</button>` : ''}
+    </div>`;
+}
+function renderJacketBadges(p, compact){
+  if(!p) return '';
+  const gold  = p.goldJackets   || 0;
+  const clown = p.clownJackets  || 0;
+  const scram = p.scrambleWins  || 0;
+  const roles = Array.isArray(p.roles) ? p.roles.filter(Boolean) : [];
+  if(!gold && !clown && !scram && !roles.length) return '';
+
+  const mkBadge = (emoji, label, count, cls) => {
+    if(!count) return '';
+    if(compact){
+      // Leaderboard: just the emoji+count inline
+      return `<span class="rank-badge" title="${label}: ${count}${count>1?'s':''}">${emoji}${count > 1 ? `<sub style="font-size:9px">${count}</sub>` : ''}</span>`;
+    }
+    // Full roster card: pill with icons (up to 5 shown, then ×N)
+    const icons = count <= 5
+      ? emoji.repeat(count)
+      : `${emoji.repeat(5)}<span style="font-size:10px">+${count-5}</span>`;
+    return `<span class="jbadge ${cls}" title="${label}: ${count}">${icons}</span>`;
+  };
+
+  if(compact){
+    return (gold ? mkBadge('🥇','Gold Jacket',gold,'gold') : '') +
+           (clown ? mkBadge('🤡','Clown Jacket',clown,'clown') : '');
+  }
+  const rolePills = roles.map(r => `<span class="jbadge role">${escHtml(r)}</span>`).join('');
+  return `<div class="jacket-badges">
+    ${mkBadge('🥇','Gold Jacket',gold,'gold')}
+    ${mkBadge('🤡','Clown Jacket',clown,'clown')}
+    ${mkBadge('⛳','Scramble Win',scram,'scram')}
+    ${rolePills}
+  </div>`;
+}
+function seedJacketHistory(){
+  // Applies JACKET_SEEDS to event.json-imported players not in the base ROSTER.
+  // Uses exact case-insensitive name match to avoid ambiguous partial matches.
+  const roster = loadRoster();
+  if(!roster.length) return;
+  let changed = false;
+  JACKET_SEEDS.forEach(seed => {
+    const needle = seed.match.toLowerCase();
+    const idx = roster.findIndex(r => {
+      const names = [r.name, r.displayName, r.shortName, r.fullName]
+        .filter(Boolean)
+        .map(n => n.toLowerCase().trim());
+      return names.some(n => n === needle);
+    });
+    if(idx < 0) return;
+    const p = roster[idx];
+    let upd = false;
+    if((p.goldJackets  ||0) < seed.gold)  { p.goldJackets  = seed.gold;  upd = true; }
+    if((p.clownJackets ||0) < seed.clown) { p.clownJackets = seed.clown; upd = true; }
+    if((p.scrambleWins ||0) < seed.scram) { p.scrambleWins = seed.scram; upd = true; }
+    if(seed.roles && seed.roles.length && !(p.roles||[]).length){ p.roles = seed.roles; upd = true; }
+    if(upd){ roster[idx] = p; changed = true; }
+  });
+  if(changed) saveRoster(roster);
+}
+function renderRosterCard(){
+  if(!masterMode) return '';
+  const roster = loadRoster();
+  const rows = roster.length === 0 && !rosterNewMode
+    ? `<div class="empty-note tight">No players yet. Add manually or import an event.json.</div>`
+    : roster.map(p => {
+        const editing = rosterEditId === p.playerId;
+        return `<div class="player-card" style="margin-bottom:6px">
+          <div class="player-head" onclick="setRosterEdit('${escHtml(p.playerId)}')" style="cursor:pointer">
+            <div class="player-name">${escHtml(p.displayName||p.playerId)}</div>
+            <div class="hcp-badge">HCP ${p.playingHandicap ?? '—'}</div>
+          </div>
+          ${editing ? rosterFormHtml(p, false) : `<div class="small" style="color:var(--muted);margin-top:2px">${escHtml(p.fullName||'')}${p.wechatName ? ' · ' + escHtml(p.wechatName) : ''}</div>${renderJacketBadges(p, false)}`}
+        </div>`;
+      }).join('');
+  return `
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="section-title" style="margin:0">Roster</div>
+        <span class="small" style="color:var(--muted)">${roster.length} player${roster.length===1?'':'s'}</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="sortRoster();renderAll()">A–Z</button>
+        <button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="downloadRosterJson()">📥 Export JSON</button>
+        <label class="btn ghost" style="padding:4px 10px;font-size:12px;cursor:pointer">
+          📤 Import JSON<input type="file" accept=".json,application/json" style="display:none" onchange="importRosterJsonFile(this)">
+        </label>
+      </div>
+      ${rows}
+      ${rosterNewMode
+        ? rosterFormHtml({displayName:'',fullName:'',shortName:'',playingHandicap:'',defaultTee:'Blue',wechatName:''}, true)
+        : `<button class="btn ghost" style="width:100%;margin-top:6px" onclick="setRosterNew(true)">+ Add new player</button>`}
+    </div>`;
+}
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function downloadRosterJson(){
+  const roster = loadRoster();
+  const blob = new Blob([JSON.stringify(roster, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'cpi_roster.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+function importRosterJsonFile(input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const arr = JSON.parse(String(reader.result || ''));
+      if(!Array.isArray(arr)) throw new Error('Expected a JSON array');
+      saveRoster(arr);
+      seedJacketHistory();
+      renderAll();
+      showToast(`Roster updated — ${arr.length} players.`, 'ok');
+    }catch(e){ showToast('Could not parse roster JSON: ' + e.message, 'err'); }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+// ── End roster helpers ────────────────────────────────────────────────────
+
+// ── Admin support: roster init, PIN, history ──────────────────────────────
+function upgradeRosterJackets(){
+  // One-time upgrade: patch any existing roster player whose jacket counts are still
+  // at zero against the ROSTER seed data (handles users who had a pre-badge roster).
+  const roster = loadRoster();
+  if(!roster.length) return;
+  let changed = false;
+  ROSTER.forEach(seed => {
+    if(!seed.gold && !seed.clown && !seed.scram && !(seed.roles||[]).length) return;
+    const needle = seed.name.toLowerCase();
+    const idx = roster.findIndex(r =>
+      [r.name, r.displayName, r.shortName, r.fullName].filter(Boolean)
+        .some(n => n.toLowerCase().trim() === needle)
+    );
+    if(idx < 0) return;
+    const p = roster[idx];
+    let upd = false;
+    if((p.goldJackets  ||0) < seed.gold)  { p.goldJackets  = seed.gold;  upd = true; }
+    if((p.clownJackets ||0) < seed.clown) { p.clownJackets = seed.clown; upd = true; }
+    if((p.scrambleWins ||0) < seed.scram) { p.scrambleWins = seed.scram; upd = true; }
+    if((seed.roles||[]).length && !(p.roles||[]).length){ p.roles = seed.roles; upd = true; }
+    if(upd){ roster[idx] = p; changed = true; }
+  });
+  if(changed) saveRoster(roster);
+}
+function initRosterFromLegacy(){
+  if(loadRoster().length > 0) return; // already populated
+  const players = ROSTER.map(r => ({
+    playerId:        genPlayerId(r.name),
+    displayName:     r.name,
+    fullName:        r.name,
+    shortName:       r.name,
+    playingHandicap: r.hcp   || 0,
+    defaultTee:      'Blue',
+    wechatName:      '',
+    goldJackets:     r.gold  || 0,
+    clownJackets:    r.clown || 0,
+    scrambleWins:    r.scram || 0,
+    roles:           r.roles || []
+  }));
+  saveRoster(players);
+}
+// ── PIN ──────────────────────────────────────────────────────────────────
+function showAdminPinPrompt(){
+  let el = document.getElementById('pin-overlay');
+  if(el) el.remove();
+  el = document.createElement('div');
+  el.id = 'pin-overlay';
+  el.className = 'confirm-overlay';
+  el.innerHTML = `
+    <div class="confirm-box" style="text-align:center">
+      <div class="confirm-msg">Admin PIN required</div>
+      <input id="pin-entry" type="password" inputmode="numeric" maxlength="8" placeholder="● ● ● ●"
+        style="width:100%;padding:14px;border-radius:14px;border:1px solid var(--line);background:#0b1b14;color:var(--text);font-size:28px;text-align:center;letter-spacing:6px;margin-bottom:10px"
+        onkeydown="if(event.key==='Enter') verifyAdminPinInput()" />
+      <div id="pin-err" style="color:#ffb5ae;font-size:12px;min-height:18px;margin-bottom:8px"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn gold" style="flex:1" onclick="verifyAdminPinInput()">Enter</button>
+        <button class="btn ghost" onclick="document.getElementById('pin-overlay').remove()">Cancel</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  setTimeout(() => { const i = document.getElementById('pin-entry'); if(i) i.focus(); }, 50);
+}
+function verifyAdminPinInput(){
+  const entered = (document.getElementById('pin-entry')||{}).value || '';
+  if(entered === loadAdminPin()){
+    adminPinVerified = true;
+    const ov = document.getElementById('pin-overlay');
+    if(ov) ov.remove();
+    masterMode = true;
+    localStorage.setItem('cpi_master', '1');
+    renderAll();
+  } else {
+    const errEl = document.getElementById('pin-err');
+    if(errEl) errEl.textContent = 'Incorrect PIN — try again.';
+    const inp = document.getElementById('pin-entry');
+    if(inp){ inp.value = ''; inp.focus(); }
+  }
+}
+function doSetAdminPin(){
+  const nv = (document.getElementById('pin-new')||{}).value || '';
+  const cv = (document.getElementById('pin-confirm')||{}).value || '';
+  if(nv.length < 4){ showToast('PIN must be at least 4 characters.','warn'); return; }
+  if(nv !== cv){ showToast('PINs do not match.','warn'); return; }
+  localStorage.setItem(PIN_KEY, nv);
+  adminPinVerified = true;
+  showToast('Admin PIN set.','ok');
+  renderAll();
+}
+function doChangeAdminPin(){
+  const ov = (document.getElementById('pin-old')||{}).value || '';
+  const nv = (document.getElementById('pin-new')||{}).value || '';
+  if(ov !== loadAdminPin()){ showToast('Current PIN incorrect.','warn'); return; }
+  if(nv.length < 4){ showToast('New PIN must be at least 4 characters.','warn'); return; }
+  localStorage.setItem(PIN_KEY, nv);
+  showToast('PIN updated.','ok');
+  renderAll();
+}
+function doRemoveAdminPin(){
+  showConfirm('Remove PIN lock? Anyone will be able to enter admin mode.', () => {
+    localStorage.removeItem(PIN_KEY);
+    adminPinVerified = false;
+    showToast('PIN removed.','ok');
+    renderAll();
+  });
+}
+// ── History / clear ───────────────────────────────────────────────────────
+function loadHistory(){
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch(e){ return []; }
+}
+function saveHistory(arr){ localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); }
+function saveEventSnapshot(){
+  const ev = state.eventBundle && state.eventBundle.event;
+  const snap = {
+    savedAt:     Date.now(),
+    eventId:     (ev && ev.eventId) || slugify(state.event.name || 'event'),
+    eventName:   state.event.name || (ev && (ev.displayName || ev.name)) || 'Event',
+    playerCount: (state.eventBundle && state.eventBundle.players && state.eventBundle.players.length) ||
+                 state.players.filter(p => p.name && p.name.trim()).length,
+    scramble:    deepClone(state.scramble),
+    stableford:  deepClone(state.stableford),
+    day1Players: deepClone(state.day1Players),
+    day2Players: deepClone(state.day2Players),
+    day1TeamId:  state.day1TeamId,
+    day2GroupId: state.day2GroupId,
+    event:       deepClone(state.event),
+    options:     deepClone(state.options)
+  };
+  const history = loadHistory();
+  history.push(snap);
+  if(history.length > 12) history.splice(0, history.length - 12);
+  saveHistory(history);
+  showToast(`Snapshot saved — ${snap.eventName}`, 'ok');
+  renderAll();
+}
+function clearRoundScores(){
+  showConfirm('Clear all hole scores? Roster, event file, and settings are kept.', () => {
+    state.scramble   = {teamName: state.scramble.teamName || '', hole:0, holes:blankScrambleHoles()};
+    state.stableford = {hole:0, holes:blankStablefordHoles()};
+    state.poker      = {stampCounter:0, digitalDeal:null};
+    holeWarning      = null;
+    saveState();
+    renderAll();
+    showToast('Round scores cleared.', 'ok');
+  });
+}
+function restoreSnapshot(idx){
+  const history = loadHistory();
+  const snap = history[idx];
+  if(!snap) return;
+  const ts = new Date(snap.savedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+  showConfirm(`Restore scores from ${snap.eventName} (${ts})?`, () => {
+    if(snap.scramble)   state.scramble   = deepClone(snap.scramble);
+    if(snap.stableford) state.stableford = deepClone(snap.stableford);
+    if(snap.day1Players) state.day1Players = deepClone(snap.day1Players);
+    if(snap.day2Players) state.day2Players = deepClone(snap.day2Players);
+    if(snap.day1TeamId)  state.day1TeamId  = snap.day1TeamId;
+    if(snap.day2GroupId) state.day2GroupId = snap.day2GroupId;
+    if(snap.event)      state.event       = deepClone(snap.event);
+    saveState();
+    renderAll();
+    showToast('Scores restored.', 'ok');
+  });
+}
+function deleteSnapshot(idx){
+  const history = loadHistory();
+  const snap = history[idx];
+  if(!snap) return;
+  showConfirm(`Delete snapshot "${snap.eventName}"?`, () => {
+    history.splice(idx, 1);
+    saveHistory(history);
+    renderAll();
+  });
+}
+// ── End admin support ─────────────────────────────────────────────────────
+
+function _doApplyBundle(bundle, requestedPlayerId){
+  const normalized = normalizeEventBundle(bundle);
+  const players = normalized.players;
+  const fallbackPlayerId =
+    (normalized.day2Groups[0] && lineupScorerId(normalized.day2Groups[0])) ||
+    (normalized.day1ScrambleTeams[0] && lineupScorerId(normalized.day1ScrambleTeams[0])) ||
+    ((players.find(p => p.isScorer) || players[0]) && (players.find(p => p.isScorer) || players[0]).playerId) ||
+    '';
+  const requested = requestedPlayerId || state.eventPlayerId || fallbackPlayerId;
+  const selectedPlayerId = players.some(p => String(p.playerId) === String(requested)) ? String(requested) : String(fallbackPlayerId || '');
+  const day1Team = normalized.day1ScrambleTeams.find(t => Array.isArray(t.playerIds) && t.playerIds.includes(selectedPlayerId)) || normalized.day1ScrambleTeams[0] || null;
+  const day2Group = normalized.day2Groups.find(g => Array.isArray(g.playerIds) && g.playerIds.includes(selectedPlayerId)) || normalized.day2Groups[0] || null;
+
+  state.eventBundle = normalized;
+  state.eventPlayerId = String(selectedPlayerId || '');
+  state.day1TeamId = day1Team ? String(day1Team.teamId || '') : '';
+  state.day2GroupId = day2Group ? String(day2Group.groupId || '') : '';
+  state.day1Players = hydrateLineupPlayers(day1Team ? day1Team.playerIds : [], normalized);
+  // Stableford: scorer always last so they enter their own score last
+  const day2Ids = day2Group ? [...(day2Group.playerIds || [])] : [];
+  if(day2Group && day2Group.scorerPlayerId){
+    const si = day2Ids.indexOf(String(day2Group.scorerPlayerId));
+    if(si > 0){ day2Ids.splice(si,1); day2Ids.push(String(day2Group.scorerPlayerId)); }
+  }
+  state.day2Players = hydrateLineupPlayers(day2Ids, normalized);
+
+  const ev = normalized.event || {};
+  state.event.name = ev.displayName || ev.name || state.event.name;
+  state.event.satDate = ev.satDate || '';
+  state.event.sunDate = ev.sunDate || '';
+  state.event.sat = ['Saturday', ev.satTime || ''].filter(Boolean).join(' · ') || state.event.sat;
+  state.event.sun = ['Sunday', ev.sunTime || ''].filter(Boolean).join(' · ') || state.event.sun;
+
+  const day1CourseId = ev.day1CourseId && COURSE_LIBRARY[ev.day1CourseId] ? ev.day1CourseId : ((ev.courseId && COURSE_LIBRARY[ev.courseId]) ? ev.courseId : courseConfigForDay('day1').courseId);
+  const day2CourseId = ev.day2CourseId && COURSE_LIBRARY[ev.day2CourseId] ? ev.day2CourseId : ((ev.courseId && COURSE_LIBRARY[ev.courseId]) ? ev.courseId : courseConfigForDay('day2').courseId);
+
+  state.roundCourses.day1.courseId = day1CourseId;
+  state.roundCourses.day1.palmIsland = safePalmCombo({front:ev.day1PalmIslandFront || ev.palmIslandFront || 'A', back:ev.day1PalmIslandBack || ev.palmIslandBack || 'B'});
+  state.roundCourses.day2.courseId = day2CourseId;
+  state.roundCourses.day2.palmIsland = safePalmCombo({front:ev.day2PalmIslandFront || ev.palmIslandFront || 'A', back:ev.day2PalmIslandBack || ev.palmIslandBack || 'B'});
+
+  if(Object.prototype.hasOwnProperty.call(normalized.options, 'threePuttPoker')) state.options.threePuttPoker = !!normalized.options.threePuttPoker;
+  if(normalized.options.pokerMode) state.options.pokerMode = normalized.options.pokerMode;
+  if(Number.isFinite(parseInt(normalized.options.ante, 10))) state.options.ante = Math.max(0, parseInt(normalized.options.ante, 10));
+  if(Number.isFinite(parseInt(normalized.options.penalty3, 10))) state.options.penalty3 = Math.max(0, parseInt(normalized.options.penalty3, 10));
+  if(Number.isFinite(parseInt(normalized.options.penalty4plus, 10))) state.options.penalty4 = Math.max(0, parseInt(normalized.options.penalty4plus, 10));
+  if(Number.isFinite(parseInt(normalized.options.penalty4, 10))) state.options.penalty4 = Math.max(0, parseInt(normalized.options.penalty4, 10));
+
+  // Start Firebase sync for this event
+  const evId = normalized.event && normalized.event.eventId;
+  if(evId) initSync(evId);
+
+  // Upsert all imported players into the persistent roster
+  const rosterSnap = loadRoster();
+  (normalized.players || []).forEach(ep => {
+    if(!ep.playerId) return;
+    const ex = rosterSnap.find(r => r.playerId === String(ep.playerId)) || {};
+    upsertRosterPlayer({
+      playerId:        String(ep.playerId),
+      displayName:     ep.displayName  || ep.shortName || ep.fullName || ep.playerId,
+      fullName:        ep.fullName     || ep.displayName || ep.playerId,
+      shortName:       ep.shortName    || ep.displayName || ep.playerId,
+      playingHandicap: ep.playingHandicap != null ? ep.playingHandicap : 0,
+      defaultTee:      ep.defaultTee   || 'Blue',
+      wechatName:      ep.wechatName   || '',
+      // Take max so local manual edits are never lost
+      goldJackets:     Math.max(ep.goldJackets  || 0, ex.goldJackets  || 0),
+      clownJackets:    Math.max(ep.clownJackets || 0, ex.clownJackets || 0),
+      scrambleWins:    Math.max(ep.scrambleWins || 0, ex.scrambleWins || 0),
+    });
+  });
+
+  seedJacketHistory(); // apply badge data to any newly-imported players
+  resetRoundData(day1Team && day1Team.teamName ? day1Team.teamName : '');
+  saveState();
+  renderAll();
+}
+function setImportedEventPlayer(playerId){
+  if(!hasImportedEvent()) return;
+  applyImportedEventBundle(state.eventBundle, playerId);
+}
+function clearImportedEventBundle(){
+  const doClear = () => {
+    state.eventBundle = null;
+    state.eventPlayerId = '';
+    state.day1TeamId = '';
+    state.day2GroupId = '';
+    syncManualLineups();
+    resetRoundData('');
+    saveState();
+    renderAll();
+  };
+  if(scoresDirty()){
+    showConfirm('Clearing the imported event will reset current scramble and Stableford scores. Continue?', doClear);
+    return;
+  }
+  doClear();
+}
+function importEventBundleText(){
+  const el = document.getElementById('eventImportText');
+  try{
+    const raw = el ? el.value : '';
+    applyImportedEventBundle(raw);
+    if(el) el.value = '';
+    showToast('Event loaded — select your player profile above.', 'ok');
+  }catch(err){
+    showToast(err.message || 'Could not import event.json.', 'err');
+  }
+}
+function importEventBundleFile(input){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const target = document.getElementById('eventImportText');
+    if(target) target.value = String(reader.result || '');
+    importEventBundleText();
+  };
+  reader.readAsText(file);
+}
+
+function encodeJoinPayload(payload){
+  return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+}
+function decodeJoinPayload(token){
+  return JSON.parse(decodeURIComponent(escape(atob(token))));
+}
+function buildJoinPayload(){
+  return {
+    sharedAt:new Date().toISOString(),
+    state:deepClone(state)
+  };
+}
+function buildJoinCode(){
+  return encodeJoinPayload(buildJoinPayload());
+}
+function parseJoinToken(value){
+  const raw = String(value || '').trim();
+  if(!raw) throw new Error('Paste a join code or join link first.');
+  const match = raw.match(/#join=([^&\s]+)/);
+  return match ? match[1] : raw;
+}
+function applyJoinHash(){
+  const match = location.hash.match(/^#join=([^&]+)/);
+  if(!match) return false;
+  try{
+    const payload = decodeJoinPayload(match[1]);
+    state = mergeState(deepClone(DEFAULT_STATE), payload.state || payload);
+    state.ui.tab = 'leaderboard';
+    readOnlyMode = true;
+    return true;
+  }catch(err){
+    console.warn('join load failed', err);
+    readOnlyMode = false;
+    state = loadState();
+    return false;
+  }
+}
+applyJoinHash();
+// Auto-select player from ?player= URL param (used for per-player sharing links)
+(function applyPlayerParam(){
+  if(readOnlyMode) return; // join hash takes priority
+  const m = location.search.match(/[?&]player=([^&]+)/);
+  if(!m) return;
+  // Always force non-admin view when opening a player link
+  masterMode = false;
+  localStorage.setItem('cpi_master', '0');
+  const pid = decodeURIComponent(m[1]);
+  if(hasImportedEvent() && state.eventBundle.players.some(p => String(p.playerId) === pid)){
+    if(String(state.eventPlayerId) !== pid) applyImportedEventBundle(state.eventBundle, pid);
+  }
+})();
+// Watch mode via ?watch=eventId — live read-only view for any device
+(function applyWatchParam(){
+  if(readOnlyMode) return; // join hash takes priority
+  const m = location.search.match(/[?&]watch=([^&]+)/);
+  if(!m) return;
+  readOnlyMode = true;
+  state.ui.tab = 'leaderboard';
+  window._cpiWatchEventId = decodeURIComponent(m[1]);
+})();
+
+// Auto-load event from cloud via ?loadEvent= URL param
+(function applyLoadEventParam(){
+  if(readOnlyMode) return;
+  const m = location.search.match(/[?&]loadEvent=([^&]+)/);
+  if(!m) return;
+  window._cpiLoadEventId = decodeURIComponent(m[1]);
+})();
+
+window.addEventListener('hashchange', () => {
+  if(location.hash.startsWith('#join=')){
+    applyJoinHash();
+  }else if(readOnlyMode){
+    readOnlyMode = false;
+    state = loadState();
+  }
+  renderAll();
+});
+function copyJoinCode(){
+  const code = buildJoinCode();
+  navigator.clipboard.writeText(code).then(() => showToast('Join code copied — paste into Join the game.', 'ok'));
+}
+function copyJoinLink(){
+  const code = buildJoinCode();
+  const link = `${location.href.split('#')[0]}#join=${code}`;
+  navigator.clipboard.writeText(link).then(() => showToast('Join link copied — followers can open it for a read-only view.', 'ok'));
+}
+function joinGameFromInput(){
+  const el = document.getElementById('joinCodeInput');
+  try{
+    const token = parseJoinToken(el ? el.value : '');
+    location.hash = `join=${token}`;
+  }catch(err){
+    showToast(err.message || 'Could not join this game.', 'err');
+  }
+}
+function leaveJoinMode(){
+  location.hash = '';
+  readOnlyMode = false;
+  state = loadState();
+  renderAll();
+}
+
+function resetApp(){
+  showConfirm('Reset the app and clear all saved scores? This cannot be undone.', () => {
+    state = deepClone(DEFAULT_STATE);
+    syncManualLineups();
+    saveState();
+    renderAll();
+    showToast('App reset.', 'info');
+  });
+}
+
+function fmtName(name, idx){ return (name || `Player ${idx+1}`).trim(); }
+function normalizeDayKey(day){ return day === 'day2' ? 'day2' : 'day1'; }
+function currentCourseEditorTarget(){ return state.ui && state.ui.courseEditorTarget === 'day2' ? 'day2' : 'day1'; }
+function activeCourseDay(){
+  if(state.ui.tab === 'day1') return 'day1';
+  if(state.ui.tab === 'day2' || state.ui.tab === 'leaderboard') return 'day2';
+  return currentCourseEditorTarget();
+}
+function safePalmCombo(raw){
+  const front = raw && ['A','B','C'].includes(raw.front) ? raw.front : 'A';
+  let back = raw && ['A','B','C'].includes(raw.back) ? raw.back : (front === 'A' ? 'B' : 'A');
+  if(back === front) back = ['A','B','C'].find(code => code !== front) || (front === 'A' ? 'B' : 'A');
+  return {front, back};
+}
+function courseConfigForDay(day){
+  const key = normalizeDayKey(day);
+  const legacy = {courseId:state.courseId || 'palmIsland', palmIsland:state.palmIsland || {front:'A', back:'B'}};
+  const raw = state.roundCourses && state.roundCourses[key] ? state.roundCourses[key] : legacy;
+  return {
+    courseId: raw.courseId && COURSE_LIBRARY[raw.courseId] ? raw.courseId : 'palmIsland',
+    palmIsland: safePalmCombo(raw.palmIsland)
+  };
+}
+function lineupScorerId(lineup){
+  const ids = Array.isArray(lineup && lineup.playerIds) ? lineup.playerIds.filter(Boolean).map(v => String(v)) : [];
+  return String((lineup && lineup.scorerPlayerId) || ids[0] || '');
+}
+function lineupScorerPlayer(lineup, bundle){
+  const pid = lineupScorerId(lineup);
+  return pid ? findEventPlayerCatalog(bundle, pid) : null;
+}
+function lineupScorerName(lineup, bundle){
+  const player = lineupScorerPlayer(lineup, bundle);
+  return player ? (player.displayName || player.fullName || player.playerId) : 'Player 1';
+}
+function setLineupScorer(type, lineupId, newScorerPlayerId){
+  if(!hasImportedEvent()) return;
+  const pid = String(newScorerPlayerId || '').trim();
+  if(!pid) return;
+  const key = type === 'team' ? 'day1ScrambleTeams' : 'day2Groups';
+  const lineups = state.eventBundle[key];
+  if(!Array.isArray(lineups)) return;
+  const idx = lineups.findIndex(l => String(l.teamId || l.groupId) === String(lineupId));
+  if(idx < 0) return;
+  const lineup = {...lineups[idx]};
+  lineup.scorerPlayerId = pid;
+  // Scorer always last in player order
+  const ids = [...(lineup.playerIds || [])];
+  const si = ids.indexOf(pid);
+  if(si > 0){ ids.splice(si, 1); ids.push(pid); }
+  lineup.playerIds = ids;
+  state.eventBundle[key] = lineups.map((l, i) => i === idx ? lineup : l);
+  applyImportedEventBundle(state.eventBundle, state.eventPlayerId);
+}
+function activeCourse(day){
+  const key = normalizeDayKey(day || activeCourseDay());
+  const cfg = courseConfigForDay(key);
+  if(cfg.courseId === 'palmIsland'){
+    const front = cfg.palmIsland.front;
+    const back = cfg.palmIsland.back;
+    return {
+      id:'palmIsland',
+      name:`Palm Island ${front}/${back}`,
+      club:'Huizhou Palm Island Resort Golf Club',
+      city:'Huizhou',
+      detail:`${PALM_NINES[front].name} / ${PALM_NINES[back].name}`,
+      note:COURSE_LIBRARY.palmIsland.note,
+      holes:palmComboHoles(front, back),
+      ...(COURSE_LOCATIONS.palmIsland || {})
+    };
+  }
+  const course = state.courses[cfg.courseId] || COURSE_LIBRARY[cfg.courseId] || {name:'Course', club:'', city:'', note:'', holes:blankCourseHoles()};
+  return {id:cfg.courseId, ...course, ...(COURSE_LOCATIONS[cfg.courseId] || {}), detail:''};
+}
+function courseComplete(course){
+  return course.holes.every(h => Number.isInteger(h.par) && Number.isInteger(h.si));
+}
+function shotsReceived(hcp, si){
+  const safe = Math.max(0, parseInt(hcp || 0, 10));
+  const base = Math.floor(safe / 18);
+  const rem = safe % 18;
+  return base + (si <= rem ? 1 : 0);
+}
+function stablefordPoints(gross, par, shots){
+  if(gross === null || gross === undefined || gross === '') return null;
+  const net = gross - shots;
+  const diff = net - par;
+  if(diff <= -2) return 4;
+  if(diff === -1) return 3;
+  if(diff === 0) return 2;
+  if(diff === 1) return 1;
+  return 0;
+}
+function handicapAdjustment(points){
+  if(points > 45) return '−3';
+  if(points >= 41) return '−2';
+  if(points >= 36) return '−1';
+  if(points >= 27) return 'No change';
+  if(points >= 16) return '+1';
+  return '+2';
+}
+function holeMeta(holeIdx, day){
+  return activeCourse(day).holes[holeIdx] || {par:null, si:null};
+}
+
+function scrambleTotals(){
+  const scramblePlayers = currentPlayers('scramble');
+  const course = activeCourse('day1');
+  let total = 0, entered = 0, parEntered = 0;
+  state.scramble.holes.forEach((h, idx) => {
+    if(typeof h.gross === 'number'){
+      total += h.gross;
+      entered += 1;
+      parEntered += course.holes[idx] && course.holes[idx].par ? course.holes[idx].par : 0;
+    }
+  });
+  const drives = scramblePlayers.map((_, idx) => state.scramble.holes.filter(h => h.driver === idx).length);
+  return {total, entered, parEntered, toPar: total - parEntered, drives};
+}
+function currentHolePokerEffect(putts){
+  if(putts === 0) return {cards:2, penalty:0, label:'+2 cards'};
+  if(putts === 1) return {cards:1, penalty:0, label:'+1 card'};
+  if(putts === 2 || putts === null || putts === undefined) return {cards:0, penalty:0, label:'—'};
+  if(putts === 3) return {cards:0, penalty:state.options.penalty3, label:`+${state.options.penalty3} RMB`};
+  return {cards:0, penalty:state.options.penalty4, label:`+${state.options.penalty4} RMB`};
+}
+
+function penaltyPlayersForHole(hole){
+  const out = [];
+  if(!hole || !Array.isArray(hole.putts)) return out;
+  hole.putts.forEach((putts, idx) => {
+    if(typeof putts === 'number' && putts >= 3) out.push(idx);
+  });
+  return out;
+}
+function effectiveLastPenaltyPlayerForHole(hole){
+  const penaltyPlayers = penaltyPlayersForHole(hole);
+  if(!penaltyPlayers.length) return null;
+  if(penaltyPlayers.length === 1) return penaltyPlayers[0];
+  if(penaltyPlayers.includes(hole.lastPenaltyOverride)) return hole.lastPenaltyOverride;
+  let lastStamp = -1;
+  let lastPlayer = penaltyPlayers[0];
+  penaltyPlayers.forEach(idx => {
+    const stamp = Array.isArray(hole.puttStamp) ? hole.puttStamp[idx] : null;
+    if(typeof stamp === 'number' && stamp > lastStamp){
+      lastStamp = stamp;
+      lastPlayer = idx;
+    }
+  });
+  return lastPlayer;
+}
+function setLastPenaltyFlag(idx){
+  const hole = state.stableford.holes[state.stableford.hole];
+  const penaltyPlayers = penaltyPlayersForHole(hole);
+  if(penaltyPlayers.length < 2 || !penaltyPlayers.includes(idx)) return;
+  hole.lastPenaltyOverride = hole.lastPenaltyOverride === idx ? null : idx;
+  state.poker.digitalDeal = null;
+  saveState();
+  renderAll();
+}
+
+function playerTotals(idx){
+  const stablePlayers = currentPlayers('stableford');
+  const course = activeCourse('day2');
+  let gross = 0, points = 0, entered = 0, back9 = 0;
+  let pokerCards = 0, pokerPenalty = 0, putts3plus = 0;
+  state.stableford.holes.forEach((hole, hIdx) => {
+    const score = hole.gross[idx];
+    if(typeof score === 'number' && Number.isInteger(course.holes[hIdx].par) && Number.isInteger(course.holes[hIdx].si)){
+      entered += 1;
+      gross += score;
+      const shots = shotsReceived(stablePlayers[idx].hcp, course.holes[hIdx].si);
+      const pts = stablefordPoints(score, course.holes[hIdx].par, shots) || 0;
+      points += pts;
+      if(hIdx >= 9) back9 += pts;
+    }
+    const putts = hole.putts[idx];
+    if(putts === 0) pokerCards += 2;
+    else if(putts === 1) pokerCards += 1;
+    if(putts === 3) pokerPenalty += state.options.penalty3;
+    else if(putts >= 4) pokerPenalty += state.options.penalty4;
+    if(putts >= 3) putts3plus += 1;
+  });
+  return {gross, points, entered, back9, pokerCards, pokerPenalty, putts3plus};
+}
+
+function pokerSummary(){
+  const stablePlayers = currentPlayers('stableford');
+  const baseAnte = state.options.threePuttPoker ? state.options.ante : 0;
+  let lastPenaltyPlayer = null;
+  const players = stablePlayers.map((p, idx) => {
+    const t = playerTotals(idx);
+    return {
+      idx,
+      name:fmtName(p.name, idx),
+      cards:t.pokerCards,
+      penalty:t.pokerPenalty,
+      ante:baseAnte,
+      doubleAnte:false,
+      totalContribution:baseAnte + t.pokerPenalty
+    };
+  });
+
+  state.stableford.holes.forEach(hole => {
+    const resolved = effectiveLastPenaltyPlayerForHole(hole);
+    if(resolved !== null) lastPenaltyPlayer = resolved;
+  });
+
+  if(lastPenaltyPlayer !== null && state.options.threePuttPoker){
+    players[lastPenaltyPlayer].doubleAnte = true;
+    players[lastPenaltyPlayer].totalContribution += state.options.ante;
+  }
+  const pot = players.reduce((sum, p) => sum + p.totalContribution, 0);
+  return {players, pot, lastPenaltyPlayer};
+}
+
+
+function syncPenaltyStamp(holeIdx, playerIdx, newVal, oldVal){
+  const hole = state.stableford.holes[holeIdx];
+  if(!hole.puttStamp) hole.puttStamp = [null,null,null,null];
+  const hadPenalty = typeof oldVal === 'number' && oldVal >= 3;
+  const hasPenalty = typeof newVal === 'number' && newVal >= 3;
+  if(hasPenalty && !hadPenalty){
+    state.poker.stampCounter += 1;
+    hole.puttStamp[playerIdx] = state.poker.stampCounter;
+  }else if(!hasPenalty){
+    hole.puttStamp[playerIdx] = null;
+  }
+  const penaltyPlayers = penaltyPlayersForHole(hole);
+  if(penaltyPlayers.length < 2) hole.lastPenaltyOverride = null;
+  if(hole.lastPenaltyOverride !== null && !penaltyPlayers.includes(hole.lastPenaltyOverride)) hole.lastPenaltyOverride = null;
+}
+
+function stepScore(day, idx, delta, field='gross'){
+  holeWarning = null;
+  if(day === 'scramble'){
+    const bucket = state.scramble.holes[state.scramble.hole];
+    let current = bucket.gross;
+    current = typeof current === 'number' ? current : (holeMeta(state.scramble.hole).par || 4);
+    bucket.gross = Math.max(1, current + delta);
+  }else{
+    const bucket = state.stableford.holes[state.stableford.hole];
+    const oldVal = bucket[field][idx];
+    const start = field === 'gross' ? (holeMeta(state.stableford.hole).par || 4) : 2;
+    let current = oldVal;
+    current = typeof current === 'number' ? current : start;
+    const newVal = Math.max(0, current + delta);
+    bucket[field][idx] = newVal;
+    if(field === 'putts') syncPenaltyStamp(state.stableford.hole, idx, newVal, oldVal);
+    state.poker.digitalDeal = null;
+  }
+  saveState();
+  renderAll();
+}
+function setExact(day, idx, value, field='gross'){
+  holeWarning = null;
+  if(day === 'scramble'){
+    state.scramble.holes[state.scramble.hole].gross = value;
+  }else{
+    const bucket = state.stableford.holes[state.stableford.hole];
+    const oldVal = bucket[field][idx];
+    bucket[field][idx] = value;
+    if(field === 'putts') syncPenaltyStamp(state.stableford.hole, idx, value, oldVal);
+    state.poker.digitalDeal = null;
+  }
+  saveState();
+  renderAll();
+}
+function clearScore(day, idx=null, field='gross'){
+  if(day === 'scramble'){
+    state.scramble.holes[state.scramble.hole].gross = null;
+  }else{
+    const bucket = state.stableford.holes[state.stableford.hole];
+    const oldVal = bucket[field][idx];
+    bucket[field][idx] = null;
+    if(field === 'putts') syncPenaltyStamp(state.stableford.hole, idx, null, oldVal);
+    state.poker.digitalDeal = null;
+  }
+  saveState();
+  renderAll();
+}
+function setBlob(idx){
+  const meta = holeMeta(state.stableford.hole);
+  let gross = 8;
+  if(meta.par === 3) gross = 7;
+  if(meta.par === 5) gross = 10;
+  state.stableford.holes[state.stableford.hole].gross[idx] = gross;
+  saveState();
+  renderAll();
+}
+function setDriver(idx){
+  holeWarning = null;
+  const hole = state.scramble.holes[state.scramble.hole];
+  hole.driver = hole.driver === idx ? null : idx;
+  saveState();
+  renderAll();
+}
+function navHole(day, dir){
+  holeWarning = null;
+  if(dir > 0){
+    if(day === 'scramble'){
+      const hole = state.scramble.holes[state.scramble.hole];
+      if(typeof hole.gross !== 'number'){
+        holeWarning = {day:'scramble', msg:"Enter the team score before moving on."};
+        renderAll(); return;
+      }
+      if(hole.driver === null){
+        holeWarning = {day:'scramble', msg:"Who drove? Select the player whose drive was used before moving on."};
+        renderAll(); return;
+      }
+    } else {
+      const hole = state.stableford.holes[state.stableford.hole];
+      const players = currentPlayers('stableford');
+      const missingScore = players.map((p,i) => typeof hole.gross[i] !== 'number' ? fmtName(p.name,i) : null).filter(Boolean);
+      if(missingScore.length){
+        holeWarning = {day:'stableford', msg:`Enter a score for: ${missingScore.join(', ')}`};
+        renderAll(); return;
+      }
+      if(state.options.threePuttPoker){
+        const missingPutts = players.map((p,i) => typeof hole.gross[i] === 'number' && typeof hole.putts[i] !== 'number' ? fmtName(p.name,i) : null).filter(Boolean);
+        if(missingPutts.length){
+          holeWarning = {day:'stableford', msg:`3-putt poker is on — add putts for: ${missingPutts.join(', ')}`};
+          renderAll(); return;
+        }
+      }
+      if(state.stableford.hole === 17){
+        showToast('Hole 18 complete! Scroll down to export the scorecard.', 'ok', 3500);
+        renderAll(); return;
+      }
+    }
+    if(day === 'scramble' && state.scramble.hole === 17){
+      showToast('Hole 18 complete! Scroll down to export the scorecard.', 'ok', 3500);
+      renderAll(); return;
+    }
+  }
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  state[key].hole = Math.max(0, Math.min(17, state[key].hole + dir));
+  saveState();
+  renderAll();
+}
+function skipHoleWarning(day, dir){
+  holeWarning = null;
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  state[key].hole = Math.max(0, Math.min(17, state[key].hole + dir));
+  saveState();
+  renderAll();
+}
+function setTab(tab){ state.ui.tab = tab; saveState(); renderAll(); }
+
+function applyRosterName(slot, value){
+  const found = ROSTER.find(r => r.name.toLowerCase() === String(value || '').trim().toLowerCase());
+  state.players[slot].name = String(value || '').toUpperCase();
+  if(found) state.players[slot].hcp = found.hcp;
+  syncManualLineups();
+  saveState();
+  renderAll();
+}
+function setHcp(slot, value){
+  const v = parseInt(value, 10);
+  state.players[slot].hcp = Number.isFinite(v) ? Math.max(0, v) : 0;
+  syncManualLineups();
+  saveState();
+  renderAll();
+}
+
+function setCourseForDay(day, courseId){
+  const key = normalizeDayKey(day);
+  if(!COURSE_LIBRARY[courseId]) return;
+  state.roundCourses[key].courseId = courseId;
+  if(courseId === 'palmIsland'){
+    state.roundCourses[key].palmIsland = safePalmCombo(state.roundCourses[key].palmIsland);
+  }
+  state.ui.courseEditorTarget = key;
+  saveState();
+  renderAll();
+}
+function setPalmNineForDay(day, which, code){
+  const key = normalizeDayKey(day);
+  if(!['A','B','C'].includes(code)) return;
+  const combo = safePalmCombo(state.roundCourses[key].palmIsland);
+  if(which === 'front'){
+    combo.front = code;
+    if(combo.front === combo.back) combo.back = ['A','B','C'].find(x => x !== code) || 'B';
+  }else{
+    combo.back = code;
+    if(combo.front === combo.back) combo.front = ['A','B','C'].find(x => x !== code) || 'A';
+  }
+  state.roundCourses[key].palmIsland = combo;
+  state.ui.courseEditorTarget = key;
+  saveState();
+  renderAll();
+}
+function setCourseEditorTarget(day){
+  state.ui.courseEditorTarget = normalizeDayKey(day);
+  saveState();
+  renderAll();
+}
+function toggleThreePutt(){
+  state.options.threePuttPoker = !state.options.threePuttPoker;
+  if(!state.options.threePuttPoker) state.poker.digitalDeal = null;
+  saveState();
+  renderAll();
+}
+function setPokerMode(mode){ state.options.pokerMode = mode; state.poker.digitalDeal = null; saveState(); renderAll(); }
+function setMoneyOption(key, value){
+  const v = Math.max(0, parseInt(value || 0, 10) || 0);
+  state.options[key] = v;
+  state.poker.digitalDeal = null;
+  saveState();
+  renderAll();
+}
+function downloadText(filename, text, mime='text/plain;charset=utf-8'){
+  const blob = new Blob([text], {type:mime});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(url);
+    a.remove();
+  }, 50);
+}
+function csvCell(value){
+  const s = value === null || value === undefined ? '' : String(value);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+}
+function fmtToPar(value){
+  if(typeof value !== 'number' || Number.isNaN(value)) return '—';
+  if(value === 0) return 'E';
+  return value > 0 ? `+${value}` : `${value}`;
+}
+function slugify(text){
+  return String(text || 'export').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60) || 'export';
+}
+function setEventField(key, value){ state.event[key] = value; saveState(); }
+function setLocationLang(lang){ state.ui.locationLang = lang === 'en' ? 'en' : 'zh'; saveState(); renderAll(); }
+function currentLocationLang(){ return state.ui.locationLang === 'en' ? 'en' : 'zh'; }
+function courseLocationInfo(course, lang){
+  const useLang = lang === 'en' ? 'en' : 'zh';
+  const name = useLang === 'zh' ? (course.zhClub || course.club || course.name) : (course.club || course.name);
+  const address = useLang === 'zh'
+    ? (course.zhAddress || course.enAddress || [course.city,'China'].filter(Boolean).join(', '))
+    : (course.enAddress || [course.city,'China'].filter(Boolean).join(', '));
+  return {lang:useLang, name, address};
+}
+function courseMapUrl(course, lang){
+  const loc = courseLocationInfo(course, lang);
+  const query = `${loc.name} ${loc.address}`.trim();
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+function copyTextValue(text, label){
+  const value = String(text || '').trim();
+  if(!value){
+    showToast((label || 'Text') + ' is empty.', 'err');
+    return;
+  }
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(value).then(() => showToast((label || 'Text') + ' copied.', 'ok'));
+  }else{
+    window.prompt('Copy this text', value);
+  }
+}
+function copyCourseAddress(lang, day){
+  const course = activeCourse(day || currentCourseEditorTarget());
+  const loc = courseLocationInfo(course, lang);
+  copyTextValue(`${loc.name} ${loc.address}`.trim(), lang === 'en' ? 'English course details' : 'Chinese course details');
+}
+function setScrambleTeamName(value){ state.scramble.teamName = value; saveState(); renderAll(); }
+function setCourseHoleValue(idx, key, value, day){
+  const targetDay = normalizeDayKey(day || currentCourseEditorTarget());
+  const courseId = courseConfigForDay(targetDay).courseId;
+  if(courseId === 'palmIsland') return;
+  const v = parseInt(value, 10);
+  state.courses[courseId].holes[idx][key] = Number.isFinite(v) ? v : null;
+  saveState();
+  renderAll();
+}
+function courseCardCsv(course){
+  const lines = [['hole','par','si']];
+  course.holes.forEach((hole, idx) => lines.push([idx+1, hole.par ?? '', hole.si ?? '']));
+  return lines.map(row => row.map(csvCell).join(',')).join('\n');
+}
+function downloadCourseTemplate(day){
+  const targetDay = normalizeDayKey(day || currentCourseEditorTarget());
+  const course = activeCourse(targetDay);
+  downloadText(`${slugify(course.name)}-scorecard-template.csv`, courseCardCsv(course), 'text/csv;charset=utf-8');
+}
+function parseImportedCourseText(raw){
+  const text = String(raw || '').trim();
+  if(!text) throw new Error('Paste or upload some scorecard rows first.');
+  try{
+    const parsed = JSON.parse(text);
+    const holes = Array.isArray(parsed) ? parsed : parsed.holes;
+    if(Array.isArray(holes)) return normalizeImportedHoles(holes);
+  }catch(e){ /* fall through to delimited text */ }
+  const lines = text.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  const delim = lines.some(line => line.includes('	')) ? '	' : ',';
+  const first = lines[0].split(delim).map(s => s.trim().toLowerCase());
+  let hasHeader = first.some(v => /hole|par|si|stroke/.test(v));
+  let holeIdx = hasHeader ? first.findIndex(v => /hole/.test(v)) : 0;
+  let parIdx = hasHeader ? first.findIndex(v => /^par$/.test(v) || /par/.test(v)) : 1;
+  let siIdx = hasHeader ? first.findIndex(v => v === 'si' || /stroke/.test(v) || /handicap/.test(v)) : 2;
+  if(parIdx < 0 || siIdx < 0) throw new Error('Need par and si columns. Use: hole,par,si');
+  const holes = blankCourseHoles();
+  let valid = 0;
+  lines.slice(hasHeader ? 1 : 0).forEach((line, rowIdx) => {
+    const parts = line.split(delim).map(s => s.trim());
+    const holeNo = holeIdx >= 0 ? parseInt(parts[holeIdx], 10) : rowIdx + 1;
+    const par = parseInt(parts[parIdx], 10);
+    const si = parseInt(parts[siIdx], 10);
+    if(holeNo >= 1 && holeNo <= 18){
+      holes[holeNo - 1] = {par:Number.isFinite(par) ? par : null, si:Number.isFinite(si) ? si : null};
+      valid += 1;
+    }
+  });
+  if(!valid) throw new Error('No valid rows found. Use 18 rows like: hole,par,si');
+  return holes;
+}
+function normalizeImportedHoles(holes){
+  const out = blankCourseHoles();
+  holes.forEach((hole, idx) => {
+    if(idx < 18){
+      const par = parseInt(hole.par, 10);
+      const si = parseInt(hole.si, 10);
+      out[idx] = {par:Number.isFinite(par) ? par : null, si:Number.isFinite(si) ? si : null};
+    }
+  });
+  return out;
+}
+function importCourseText(day){
+  const targetDay = normalizeDayKey(day || currentCourseEditorTarget());
+  const courseId = courseConfigForDay(targetDay).courseId;
+  if(courseId === 'palmIsland'){
+    showToast('Palm Island uses the built-in A/B/C selector — no import needed.', 'info');
+    return;
+  }
+  const el = document.getElementById('courseImportText');
+  try{
+    state.courses[courseId].holes = parseImportedCourseText(el ? el.value : '');
+    if(el) el.value = '';
+    saveState();
+    renderAll();
+    showToast('Course card imported.', 'ok');
+  }catch(err){
+    showToast(err.message || 'Import failed.', 'err');
+  }
+}
+function importCourseFile(input, day){
+  const file = input && input.files && input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const target = document.getElementById('courseImportText');
+    if(target) target.value = reader.result;
+    importCourseText(day);
+  };
+  reader.readAsText(file);
+}
+
+function exportScrambleCsv(){
+  const scramblePlayers = currentPlayers('scramble');
+  const teamName = (state.scramble.teamName || '').trim();
+  if(!teamName){
+    showToast('Add a team name before exporting.', 'err');
+    return;
+  }
+  const course = activeCourse('day1');
+  const rows = [['event','course','team_name','hole','par','si','team_gross','drive_used']];
+  state.scramble.holes.forEach((hole, idx) => {
+    const meta = course.holes[idx] || {};
+    const driver = hole.driver === null || hole.driver === undefined ? '' : fmtName(scramblePlayers[hole.driver].name, hole.driver);
+    rows.push([
+      state.event.name,
+      course.name,
+      teamName,
+      idx + 1,
+      meta.par ?? '',
+      meta.si ?? '',
+      typeof hole.gross === 'number' ? hole.gross : '',
+      driver
+    ]);
+  });
+  const totals = scrambleTotals();
+  rows.push([state.event.name, course.name, teamName, 'TOTAL', '', '', totals.entered ? totals.total : '', '']);
+  downloadText(`${slugify(teamName)}-${slugify(course.name)}-scramble.csv`, rows.map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8');
+}
+function exportStablefordCsv(){
+  const stablePlayers = currentPlayers('stableford');
+  const course = activeCourse('day2');
+  const rows = [['event','course','player','hcp','hole','par','si','shots_received','gross','net','stableford_points','putts','poker_cards_awarded','poker_penalty_rmb']];
+  stablePlayers.forEach((player, idx) => {
+    state.stableford.holes.forEach((hole, hIdx) => {
+      const meta = course.holes[hIdx] || {};
+      const gross = hole.gross[idx];
+      const putts = hole.putts[idx];
+      const shots = Number.isInteger(meta.si) ? shotsReceived(player.hcp, meta.si) : '';
+      const net = typeof gross === 'number' && shots !== '' ? gross - shots : '';
+      const pts = typeof gross === 'number' && Number.isInteger(meta.par) && shots !== '' ? stablefordPoints(gross, meta.par, shots) : '';
+      const effect = currentHolePokerEffect(putts);
+      rows.push([
+        state.event.name,
+        course.name,
+        fmtName(player.name, idx),
+        player.hcp,
+        hIdx + 1,
+        meta.par ?? '',
+        meta.si ?? '',
+        shots,
+        typeof gross === 'number' ? gross : '',
+        net,
+        pts,
+        typeof putts === 'number' ? (putts >= 4 ? '4+' : putts) : '',
+        effect.cards,
+        effect.penalty
+      ]);
+    });
+    const total = playerTotals(idx);
+    rows.push([
+      state.event.name,
+      course.name,
+      fmtName(player.name, idx),
+      player.hcp,
+      'TOTAL',
+      '',
+      '',
+      '',
+      total.entered ? total.gross : '',
+      '',
+      total.points,
+      '',
+      total.pokerCards,
+      total.pokerPenalty
+    ]);
+  });
+  downloadText(`${slugify(state.event.name)}-${slugify(course.name)}-stableford.csv`, rows.map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8');
+}
+function exportSummary(){
+  const stablePlayers = currentPlayers('stableford');
+  const scramblePlayers = currentPlayers('scramble');
+  const day1Course = activeCourse('day1');
+  const day2Course = activeCourse('day2');
+  const scramble = scrambleTotals();
+  const poker = pokerSummary();
+  const ranking = stablePlayers.map((p, idx) => ({idx, ...playerTotals(idx), name:fmtName(p.name, idx), hcp:p.hcp}))
+    .sort((a,b)=> b.points - a.points || b.back9 - a.back9 || a.hcp - b.hcp);
+  const day1Team = activeEventDay1Team();
+  const day2Group = activeEventDay2Group();
+  const lines = [];
+  lines.push(state.event.name);
+  lines.push(`Saturday: ${day1Course.name}${day1Course.detail ? ' · ' + day1Course.detail : ''}`);
+  lines.push(`Sunday: ${day2Course.name}${day2Course.detail ? ' · ' + day2Course.detail : ''}`);
+  lines.push([state.event.satDate, state.event.sat].filter(Boolean).join(' · '));
+  lines.push([state.event.sunDate, state.event.sun].filter(Boolean).join(' · '));
+  lines.push('');
+  lines.push(`Scramble team: ${(state.scramble.teamName || (day1Team && day1Team.teamName) || 'Not set').trim() || 'Not set'}`);
+  if(day1Team) lines.push(`Scramble scorer: ${lineupScorerName(day1Team, state.eventBundle)}`);
+  lines.push(`Scramble gross: ${scramble.entered ? scramble.total : 'No scores yet'}`);
+  scramble.drives.forEach((count, idx) => lines.push(`${fmtName(scramblePlayers[idx].name, idx)} drives used: ${count}`));
+  lines.push('');
+  lines.push('Stableford');
+  if(day2Group) lines.push(`Stableford scorer: ${lineupScorerName(day2Group, state.eventBundle)}`);
+  ranking.forEach((row, i) => {
+    lines.push(`${i+1}. ${row.name} · ${row.points} pts · gross ${row.gross || '—'} · hcp ${row.hcp}`);
+  });
+  if(state.options.threePuttPoker){
+    lines.push('');
+    lines.push(`3-putt poker pot: RMB ${poker.pot}`);
+    poker.players.forEach((p, idx) => {
+      const extra = p.doubleAnte ? ' · doubled ante' : '';
+      lines.push(`${p.name} · cards ${p.cards} · penalties RMB ${p.penalty} · total in RMB ${p.totalContribution}${extra}`);
+    });
+  }
+  navigator.clipboard.writeText(lines.join('\n')).then(() => showToast('Summary copied to clipboard.', 'ok'));
+}
+function scrambleBeforeStableford(){
+  const ev = state.eventBundle && state.eventBundle.event;
+  if(!ev) return true;
+  const d1 = ev.satDate ? new Date(ev.satDate) : null;
+  const d2 = ev.sunDate ? new Date(ev.sunDate) : null;
+  if(!d1 || !d2 || isNaN(d1) || isNaN(d2)) return true;
+  return d1 <= d2;
+}
+function renderTabs(){
+  const setupLabel = masterMode ? 'Setup' : 'Me';
+  const gameTabs = scrambleBeforeStableford()
+    ? [['day1','Scramble'],['day2','Stableford']]
+    : [['day2','Stableford'],['day1','Scramble']];
+  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],...gameTabs];
+  document.getElementById('tabs').innerHTML = tabs.map(([id,label]) =>
+    `<button class="tab-btn ${state.ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`
+  ).join('\n');
+  document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+  document.getElementById(state.ui.tab).classList.add('active');
+}
+
+// ── Shared import card HTML (used in both player + master view) ──
+function importCardHtml(imported){
+  return `
+    <div class="card">
+      <div class="section-title">Load event</div>
+      ${imported
+        ? `<div class="status ok tight"><strong>${(state.eventBundle.event.displayName || state.eventBundle.event.name || 'Event')} loaded</strong></div>`
+        : `<div class="small tight">Upload the <strong>event.json</strong> built from the starter-pack CSVs to preload all teams, groups, and course data.</div>`}
+      <div class="upload-grid tight">
+        <div>
+          <label>Upload event.json</label>
+          <input type="file" accept=".json,application/json" onchange="importEventBundleFile(this)" />
+        </div>
+        <div>
+          <label>Or paste JSON</label>
+          <textarea id="eventImportText" placeholder='{"event":{"displayName":"April CPI"},"players":[...]}'></textarea>
+          <div class="toolbar tight">
+            <button class="btn gold slim" onclick="importEventBundleText()">Import</button>
+            ${imported ? `<button class="btn ghost slim" onclick="clearImportedEventBundle()">Clear</button>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderSetup(){
+  const imported = hasImportedEvent();
+  const eventPlayer = currentEventPlayer();
+  const day1Team = activeEventDay1Team();
+  const day2Group = activeEventDay2Group();
+  const importedDay1Players = currentPlayers('scramble').map((p, idx) => fmtName(p.name, idx)).join(' · ');
+  const importedDay2Players = currentPlayers('stableford').map((p, idx) => fmtName(p.name, idx)).join(' · ');
+
+  const day1Config = courseConfigForDay('day1');
+  const day2Config = courseConfigForDay('day2');
+  const day1Course = activeCourse('day1');
+  const day2Course = activeCourse('day2');
+
+  const editorTarget = currentCourseEditorTarget();
+  const editorCourse = activeCourse(editorTarget);
+  const complete = courseComplete(editorCourse);
+  const locationLang = currentLocationLang();
+  const locationInfo = courseLocationInfo(editorCourse, locationLang);
+  const mapUrl = courseMapUrl(editorCourse, locationLang);
+
+  const courseOptionsFor = selectedId => COURSE_ORDER.map(id => {
+    const item = COURSE_LIBRARY[id];
+    return `<option value="${id}" ${selectedId===id?'selected':''}>${item.name} · ${item.city}</option>`;
+  }).join('\n');
+
+  const palmOptions = selected => ['A','B','C'].map(code => `<option value="${code}" ${selected===code?'selected':''}>${code} · ${PALM_NINES[code].name}</option>`).join('\n');
+
+  const playerRows = state.players.map((p, idx) => {
+    const options = ['<option value="">Pick from CPI roster</option>'].concat(
+      ROSTER.map(r => `<option value="${r.name}" ${String(p.name).toUpperCase()===r.name?'selected':''}>${r.name} · HCP ${r.hcp}</option>`)
+    ).join('\n');
+    return `
+      <div class="player-card">
+        <div class="player-head">
+          <div class="player-name">Player ${idx+1}</div>
+          <div class="hcp-badge">HCP ${p.hcp}</div>
+        </div>
+        <label>Roster pick</label>
+        <select onchange="applyRosterName(${idx}, this.value)">${options}</select>
+        <div class="grid-2 tight">
+          <div>
+            <label>Custom name</label>
+            <input type="text" value="${(p.name||'').replace(/"/g,'&quot;')}" oninput="setPlayerName(${idx}, this.value)" />
+          </div>
+          <div>
+            <label>Playing handicap</label>
+            <input type="number" min="0" max="54" value="${p.hcp}" onchange="setHcp(${idx}, this.value)" />
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('\n');
+
+  const courseRows = editorCourse.holes.map((hole, idx) => {
+    if(editorCourse.id === 'palmIsland'){
+      return `<div class="hole-num">${idx+1}</div><div class="hole-num">${hole.par ?? '—'}</div><div class="hole-num">${hole.si ?? '—'}</div>`;
+    }
+    return `
+      <div class="hole-num">${idx+1}</div>
+      <input class="editor-input" type="number" min="3" max="6" value="${hole.par ?? ''}" onchange="setCourseHoleValue(${idx},'par',this.value,'${editorTarget}')" />
+      <input class="editor-input" type="number" min="1" max="18" value="${hole.si ?? ''}" onchange="setCourseHoleValue(${idx},'si',this.value,'${editorTarget}')" />`;
+  }).join('\n');
+
+  const importedPlayerOptions = imported
+    ? state.eventBundle.players.map(p => {
+        const label = p.displayName || p.fullName || p.playerId;
+        return `<option value="${p.playerId}" ${String(p.playerId)===String(state.eventPlayerId)?'selected':''}>${label}</option>`;
+      }).join('\n')
+    : '';
+
+  const day1Scorer = day1Team ? lineupScorerName(day1Team, state.eventBundle) : 'Player 1';
+  const day2Scorer = day2Group ? lineupScorerName(day2Group, state.eventBundle) : 'Player 1';
+
+  const importedBlock = imported ? `
+      <div class="status ok tight"><strong>${state.eventBundle.event.displayName || state.eventBundle.event.name || 'Imported weekend event'}</strong><br/>Loaded from event.json. Saturday and Sunday lineups and course routing can now be different.</div>
+      <div class="grid-2 tight">
+        <div>
+          <label>Player profile</label>
+          <select onchange="setImportedEventPlayer(this.value)">${importedPlayerOptions}</select>
+        </div>
+        <div>
+          <label>Loaded for</label>
+          <div class="status info">${eventPlayer ? (eventPlayer.displayName || eventPlayer.fullName || eventPlayer.playerId) : '—'}</div>
+        </div>
+      </div>
+      <div class="grid-2 tight">
+        <div class="status info"><strong>Saturday scramble</strong><br/>${day1Team ? (day1Team.teamName || day1Team.teamId || 'Team') : 'Not assigned'}<br/><span class="small">${importedDay1Players}</span><br/><span class="small">Scorer · ${day1Scorer}</span></div>
+        <div class="status info"><strong>Sunday Stableford</strong><br/>${day2Group ? ((day2Group.groupName || day2Group.groupId || 'Group') + (day2Group.teeTime ? ' · ' + day2Group.teeTime : '')) : 'Not assigned'}<br/><span class="small">${importedDay2Players}</span><br/><span class="small">Scorer · ${day2Scorer}</span></div>
+      </div>
+    ` : `<div class="empty-note tight">No weekend event file loaded yet. Upload the <strong>event.json</strong> from the starter pack to preload Saturday scramble teams, Sunday groups, day-specific courses, and scorer defaults.</div>`;
+
+  const allTeams  = imported && Array.isArray(state.eventBundle.day1ScrambleTeams) ? state.eventBundle.day1ScrambleTeams : [];
+  const allGroups = imported && Array.isArray(state.eventBundle.day2Groups)        ? state.eventBundle.day2Groups        : [];
+  const allEventPlayers = imported ? state.eventBundle.players : [];
+
+  const lineupEditorRows = (lineups, type) => lineups.map(lineup => {
+    const lid = String(lineup.teamId || lineup.groupId || '');
+    const lname = lineup.teamName || lineup.groupName || lineup.teamId || lineup.groupId || (type==='team'?'Team':'Group');
+    const ltime = lineup.teeTime ? ` · ${lineup.teeTime}` : '';
+    const curScorer = lineupScorerId(lineup);
+    const members = (lineup.playerIds || []).map(pid => {
+      const ep = allEventPlayers.find(p => String(p.playerId) === String(pid));
+      return ep ? (ep.displayName || ep.fullName || ep.playerId) : pid;
+    }).join(', ');
+    const scorerOptions = (lineup.playerIds || []).map(pid => {
+      const ep = allEventPlayers.find(p => String(p.playerId) === String(pid));
+      const label = ep ? (ep.displayName || ep.fullName || ep.playerId) : pid;
+      return `<option value="${pid}" ${String(pid)===String(curScorer)?'selected':''}>${label}</option>`;
+    }).join('');
+    return `<div class="player-card" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <strong style="font-size:13px">${lname}${ltime}</strong>
+        <span class="small" style="color:var(--muted)">${type==='team'?'Scramble':'Stableford'}</span>
+      </div>
+      <div class="small" style="color:var(--muted);margin-bottom:8px">${members}</div>
+      <label style="font-size:11px;margin-bottom:4px">Scorer</label>
+      <select onchange="setLineupScorer('${type}','${lid}',this.value)">${scorerOptions}</select>
+    </div>`;
+  }).join('');
+
+  const playerSection = imported ? `
+    <div class="card">
+      <div class="section-title">Scramble teams</div>
+      ${allTeams.length ? lineupEditorRows(allTeams,'team') : '<div class="empty-note">No scramble teams in event file.</div>'}
+    </div>
+    <div class="card">
+      <div class="section-title">Stableford groups</div>
+      ${allGroups.length ? lineupEditorRows(allGroups,'group') : '<div class="empty-note">No Stableford groups in event file.</div>'}
+      <div class="inline-note" style="margin-top:6px">Changing scorer reorders the player list — scorer always goes last.</div>
+    </div>` : `
+    <div class="card">
+      <div class="section-title">Players</div>
+      <div class="stack">${playerRows}</div>
+    </div>`;
+
+  const renderRoundCard = (dayKey, title, detailsValue, course, config, scorerLabel) => `
+    <div class="player-card">
+      <div class="player-head">
+        <div class="player-name">${title}</div>
+        <div class="hcp-badge">${dayKey === 'day1' ? 'Scramble' : 'Stableford'}</div>
+      </div>
+      <label>Course</label>
+      <select onchange="setCourseForDay('${dayKey}', this.value)">${courseOptionsFor(config.courseId)}</select>
+      ${config.courseId === 'palmIsland' ? `
+        <div class="grid-2 tight">
+          <div>
+            <label>Front 9 selector</label>
+            <select onchange="setPalmNineForDay('${dayKey}','front', this.value)">${palmOptions(config.palmIsland.front)}</select>
+          </div>
+          <div>
+            <label>Back 9 selector</label>
+            <select onchange="setPalmNineForDay('${dayKey}','back', this.value)">${palmOptions(config.palmIsland.back)}</select>
+          </div>
+        </div>
+        <div class="inline-note">Palm Island combo: <strong>${config.palmIsland.front}/${config.palmIsland.back}</strong> · ${PALM_NINES[config.palmIsland.front].name} then ${PALM_NINES[config.palmIsland.back].name}</div>
+      ` : ''}
+      <div class="status ${courseComplete(course)?'ok':'warn'} tight"><strong>${course.name}</strong><br/><span class="small">${course.city || ''}${course.club ? ' · ' + course.club : ''}</span></div>
+      <div class="small">Details: ${detailsValue || '—'}</div>
+      <div class="small">Scorer default: ${scorerLabel || 'Player 1'}</div>
+      <div class="toolbar tight">
+        <button class="btn slim ${editorTarget===dayKey?'gold':'ghost'}" onclick="setCourseEditorTarget('${dayKey}')">Edit this card</button>
+        <button class="btn slim" onclick="copyCourseAddress('zh','${dayKey}')">Copy CN address</button>
+        <a class="btn blue slim" href="${courseMapUrl(course, locationLang)}" target="_blank" rel="noopener">Show on map</a>
+      </div>
+    </div>`;
+
+  // ── PLAYER VIEW ──────────────────────────────────────────────
+  if(!masterMode){
+    const importedPlayerOptions = imported
+      ? state.eventBundle.players.map(p => {
+          const label = p.displayName || p.fullName || p.playerId;
+          return `<option value="${p.playerId}" ${String(p.playerId)===String(state.eventPlayerId)?'selected':''}>${label}</option>`;
+        }).join('\n')
+      : '';
+
+    const satLabel = imported && state.eventBundle.event.satDate ? formatEventDate(state.eventBundle.event.satDate,'long') : (state.event.satDate ? formatEventDate(state.event.satDate,'long') : '');
+    const sunLabel = imported && state.eventBundle.event.sunDate ? formatEventDate(state.eventBundle.event.sunDate,'long') : (state.event.sunDate ? formatEventDate(state.event.sunDate,'long') : '');
+    const satTime  = imported ? (state.eventBundle.event.satTime||'') : '';
+    const sunTime  = imported ? (state.eventBundle.event.sunTime||'') : '';
+
+    const c1 = activeCourse('day1');
+    const c2 = activeCourse('day2');
+    const mapUrl1 = courseMapUrl(c1, currentLocationLang());
+    const mapUrl2 = courseMapUrl(c2, currentLocationLang());
+    const courseCard = (course, dayKey, dateLabel, timeStr, lineupLabel, players, scorer) => `
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+          <div class="section-title" style="margin:0">${lineupLabel}</div>
+          <div style="font-size:12px;color:var(--muted)">${dateLabel}${timeStr?' · '+timeStr:''}</div>
+        </div>
+        <div class="status info tight" style="margin-bottom:8px">
+          <strong style="font-size:15px">${course.name}</strong><br/>
+          <span class="small">${course.club||''}${course.city?' · '+course.city:''}</span>
+        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:8px">${players}</div>
+        <div class="small" style="color:var(--muted);margin-bottom:10px">Scorer · ${scorer}</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn blue slim" href="${courseMapUrl(course,'zh')}" target="_blank" rel="noopener">🗺 地图</a>
+          <a class="btn blue slim" href="${courseMapUrl(course,'en')}" target="_blank" rel="noopener">🗺 Map</a>
+          <button class="btn ghost slim" onclick="copyCourseAddress('zh','${dayKey}')">Copy CN address</button>
+          <button class="btn ghost slim" onclick="copyCourseAddress('en','${dayKey}')">Copy EN address</button>
+        </div>
+      </div>`;
+    // Single shared location card when both days are at the same course
+    const sameVenue = c1.name && c2.name && c1.name.trim() === c2.name.trim();
+    const locationCard = imported && eventPlayer ? (() => {
+      if(sameVenue){
+        return `<div class="card">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div class="section-title" style="margin:0">Venue</div>
+          </div>
+          <div class="status info tight" style="margin-bottom:8px">
+            <strong style="font-size:15px">${c1.name}</strong><br/>
+            <span class="small">${c1.club||''}${c1.city?' · '+c1.city:''}</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <a class="btn blue slim" href="${courseMapUrl(c1,'zh')}" target="_blank" rel="noopener">🗺 地图</a>
+            <a class="btn blue slim" href="${courseMapUrl(c1,'en')}" target="_blank" rel="noopener">🗺 Map</a>
+            <button class="btn ghost slim" onclick="copyCourseAddress('zh','day1')">Copy CN address</button>
+            <button class="btn ghost slim" onclick="copyCourseAddress('en','day1')">Copy EN address</button>
+          </div>
+        </div>`;
+      }
+      // Different venues — show two compact location cards
+      return `${courseCard(c1,'day1',satLabel||'Scramble',satTime,'Scramble venue','','')}
+              ${courseCard(c2,'day2',sunLabel||'Stableford',sunTime,'Stableford venue','','')}`;
+    })() : '';
+
+    const myLineupCard = imported && eventPlayer ? `
+      ${locationCard}
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="section-title" style="margin:0">Scramble · ${satLabel||''}</div>
+          <div style="font-size:12px;color:var(--muted)">${satTime||''}</div>
+        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:4px">${day1Team?(day1Team.teamName||day1Team.teamId||'Team'):'Not assigned'}</div>
+        <div class="small" style="color:var(--muted);margin-bottom:4px">${importedDay1Players}</div>
+        <div class="small" style="color:var(--muted)">Scorer · ${day1Scorer}</div>
+      </div>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div class="section-title" style="margin:0">Stableford · ${sunLabel||''}</div>
+          <div style="font-size:12px;color:var(--muted)">${day2Group&&day2Group.teeTime?'Tee '+day2Group.teeTime:sunTime||''}</div>
+        </div>
+        <div class="small" style="color:var(--muted);margin-bottom:4px">${day2Group?(day2Group.groupName||day2Group.groupId||'Group'):'Not assigned'}</div>
+        <div class="small" style="color:var(--muted);margin-bottom:4px">${importedDay2Players}</div>
+        <div class="small" style="color:var(--muted)">Scorer · ${day2Scorer}</div>
+      </div>
+      <div class="card">
+        <div class="toolbar tight">
+          <a class="btn gold slim" href="./CPI%20Handbook.pdf" target="_blank" rel="noopener">📖 Handbook</a>
+          <button class="btn blue slim" id="plink-${eventPlayer.playerId}" onclick="copyPlayerLink('${eventPlayer.playerId}')">Copy my link</button>
+        </div>
+      </div>` : '';
+
+    const whoCard = imported
+      ? (state.eventPlayerId
+        ? `<div class="card">
+        <div class="section-title">Playing as</div>
+        <div class="status ok" style="font-size:16px">${eventPlayer ? `<strong>${eventPlayer.displayName||eventPlayer.fullName||eventPlayer.playerId}</strong> · HCP ${eventPlayer.playingHandicap??'—'}` : '—'}</div>
+      </div>`
+        : `<div class="card">
+        <div class="section-title">Who are you?</div>
+        <label>Select your name</label>
+        <select style="font-size:15px;padding:14px;" onchange="setImportedEventPlayer(this.value)">${importedPlayerOptions}</select>
+      </div>`)
+      : '';
+
+    document.getElementById('setup').innerHTML = `
+      ${whoCard}
+      ${myLineupCard}
+      ${!imported ? `<div class="card"><div class="empty-note">Waiting for the organiser to load the event. Check back before tee time.</div></div>` : ''}
+      <div style="text-align:center;margin-top:8px;padding-bottom:4px">
+        <button onclick="toggleMasterMode()" style="background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:8px 12px;">⚙️ Organiser / admin view</button>
+      </div>
+    `;
+    return;
+  }
+
+  // ── MASTER VIEW ───────────────────────────────────────────────
+  const satInputVal = toInputDate(state.event.satDate) || (state.event.satDate||'');
+  const sunInputVal = toInputDate(state.event.sunDate) || (state.event.sunDate||'');
+  const adminTab    = state.ui.adminTab || 'players';
+  const hasPin      = !!loadAdminPin();
+
+  const playerLinksBlock = imported ? `
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-title" style="margin:0">Player links</div>
+        <button class="btn slim blue" onclick="copyLiveViewLink()">📡 Live view link</button>
+      </div>
+      <div class="small" style="margin-bottom:10px">Send player links via WeChat — each pre-selects that player's profile. The <strong>Live view link</strong> shows a live read-only leaderboard for spectators.</div>
+      <div class="stack tight">
+        ${state.eventBundle.players.map(p => {
+          const label = p.displayName || p.fullName || p.playerId;
+          return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)">
+            <span style="font-weight:700">${label}</span>
+            <button class="btn slim blue" id="plink-${p.playerId}" onclick="copyPlayerLink('${p.playerId}')">Copy link</button>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>` : '';
+
+  // ── Tab content ─────────────────────────────────────────────
+  const playersTab = `
+    ${renderRosterCard()}
+    ${playerSection}`;
+
+  const eventTab = `
+    <div class="card">
+      <div class="section-title">Weekend event file</div>
+      <div class="small">Upload the <strong>event.json</strong> to preload teams, groups, courses, and scorer defaults for the weekend.</div>
+      <div class="upload-grid tight">
+        <div>
+          <label>Upload event.json</label>
+          <input type="file" accept=".json,application/json" onchange="importEventBundleFile(this)" />
+        </div>
+        <div>
+          <label>Paste event.json</label>
+          <textarea id="eventImportText" placeholder='{"event":{"displayName":"April Chubbs"},"players":[]}'></textarea>
+          <div class="toolbar tight">
+            <button class="btn gold slim" onclick="importEventBundleText()">Import</button>
+            ${imported ? `<button class="btn ghost slim" onclick="clearImportedEventBundle()">Clear event</button>` : ''}
+          </div>
+        </div>
+      </div>
+      ${importedBlock}
+    </div>
+
+    <div class="card">
+      <div class="section-title">Event details</div>
+      <div class="grid-2 tight">
+        <div>
+          <label>Event name</label>
+          <input type="text" value="${(state.event.name||'').replace(/"/g,'&quot;')}" onchange="setEventField('name', this.value)" />
+        </div>
+        <div>
+          <label>Saturday date</label>
+          <input type="date" value="${satInputVal}" onchange="setEventField('satDate', this.value)" />
+        </div>
+      </div>
+      <div class="grid-2 tight">
+        <div>
+          <label>Sunday date</label>
+          <input type="date" value="${sunInputVal}" onchange="setEventField('sunDate', this.value)" />
+        </div>
+        <div>
+          <label>Saturday details</label>
+          <input type="text" value="${(state.event.sat||'').replace(/"/g,'&quot;')}" onchange="setEventField('sat', this.value)" />
+        </div>
+      </div>
+      <div class="toolbar tight">
+        <a class="btn gold slim" href="./CPI%20Handbook.pdf" target="_blank" rel="noopener">📖 Handbook</a>
+        <button class="btn blue slim" onclick="exportSummary()">Copy summary</button>
+      </div>
+    </div>
+
+    ${playerLinksBlock}
+
+    <div class="card">
+      <div class="section-title">Snapshot follower view</div>
+      <div class="small">Legacy join code — sends a read-only state snapshot. For live updates use the 📡 Live view link above.</div>
+      <div class="toolbar tight">
+        <button class="btn slim" data-readonly="allow" onclick="copyJoinCode()">Copy join code</button>
+        <button class="btn slim" data-readonly="allow" onclick="copyJoinLink()">Copy join link</button>
+      </div>
+      <div class="join-box tight">
+        <label>Paste join code or link to follow</label>
+        <textarea id="joinCodeInput" placeholder="Paste a join code or join link here…"></textarea>
+        <button class="btn gold slim" style="margin-top:6px" data-readonly="allow" onclick="joinGameFromInput()">Join as follower</button>
+      </div>
+    </div>`;
+
+  const coursesTab = `
+    <div class="card">
+      <div class="section-title">Day-specific course setup</div>
+      <div class="grid-2 tight">
+        ${renderRoundCard('day1', 'Saturday round', state.event.sat, day1Course, day1Config, day1Scorer)}
+        ${renderRoundCard('day2', 'Sunday round', state.event.sun, day2Course, day2Config, day2Scorer)}
+      </div>
+      <div>
+        <label>Card template</label>
+        <button class="btn ghost slim" onclick="downloadCourseTemplate('${editorTarget}')">Download CSV template</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Course editor</div>
+      <div class="toolbar tight">
+        <button class="btn slim ${editorTarget==='day1'?'gold':'ghost'}" onclick="setCourseEditorTarget('day1')">Saturday card</button>
+        <button class="btn slim ${editorTarget==='day2'?'gold':'ghost'}" onclick="setCourseEditorTarget('day2')">Sunday card</button>
+      </div>
+      <div class="focus tight"><strong>${editorTarget==='day1'?'Saturday':'Sunday'}</strong> · ${editorCourse.name}${editorCourse.detail?' · '+editorCourse.detail:''}</div>
+      <div class="status ${complete?'ok':'warn'} tight">${complete?`<strong>${editorCourse.name}</strong> is ready for scoring.`:`<strong>${editorCourse.name}</strong> needs a complete 18-hole par / stroke index card.`}</div>
+      <div class="grid-2 tight">
+        <div>
+          <label>Location language</label>
+          <div class="location-actions">
+            <button class="btn slim ${locationLang==='zh'?'gold':'ghost'}" onclick="setLocationLang('zh')">中文</button>
+            <button class="btn slim ${locationLang==='en'?'gold':'ghost'}" onclick="setLocationLang('en')">English</button>
+          </div>
+        </div>
+        <div>
+          <label>Navigation</label>
+          <div class="location-actions">
+            <button class="btn slim" onclick="copyCourseAddress('zh','${editorTarget}')">Copy CN address</button>
+            <a class="btn blue slim" href="${mapUrl}" target="_blank" rel="noopener">Map</a>
+          </div>
+        </div>
+      </div>
+      <div class="status info tight"><strong>${locationInfo.name}</strong><br/>${locationInfo.address}</div>
+      <div class="course-note">${editorCourse.note||''}</div>
+      <div class="upload-grid tight">
+        ${editorCourse.id==='palmIsland'
+          ? `<div class="empty-note">Palm Island is pre-loaded — use the nine selectors on the round cards above.</div>`
+          : `<div>
+              <label>Upload scorecard</label>
+              <input type="file" accept=".csv,.json,.txt" onchange="importCourseFile(this,'${editorTarget}')" />
+            </div>
+            <div>
+              <label>Paste scorecard rows</label>
+              <textarea id="courseImportText" placeholder="hole,par,si&#10;1,4,7&#10;2,4,17&#10;..."></textarea>
+              <button class="btn blue slim tight" onclick="importCourseText('${editorTarget}')">Import pasted card</button>
+            </div>`}
+      </div>
+      <div class="tight">
+        <label>Current par / stroke index</label>
+        <div class="editor-head"><div class="hdr">Hole</div><div class="hdr">Par</div><div class="hdr">S.I.</div></div>
+        <div class="course-editor">${courseRows}</div>
+      </div>
+    </div>`;
+
+  const settingsTab = `
+    <div class="card">
+      <div class="section-title">3-putt poker <span style="color:${state.options.threePuttPoker?'var(--gold2)':'var(--muted)'}">· ${state.options.threePuttPoker?'ON':'OFF'}</span></div>
+      <div class="small tight">3-putt poker is configured by the Stableford scorer on the <strong>Stableford tab</strong> before play begins. The setup card appears at the top until poker is turned on.</div>
+      <div class="rule-list tight">
+        <div class="rule"><strong>Cards:</strong> 0 putts = 2 cards · 1 putt = 1 card · 2 putts = none</div>
+        <div class="rule"><strong>Money:</strong> 3-putt = ${state.options.penalty3} · 4+ putt = ${state.options.penalty4} · Ante = ${state.options.ante} RMB</div>
+        <div class="rule"><strong>Last 3-putt+:</strong> last to post 3+ on a shared-miss hole doubles ante</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Admin PIN lock</div>
+      <div class="small tight">${hasPin ? 'PIN is active. Update below — share it with Terry.' : 'No PIN set — anyone can enter admin mode. Set a PIN to restrict access to you and Terry.'}</div>
+      ${hasPin ? `
+      <div class="grid-2 tight">
+        <div><label>Current PIN</label><input id="pin-old" type="password" inputmode="numeric" maxlength="12" placeholder="Current PIN" /></div>
+        <div><label>New PIN</label><input id="pin-new" type="password" inputmode="numeric" maxlength="12" placeholder="4+ characters" /></div>
+      </div>
+      <div class="toolbar tight">
+        <button class="btn gold slim" onclick="doChangeAdminPin()">Update PIN</button>
+        <button class="btn ghost slim" style="color:#ffb5ae" onclick="doRemoveAdminPin()">Remove PIN lock</button>
+      </div>` : `
+      <div class="grid-2 tight">
+        <div><label>New PIN</label><input id="pin-new" type="password" inputmode="numeric" maxlength="12" placeholder="4+ characters" /></div>
+        <div><label>Confirm PIN</label><input id="pin-confirm" type="password" inputmode="numeric" maxlength="12" placeholder="Repeat" /></div>
+      </div>
+      <button class="btn gold slim" style="margin-top:8px" onclick="doSetAdminPin()">Set PIN</button>`}
+      <div class="inline-note" style="margin-top:8px">PIN is stored on this device only. Set the same PIN on every device used for admin access.</div>
+    </div>`;
+
+  const history   = loadHistory();
+  const histSnaps = history.slice().reverse().map((snap, ri) => {
+    const idx = history.length - 1 - ri;
+    const ts  = new Date(snap.savedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div class="player-card" style="margin-bottom:6px">
+      <div class="player-head">
+        <div style="font-weight:800">${escHtml(snap.eventName||snap.eventId||'Event')}</div>
+        <div class="hcp-badge">${ts}</div>
+      </div>
+      <div class="small">${escHtml(snap.eventId||'')} · ${snap.playerCount||0} players</div>
+      <div class="toolbar tight">
+        <button class="btn slim blue" onclick="restoreSnapshot(${idx})">Restore scores</button>
+        <button class="btn slim ghost" onclick="deleteSnapshot(${idx})">Delete</button>
+      </div>
+    </div>`;
+  }).join('') || `<div class="empty-note tight">No saved snapshots yet.</div>`;
+
+  const dataTab = `
+    <div class="card">
+      <div class="section-title">Save &amp; clear round data</div>
+      <div class="small tight">Save a snapshot before clearing — roster and event file are always preserved.</div>
+      <div class="toolbar tight" style="margin-top:10px;flex-wrap:wrap">
+        <button class="btn gold slim" onclick="saveEventSnapshot()">💾 Save snapshot</button>
+        <button class="btn slim" onclick="clearRoundScores()">🗑 Clear scores only</button>
+        <button class="btn warn slim" onclick="resetApp()">⚠️ Full reset</button>
+      </div>
+      <div class="rule-list tight">
+        <div class="rule"><strong>Save snapshot</strong> — archives all hole scores, putts, and poker data to history.</div>
+        <div class="rule"><strong>Clear scores only</strong> — resets Scramble &amp; Stableford holes. Keeps roster, event file, and settings.</div>
+        <div class="rule"><strong>Full reset</strong> — clears everything except the roster. Use after the season is over.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-title" style="margin:0">Event history</div>
+        <span class="small" style="color:var(--muted)">${history.length} snapshot${history.length===1?'':'s'}</span>
+      </div>
+      ${histSnaps}
+    </div>`;
+
+  const tabs = {players:playersTab, event:eventTab, courses:coursesTab, settings:settingsTab, data:dataTab};
+
+  document.getElementById('setup').innerHTML = `
+    <div class="status warn" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+      <span>⚙️ Admin view${hasPin ? ' · 🔒' : ''}</span>
+      <button class="btn slim ghost" onclick="toggleMasterMode()">Exit admin</button>
+    </div>
+    <nav class="admin-tab-nav">
+      ${[['players','👥 Players'],['event','📋 Event'],['courses','⛳ Courses'],['settings','⚙️ Settings'],['data','💾 Data']].map(
+        ([id,lbl]) => `<button class="admin-tab-btn ${adminTab===id?'active':''}" onclick="setAdminTab('${id}')">${lbl}</button>`
+      ).join('')}
+    </nav>
+    <div class="stack" style="margin-top:14px">${tabs[adminTab] || playersTab}</div>
+  `;
+}
+
+
+
+function renderDay1(){
+  const scramblePlayers = currentPlayers('scramble');
+  const course = activeCourse('day1');
+  const scrambleAllScored = state.scramble.holes.every(h => typeof h.gross === 'number');
+  const meta = holeMeta(state.scramble.hole, 'day1');
+  const hole = state.scramble.holes[state.scramble.hole];
+  const totals = scrambleTotals();
+  const impossible = totals.drives.map(c => Math.max(0, 4 - c) > (18 - state.scramble.hole));
+  const importedTeam = activeEventDay1Team();
+  const drivePills = scramblePlayers.map((p, idx) => {
+    const count = totals.drives[idx];
+    const needed = Math.max(0, 4 - count);
+    const holesLeft = 18 - state.scramble.hole;
+    const pillColor = needed === 0
+      ? 'background:#1a3d2b;color:#5cf5a0;border:1px solid #2a6b44'
+      : (count > 0 && needed <= holesLeft)
+        ? 'background:#2d2a0a;color:#f5d85c;border:1px solid #6b5a18'
+        : 'background:#3d1a1a;color:#f55c5c;border:1px solid #6b2020';
+    return `<span style="display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;${pillColor}">${fmtName(p.name, idx)} ${count}/4</span>`;
+  }).join(' ');
+  const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedTeam ? (importedTeam.teamName || importedTeam.teamId || 'Team') : 'Not assigned'} · ${scramblePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedTeam, state.eventBundle)}</span><span class="small"> · Course · ${course.name}${course.detail ? ' · ' + course.detail : ''}</span><br/><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${drivePills}</div></div>` : '';
+  const summary = scramblePlayers.map((p, idx) => {
+    const count = totals.drives[idx];
+    const needed = Math.max(0, 4 - count);
+    const cls = needed === 0 ? 'ok' : (impossible[idx] ? 'warn' : 'info');
+    return `<div class="status ${cls}"><strong>${fmtName(p.name, idx)}</strong><br>${count} drives used · ${needed} still needed</div>`;
+  }).join('\n');
+
+  const driverButtons = scramblePlayers.map((p, idx) =>
+    `<button class="driver-btn ${hole.driver===idx?'on':''}" onclick="setDriver(${idx})">${fmtName(p.name, idx)}${hole.driver===idx?' · selected':''}</button>`
+  ).join('\n');
+
+  const rows = state.scramble.holes.map((h, idx) => {
+    const driver = h.driver === null ? '—' : fmtName(scramblePlayers[h.driver].name, h.driver);
+    const m = holeMeta(idx, 'day1');
+    return `<tr><td>${idx+1}</td><td>${m.par ?? '—'}</td><td>${m.si ?? '—'}</td><td>${typeof h.gross==='number'?h.gross:'—'}</td><td class="left">${driver}</td></tr>`;
+  }).join('\n');
+
+  document.getElementById('day1').innerHTML = `
+    <div class="card">
+      <div class="section-title">Scramble</div>
+      ${importedNote}
+      <input type="text" value="${(state.scramble.teamName || '').replace(/"/g,'&quot;')}" placeholder="Team name (required for export)" onchange="setScrambleTeamName(this.value)" />
+      ${holeWarning && holeWarning.day==='scramble' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('scramble',1)">Skip anyway</button></div>` : ''}
+      <div class="holebar tight">
+        <button class="btn slim" onclick="navHole('scramble',-1)">← Prev</button>
+        <div class="hole-chip" style="flex:1;text-align:center">Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
+        <button class="btn slim" onclick="navHole('scramble',1)">Next →</button>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0">
+        <div class="meta"><div class="k">Total</div><div class="v">${totals.entered ? totals.total : '—'}</div></div>
+        <div class="meta ${totals.entered ? toParClass(totals.toPar) : ''}"><div class="k">To par</div><div class="v">${totals.entered ? fmtToPar(totals.toPar) : '—'}</div></div>
+      </div>
+      <label>Team gross</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div class="stepper" style="flex:1">
+          <button onclick="stepScore('scramble',0,-1)">−</button>
+          ${typeof hole.gross==='number'
+            ? `<div class="val">${hole.gross}</div>`
+            : (meta.par ? `<button class="val" onclick="setExact('scramble',0,${meta.par})">${meta.par}</button>`
+                        : `<div class="val empty">—</div>`)}
+          <button onclick="stepScore('scramble',0,1)">+</button>
+        </div>
+        ${typeof hole.gross==='number' ? `<button class="stepper-clr" onclick="clearScore('scramble')" title="Clear score">✕</button>` : ''}
+      </div>
+      ${typeof hole.gross==='number' && typeof meta.par==='number' ? `<div class="small tight" style="color:${hole.gross-meta.par<0?'#a5f0c5':hole.gross-meta.par>0?'#ffb5ae':'var(--gold2)'}">vs par: ${fmtToPar(hole.gross - meta.par)}</div>` : ''}
+      <label class="tight">Drive used on this hole</label>
+      <div class="driver-grid">${driverButtons}</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Drive requirement tracker</div>
+      <div class="small">A red warning means a player is running out of holes to reach the required four drives.</div>
+      ${summary}
+    </div>
+
+    <div class="card">
+      <div class="section-title">Scramble scorecard</div>
+      <table>
+        <thead><tr><th>Hole</th><th>Par</th><th>S.I.</th><th>Gross</th><th class="left">Drive used</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+
+    ${scrambleAllScored ? `
+    <div class="card" style="text-align:center">
+      ${state.scramble.teamName.trim() ? '' : `<div class="status warn tight" style="margin-bottom:12px">Add the team name before exporting.</div>`}
+      <button class="btn gold" style="width:100%;padding:16px;font-size:16px" onclick="exportScrambleCsv()">Export scramble CSV</button>
+    </div>` : ''}
+  `;
+}
+
+function quickPuttButtons(idx){
+  return `
+    <div class="pills tight">
+      <button class="btn slim" onclick="setExact('stableford',${idx},0,'putts')">0</button>
+      <button class="btn slim" onclick="setExact('stableford',${idx},1,'putts')">1</button>
+      <button class="btn slim" onclick="setExact('stableford',${idx},2,'putts')">2</button>
+      <button class="btn slim warn" onclick="setExact('stableford',${idx},3,'putts')">3</button>
+      <button class="btn slim warn" onclick="setExact('stableford',${idx},4,'putts')">4+</button>
+    </div>`;
+}
+
+
+function renderPokerSetupCard(){
+  const on = state.options.threePuttPoker;
+  const currency = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency) || 'RMB';
+  return `<div class="card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${on?'10px':'0'}">
+      <div class="section-title" style="margin:0">3-putt poker <span style="color:${on?'var(--gold2)':'var(--muted)'}">· ${on?'ON':'OFF'}</span></div>
+      <button class="btn slim ${on?'gold':'ghost'}" onclick="toggleThreePutt()">${on?'Turn off':'Turn on'}</button>
+    </div>
+    ${on ? `
+    <div class="grid-2 tight" style="margin-top:2px">
+      <div><label>Ante (${currency})</label>
+        <input type="number" min="0" step="10" value="${state.options.ante}" onchange="setMoneyOption('ante',this.value)" /></div>
+      <div><label>3-putt penalty (${currency})</label>
+        <input type="number" min="0" step="5" value="${state.options.penalty3}" onchange="setMoneyOption('penalty3',this.value)" /></div>
+    </div>
+    <div class="grid-2 tight">
+      <div><label>4+ putt penalty (${currency})</label>
+        <input type="number" min="0" step="5" value="${state.options.penalty4}" onchange="setMoneyOption('penalty4',this.value)" /></div>
+      <div><label>Card dealing</label>
+        <select onchange="setPokerMode(this.value)">
+          <option value="digital" ${state.options.pokerMode==='digital'?'selected':''}>Digital (in app)</option>
+          <option value="physical" ${state.options.pokerMode==='physical'?'selected':''}>Physical cards</option>
+        </select></div>
+    </div>` : ''}
+  </div>`;
+}
+
+function renderDay2(){
+  const stablePlayers = currentPlayers('stableford');
+  const course = activeCourse('day2');
+  const stablefordAllScored = stablePlayers.length > 0 && state.stableford.holes.every(h => stablePlayers.every((_, i) => typeof h.gross[i] === 'number'));
+  const complete = courseComplete(course);
+  const meta = holeMeta(state.stableford.hole, 'day2');
+  const hole = state.stableford.holes[state.stableford.hole];
+  const poker = pokerSummary();
+  const penaltyPlayers = penaltyPlayersForHole(hole);
+  const flaggedPlayer = effectiveLastPenaltyPlayerForHole(hole);
+  const importedGroup = activeEventDay2Group();
+  const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedGroup ? ((importedGroup.groupName || importedGroup.groupId || 'Group') + (importedGroup.teeTime ? ' · ' + importedGroup.teeTime : '')) : 'Not assigned'} · ${stablePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedGroup, state.eventBundle)}</span><span class="small"> · Course · ${course.name}${course.detail ? ' · ' + course.detail : ''}</span></div>` : '';
+
+  const playerCards = stablePlayers.map((p, idx) => {
+    const gross = hole.gross[idx];
+    const putts = hole.putts[idx];
+    const shots = complete ? shotsReceived(p.hcp, meta.si) : null;
+    const points = complete && typeof gross === 'number' ? stablefordPoints(gross, meta.par, shots) : null;
+    const net = complete && typeof gross === 'number' ? gross - shots : null;
+    const eff = currentHolePokerEffect(putts);
+    const total = playerTotals(idx);
+    const doubled = poker.lastPenaltyPlayer === idx ? ' · currently last 3-putt+' : '';
+    const showFlag = state.options.threePuttPoker && penaltyPlayers.length > 1 && typeof putts === 'number' && putts >= 3;
+    const flagOn = showFlag && flaggedPlayer === idx;
+
+    const puttBlock = state.options.threePuttPoker
+      ? `<div style="display:flex;gap:8px;align-items:center">
+           <div class="stepper" style="flex:1">
+             <button onclick="stepScore('stableford',${idx},-1,'putts')">−</button>
+             <div class="val ${typeof putts==='number' ? '' : 'empty'}">${typeof putts==='number' ? (putts >= 4 ? '4+' : putts) : '—'}</div>
+             <button onclick="stepScore('stableford',${idx},1,'putts')">+</button>
+           </div>
+           ${typeof putts==='number' ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
+         </div>
+         ${quickPuttButtons(idx)}`
+      : '';
+
+    return `
+      <div class="player-card p${idx}">
+        <div class="player-head">
+          <div class="player-name">${fmtName(p.name, idx)}</div>
+          <div class="toolbar tight">
+            ${showFlag ? `<button class="flag-btn ${flagOn ? 'on' : 'safe'}" onclick="setLastPenaltyFlag(${idx})">🚩 ${flagOn ? 'Last 3-putt+' : 'Mark last 3-putt+'}</button>` : ''}
+            <div class="hcp-badge">HCP ${p.hcp}</div>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div>
+            <label>Gross</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="stepper" style="flex:1">
+                <button onclick="stepScore('stableford',${idx},-1,'gross')">−</button>
+                ${typeof gross==='number'
+                  ? `<div class="val">${gross}</div>`
+                  : (meta.par ? `<button class="val" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
+                              : `<div class="val empty">—</div>`)}
+                <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
+              </div>
+              ${typeof gross==='number' ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear">✕</button>` : ''}
+            </div>
+            ${typeof gross==='number' && typeof meta.par==='number' ? `<div class="small tight" style="color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'}">vs par: ${fmtToPar(gross - meta.par)}</div>` : ''}
+            <div class="toolbar tight" style="margin-top:6px">
+              <button class="btn slim" onclick="setBlob(${idx})">Spenny</button>
+            </div>
+          </div>
+          <div>
+            <label>Putts</label>
+            ${puttBlock}
+          </div>
+        </div>
+        <div class="meta-grid-4 tight">
+          <div class="meta"><div class="k">Shots</div><div class="v">${shots ?? '—'}</div></div>
+          <div class="meta"><div class="k">Net</div><div class="v">${net ?? '—'}</div></div>
+          <div class="meta"><div class="k">Pts</div><div class="v">${points ?? '—'}</div></div>
+          <div class="meta"><div class="k">Cards</div><div class="v">${total.pokerCards}</div></div>
+        </div>
+      </div>
+    `;
+  }).join('\n');
+
+  const pokerSetupCard = renderPokerSetupCard();
+  document.getElementById('day2').innerHTML = `
+    ${!state.options.threePuttPoker ? pokerSetupCard : ''}
+    <div class="card">
+      <div class="section-title">Stableford</div>
+      ${importedNote}
+      ${complete ? '' : `<div class="status warn tight">Complete the scorecard on Setup first. Stableford needs par and stroke index for all 18 holes.</div>`}
+      ${holeWarning && holeWarning.day==='stableford' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('stableford',1)">Skip anyway</button></div>` : ''}
+      <div class="holebar tight">
+        <button class="btn slim" onclick="navHole('stableford',-1)">← Prev</button>
+        <div class="hole-chip" style="flex:1;text-align:center">Hole ${state.stableford.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
+        <button class="btn slim" onclick="navHole('stableford',1)">Next →</button>
+      </div>
+      ${state.options.threePuttPoker && penaltyPlayers.length > 1 ? `<div class="status warn tight">More than one player 3-putted this hole. Flag the last one.</div>` : ''}
+    </div>
+
+    <div class="stack">${playerCards}</div>
+
+    ${stablefordAllScored ? `
+    <div class="card" style="text-align:center">
+      <button class="btn gold" style="width:100%;padding:16px;font-size:16px" onclick="exportStablefordCsv()">Export Stableford CSV</button>
+    </div>` : ''}
+    ${state.options.threePuttPoker ? pokerSetupCard : ''}
+  `;
+}
+
+function buildDeck(){
+  const suits = ['♠','♥','♦','♣'];
+  const ranks = [
+    {s:'2',v:2},{s:'3',v:3},{s:'4',v:4},{s:'5',v:5},{s:'6',v:6},{s:'7',v:7},{s:'8',v:8},{s:'9',v:9},
+    {s:'10',v:10},{s:'J',v:11},{s:'Q',v:12},{s:'K',v:13},{s:'A',v:14}
+  ];
+  const deck = [];
+  suits.forEach(suit => ranks.forEach(rank => deck.push({code:rank.s+suit, rank:rank.v, rankLabel:rank.s, suit})));
+  return deck;
+}
+function shuffle(arr){
+  const a = arr.slice();
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function combinations(arr, k){
+  const out = [];
+  function rec(start, path){
+    if(path.length === k){ out.push(path.slice()); return; }
+    for(let i=start; i<arr.length; i++){
+      path.push(arr[i]);
+      rec(i+1, path);
+      path.pop();
+    }
+  }
+  rec(0, []);
+  return out;
+}
+function isStraight(vals){
+  const uniq = Array.from(new Set(vals)).sort((a,b)=> b-a);
+  if(uniq.length < 5) return null;
+  for(let i=0; i<=uniq.length-5; i++){
+    let ok = true;
+    for(let j=1; j<5; j++) if(uniq[i+j] !== uniq[i]-j) ok = false;
+    if(ok) return uniq[i];
+  }
+  if(uniq.includes(14) && uniq.includes(5) && uniq.includes(4) && uniq.includes(3) && uniq.includes(2)) return 5;
+  return null;
+}
+
+function evaluateHand(cards){
+  const vals = cards.map(c => c.rank).sort((a,b)=> b-a);
+  const counts = {};
+  vals.forEach(v => counts[v] = (counts[v] || 0) + 1);
+  const groups = Object.entries(counts)
+    .map(([rank,count]) => ({rank:Number(rank), count}))
+    .sort((a,b)=> b.count - a.count || b.rank - a.rank);
+  const isFiveCard = cards.length === 5;
+  const flush = isFiveCard && cards.every(c => c.suit === cards[0].suit);
+  const straightHigh = isFiveCard ? isStraight(vals) : null;
+
+  let category = 0;
+  let tiebreak = [];
+  let label = 'High card';
+
+  if(isFiveCard && straightHigh && flush){
+    category = 8; tiebreak = [straightHigh]; label = 'Straight flush';
+  }else if(groups[0].count === 4){
+    category = 7; tiebreak = [groups[0].rank, groups[1] ? groups[1].rank : 0]; label = 'Four of a kind';
+  }else if(isFiveCard && groups[0].count === 3 && groups[1] && groups[1].count === 2){
+    category = 6; tiebreak = [groups[0].rank, groups[1].rank]; label = 'Full house';
+  }else if(isFiveCard && flush){
+    category = 5; tiebreak = vals; label = 'Flush';
+  }else if(isFiveCard && straightHigh){
+    category = 4; tiebreak = [straightHigh]; label = 'Straight';
+  }else if(groups[0].count === 3){
+    const kickers = groups.slice(1).map(g => g.rank).sort((a,b)=> b-a);
+    category = 3; tiebreak = [groups[0].rank, ...kickers]; label = 'Three of a kind';
+  }else if(groups[0].count === 2 && groups[1] && groups[1].count === 2){
+    const pairs = [groups[0].rank, groups[1].rank].sort((a,b)=> b-a);
+    const kicker = groups[2] ? groups[2].rank : 0;
+    category = 2; tiebreak = [...pairs, kicker]; label = 'Two pair';
+  }else if(groups[0].count === 2){
+    const kickers = groups.slice(1).map(g => g.rank).sort((a,b)=> b-a);
+    category = 1; tiebreak = [groups[0].rank, ...kickers]; label = 'One pair';
+  }else{
+    category = 0; tiebreak = vals; label = 'High card';
+  }
+  return {category, tiebreak, label, cards};
+}
+function compareHands(a, b){
+  if(a.category !== b.category) return a.category - b.category;
+  const len = Math.max(a.tiebreak.length, b.tiebreak.length);
+  for(let i=0; i<len; i++){
+    const av = a.tiebreak[i] || 0;
+    const bv = b.tiebreak[i] || 0;
+    if(av !== bv) return av - bv;
+  }
+  return 0;
+}
+
+function bestHand(cards){
+  if(!cards.length) return null;
+  const size = Math.min(5, cards.length);
+  const combos = combinations(cards, size);
+  let best = null;
+  combos.forEach(combo => {
+    const evald = evaluateHand(combo);
+    if(!best || compareHands(evald, best) > 0) best = evald;
+  });
+  return best;
+}
+
+function dealPoker(){
+  const poker = pokerSummary();
+  const totalCards = poker.players.reduce((sum, p) => sum + p.cards, 0);
+  if(totalCards < 1){
+    showToast('No poker cards earned yet.', 'err');
+    return;
+  }
+  if(totalCards > 52){
+    showToast('Too many cards (52+) — switch to physical cards for this round.', 'err');
+    return;
+  }
+  let deck = shuffle(buildDeck());
+  const hands = poker.players.map(p => {
+    const cards = deck.splice(0, p.cards);
+    const best = bestHand(cards);
+    return {idx:p.idx, cards, best};
+  });
+  let winnerIdx = null;
+  hands.forEach(hand => {
+    if(!hand.best) return;
+    if(winnerIdx === null || compareHands(hand.best, hands[winnerIdx].best) > 0) winnerIdx = hand.idx;
+  });
+  state.poker.digitalDeal = {hands, winnerIdx, dealtAt:new Date().toISOString()};
+  saveState();
+  renderAll();
+}
+function resetPokerDeal(){
+  state.poker.digitalDeal = null;
+  saveState();
+  renderAll();
+}
+function renderPokerDeal(){
+  if(!state.options.threePuttPoker) return '';
+  const poker = pokerSummary();
+  const rows = poker.players.map(p => `
+    <div class="summary-row">
+      <div class="n">${p.name}</div>
+      <div class="s">${p.cards} cards · RMB ${p.totalContribution}</div>
+    </div>
+  `).join('\n');
+
+  let digitalBlock = '';
+  if(state.options.pokerMode === 'digital'){
+    if(state.poker.digitalDeal){
+      const handsHtml = state.poker.digitalDeal.hands.map(hand => {
+        const winner = state.poker.digitalDeal.winnerIdx === hand.idx;
+        const player = poker.players[hand.idx];
+        const best = hand.best ? `${hand.best.label}` : 'No cards';
+        const cards = hand.cards.length
+          ? hand.cards.map(card => `<div class="play-card ${card.suit==='♥' || card.suit==='♦' ? 'red' : ''}">${card.code}</div>`).join('\n')
+          : '<div class="empty-note">No cards earned.</div>';
+        const bestCards = hand.best
+          ? `<div class="cards-wrap">${hand.best.cards.map(card => `<div class="play-card ${card.suit==='♥' || card.suit==='♦' ? 'red' : ''}">${card.code}</div>`).join('\n')}</div>`
+          : '';
+        return `
+          <div class="player-card ${winner ? 'winner' : ''}">
+            <div class="player-head">
+              <div class="player-name">${player.name}${winner ? ' · Winner' : ''}</div>
+              <div class="hcp-badge">${best}</div>
+            </div>
+            <div class="cards-wrap">${cards}</div>
+            ${bestCards ? `<div class="inline-note">Best hand in play</div>${bestCards}` : ''}
+          </div>`;
+      }).join('\n');
+      digitalBlock = `
+        <div class="toolbar tight">
+          <button class="btn blue slim" onclick="dealPoker()">Redeal</button>
+          <button class="btn ghost slim" onclick="resetPokerDeal()">Clear deal</button>
+        </div>
+        <div class="stack tight">${handsHtml}</div>
+      `;
+    }else{
+      digitalBlock = `
+        <div class="toolbar tight">
+          <button class="btn blue slim" onclick="dealPoker()">Deal digital cards</button>
+        </div>
+        <div class="inline-note">Uses one 52-card deck. Players can now be ranked even with fewer than 5 cards. If the total earned cards go above 52, switch to physical cards for that round.</div>
+      `;
+    }
+  }else{
+    digitalBlock = `<div class="empty-note">Physical cards selected. The app tracks each player's card count and money in. Deal the real cards off-screen.</div>`;
+  }
+
+  return `
+    <div class="card">
+      <div class="section-title">3-putt poker</div>
+      <div class="meta-grid">
+        <div class="meta"><div class="k">Pot</div><div class="v">RMB ${poker.pot}</div></div>
+        <div class="meta"><div class="k">Mode</div><div class="v">${state.options.pokerMode === 'digital' ? 'Digital' : 'Physical'}</div></div>
+        <div class="meta"><div class="k">Last 3-putt+</div><div class="v">${poker.lastPenaltyPlayer===null ? '—' : poker.players[poker.lastPenaltyPlayer].name}</div></div>
+      </div>
+      ${rows}
+      ${digitalBlock}
+    </div>
+  `;
+}
+
+
+function openSponsorLink(){
+  const mpLink = '#小程序://南沙高球通/xrtlrkfkblCCGah';
+  const isWeChat = /MicroMessenger/i.test(navigator.userAgent);
+  if(isWeChat){
+    location.href = 'weixin://dl/business/?t=xrtlrkfkblCCGah';
+  } else {
+    navigator.clipboard.writeText(mpLink)
+      .then(()=> showToast('Link copied — open WeChat and paste to launch 南沙高球通', 'ok'))
+      .catch(()=> showToast('Open WeChat and search: 南沙高球通', 'info'));
+  }
+}
+function renderSponsorTile(){
+  const hasLogo = true; // set false if nansha_logo.png not yet in folder
+  return `
+  <div onclick="openSponsorLink()" style="
+      background:linear-gradient(135deg,rgba(10,40,20,0.97),rgba(5,20,12,0.98));
+      border:1px solid rgba(214,176,90,0.4);
+      border-radius:16px;padding:14px 16px;
+      display:flex;align-items:center;gap:14px;
+      cursor:pointer;margin-bottom:2px;
+      box-shadow:0 2px 12px rgba(0,0,0,0.4)">
+    <div style="flex-shrink:0;width:52px;height:52px;border-radius:10px;overflow:hidden;
+                background:rgba(255,255,255,0.06);border:1px solid rgba(214,176,90,0.25);
+                display:flex;align-items:center;justify-content:center">
+      <img src="./nansha_logo.png" alt="南沙高球通"
+        style="width:52px;height:52px;object-fit:contain"
+        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"  />
+      <div style="display:none;font-size:22px;align-items:center;justify-content:center;width:100%;height:100%">⛳</div>
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold2);opacity:.7;margin-bottom:2px">Weekend sponsor</div>
+      <div style="font-weight:800;font-size:15px;color:#fff">南沙高球通</div>
+      <div style="font-size:12px;color:var(--muted)">Nansha Golf · Book tee times</div>
+    </div>
+    <div style="flex-shrink:0;font-size:11px;color:var(--gold2);font-weight:700;
+                border:1px solid rgba(214,176,90,0.4);border-radius:8px;
+                padding:5px 10px;white-space:nowrap">
+      Open in<br/>WeChat ↗
+    </div>
+  </div>`;
+}
+function renderLeaderboard(){
+  const scramblePlayers = currentPlayers('scramble');
+  const day1Course = activeCourse('day1');
+  const day2Course = activeCourse('day2');
+  const scramble = scrambleTotals();
+  const allPlayers = leaderboardPlayers();
+  const ranking = [...allPlayers].sort((a,b) =>
+    b.points - a.points || b.back9 - a.back9 || b.entered - a.entered || a.hcp - b.hcp
+  );
+  const lbUnlocked = isLeaderboardUnlocked();
+
+  // ── SCRAMBLE SECTION ─────────────────────────────────────────────
+  const scrambleHasScores = scramble.entered > 0;
+  const driveHtml = scramblePlayers.map((p, idx) => {
+    const count = scramble.drives[idx];
+    return `<div class="summary-row"><div class="n">${fmtName(p.name, idx)}</div><div class="s">${count} / 4</div></div>`;
+  }).join('\n');
+
+  let scrambleCard;
+  if(!scrambleHasScores){
+    scrambleCard = `<details>
+      <summary style="list-style:none;cursor:pointer">
+        <div class="card" style="margin-bottom:0">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="section-title" style="margin:0">Scramble</div>
+            <span class="small" style="color:var(--muted)">No scores yet ▸</span>
+          </div>
+          <div class="small" style="color:var(--muted);margin-top:4px">${day1Course.name} · ${state.scramble.teamName.trim() || 'Team TBC'}</div>
+        </div>
+      </summary>
+    </details>`;
+  } else if(!state.ui.day1Revealed){
+    scrambleCard = `<div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div class="section-title" style="margin:0">Scramble</div>
+        <span class="small" style="color:var(--gold2)">${scramble.entered}/18 holes</span>
+      </div>
+      <div class="meta-grid" style="margin-bottom:8px">
+        <div class="meta"><div class="k">Team gross</div><div class="v">${scramble.total}</div></div>
+        <div class="meta ${toParClass(scramble.toPar)}"><div class="k">To par</div><div class="v">${fmtToPar(scramble.toPar)}</div></div>
+      </div>
+      <div class="inline-note" style="margin-bottom:10px">${day1Course.name} · ${state.scramble.teamName.trim() || 'Team TBC'}</div>
+      ${lbUnlocked ? driveHtml : `<div style="text-align:center;margin-top:4px"><button class="btn ghost slim" onclick="unlockLeaderboard()">See drive tracker</button></div>`}
+    </div>`;
+  } else {
+    scrambleCard = `<div class="card">
+      <div class="section-title">Scramble results</div>
+      <div class="meta-grid">
+        <div class="meta"><div class="k">Team gross</div><div class="v">${scramble.total}</div></div>
+        <div class="meta ${toParClass(scramble.toPar)}"><div class="k">To par</div><div class="v">${fmtToPar(scramble.toPar)}</div></div>
+        <div class="meta"><div class="k">Holes</div><div class="v">${scramble.entered}</div></div>
+      </div>
+      <div class="inline-note">${day1Course.name} · ${state.scramble.teamName.trim() || 'Team name not set'}</div>
+      ${driveHtml}
+    </div>`;
+  }
+
+  // ── STABLEFORD SECTION ───────────────────────────────────────────
+  const anyStableScores = ranking.some(r => r.entered > 0);
+  const leader = ranking[0];
+  const paywall = `<div style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.22);border-radius:12px;padding:14px 16px;text-align:center;margin-top:8px">
+    <div style="font-size:13px;font-weight:700;color:var(--gold2);margin-bottom:4px">Full leaderboard</div>
+    <div class="small" style="color:var(--muted);margin-bottom:6px">Buy the organiser a beer and unlock the full ranked board for this device.</div>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">① Save QR to photos &nbsp;② WeChat → Pay &nbsp;③ Photo Library / QR code &nbsp;④ Scan &amp; pay</div>
+    <button class="btn ghost slim" style="margin-right:8px" onclick="showQrOverlay('./mph_pay_code.jpeg','① Save to photos  ② WeChat → Pay  ③ Photo Library / QR code  ④ Scan & pay')">WeChat Pay 🍺</button>
+    <button class="btn gold slim" onclick="unlockLeaderboard()">Unlocked ✓</button>
+  </div>`;
+
+  const fullRankHtml = ranking.map((row, i) => {
+    const isAway = row.source === 'none';
+    const holesLabel = row.entered > 0
+      ? `${row.entered}/18 holes${row.source==='remote' ? ' · live' : ''}`
+      : (row.source==='remote' ? 'Connected · no holes complete' : 'No scores');
+    return `<div class="player-card leader${isAway ? ' away' : ''}">
+      <div class="player-head">
+        <div><span class="rank">${i+1}</span><strong>${row.name}</strong>${renderJacketBadges(row, true)}</div>
+        <div class="hcp-badge">HCP ${row.hcp}</div>
+      </div>
+      <div class="meta-grid-4">
+        <div class="meta"><div class="k">Pts</div><div class="v">${row.points||0}</div></div>
+        <div class="meta"><div class="k">Gross</div><div class="v">${row.entered ? row.gross : '—'}</div></div>
+        <div class="meta"><div class="k">Back 9</div><div class="v">${row.back9 || '—'}</div></div>
+        <div class="meta"><div class="k">3-putt+</div><div class="v">${row.putts3plus||0}</div></div>
+      </div>
+      <div class="inline-note">${holesLabel}</div>
+    </div>`;
+  }).join('\n');
+
+  let stablefordCard;
+  if(!anyStableScores){
+    stablefordCard = `<details>
+      <summary style="list-style:none;cursor:pointer">
+        <div class="card" style="margin-bottom:0">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="section-title" style="margin:0">Stableford</div>
+            <span class="small" style="color:var(--muted)">No scores yet ▸</span>
+          </div>
+          <div class="small" style="color:var(--muted);margin-top:4px">${day2Course.name} · ${ranking.length} players · Sorted by pts, back-9 countback</div>
+          ${ranking.length ? `<div style="margin-top:6px">${ranking.map(r=>`<span class="small" style="color:var(--muted);margin-right:8px">${r.name}</span>`).join('')}</div>` : ''}
+        </div>
+      </summary>
+    </details>`;
+  } else if(lbUnlocked){
+    stablefordCard = `<div class="card">
+      <div class="section-title">Stableford · Golden Jacket board</div>
+      <div class="inline-note">${day2Course.name} · Sorted by pts, back-9 countback</div>
+      <div class="stack tight" style="margin-top:10px">${fullRankHtml}</div>
+    </div>`;
+  } else {
+    // Teaser: show leader + summary, paywall for full list
+    const leaderBlock = leader && leader.entered > 0
+      ? `<div class="player-card leader" style="margin-bottom:8px">
+          <div class="player-head">
+            <div><span class="rank">1</span><strong>${leader.name}</strong>${renderJacketBadges(leader, true)}</div>
+            <div class="hcp-badge">HCP ${leader.hcp}</div>
+          </div>
+          <div class="meta-grid-4">
+            <div class="meta"><div class="k">Pts</div><div class="v">${leader.points||0}</div></div>
+            <div class="meta"><div class="k">Gross</div><div class="v">${leader.gross}</div></div>
+            <div class="meta"><div class="k">Back 9</div><div class="v">${leader.back9||'—'}</div></div>
+            <div class="meta"><div class="k">Holes</div><div class="v">${leader.entered}/18</div></div>
+          </div>
+        </div>` : '';
+    stablefordCard = `<div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="section-title" style="margin:0">Stableford · Golden Jacket board</div>
+        <span class="small" style="color:var(--gold2)">${ranking.filter(r=>r.entered>0).length}/${ranking.length} scored</span>
+      </div>
+      <div class="inline-note" style="margin-bottom:8px">${day2Course.name} · Sorted by pts, back-9 countback</div>
+      ${leaderBlock}
+      ${paywall}
+    </div>`;
+  }
+
+  // ── 3-PUTT POKER SECTION (last, collapsed until putts) ───────────
+  const poker = pokerSummary();
+  const hasPokerActivity = state.options.threePuttPoker && poker.pot > (poker.players.length * state.options.ante);
+  const pokerSection = !state.options.threePuttPoker ? '' : (() => {
+    if(!hasPokerActivity){
+      return `<details style="margin-bottom:12px">
+        <summary style="list-style:none;cursor:pointer">
+          <div class="card" style="margin-bottom:0">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div class="section-title" style="margin:0">3-putt poker</div>
+              <span class="small" style="color:var(--muted)">No putts yet ▸</span>
+            </div>
+            <div class="small" style="color:var(--muted);margin-top:4px">Pot starts at · RMB ${poker.pot} · ${poker.players.length} players</div>
+          </div>
+        </summary>
+        ${renderPokerDeal()}
+      </details>`;
+    }
+    return renderPokerDeal();
+  })();
+
+  document.getElementById('leaderboard').innerHTML = `
+    ${scrambleCard}
+
+    ${stablefordCard}
+
+    ${pokerSection}
+
+    ${renderSponsorTile()}
+    <div onclick="navigator.clipboard.writeText('MPH_SIC').then(()=>showToast('WeChat ID copied — open WeChat and paste','ok'))"
+      style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.2);border-radius:12px;
+             padding:12px 14px;margin-top:4px;margin-bottom:8px;cursor:pointer">
+      <div style="font-size:13px;font-weight:700;color:var(--gold2);margin-bottom:4px">Interested in sponsoring Chubbs?</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5">A small sponsor tile on the live leaderboard — seen by every player and scorer all weekend. Message <span style="color:var(--gold2)">MPH_SIC</span> on WeChat to chat. 📋</div>
+    </div>
+  `;
+}
+
+
+function renderModeBanner(){
+  const el = document.getElementById('modeBanner');
+  if(!el) return;
+  if(!readOnlyMode){ el.innerHTML = ''; return; }
+  if(window._cpiWatchEventId){
+    const dot = SYNC.status==='live' ? '<span class="sync-dot" style="background:#a5f0c5;animation:pulse 2s infinite;display:inline-block;width:6px;height:6px;border-radius:50%;margin-right:4px"></span>' : '';
+    el.innerHTML = `
+      <div class="status info" style="display:flex;align-items:center;gap:12px">
+        <div style="flex:1"><strong>Live view</strong> · read-only<br/><span class="small">${dot}${SYNC.status==='live' ? 'Connected — scores update automatically' : 'Connecting to live scores…'}</span></div>
+        <button class="btn slim" data-readonly="allow" onclick="leaveJoinMode()">Exit</button>
+      </div>`;
+  } else {
+    el.innerHTML = `
+      <div class="status info">
+        <div><strong>Follower view</strong><br/>This copy is read-only. Ask the scorer for a fresh join code or join link when the round changes.</div>
+        <div class="toolbar"><button class="btn slim" data-readonly="allow" onclick="leaveJoinMode()">Exit</button></div>
+      </div>`;
+  }
+}
+function applyReadOnlyLocks(){
+  document.body.classList.toggle('readonly', readOnlyMode);
+  document.querySelectorAll('#setup input, #setup select, #setup textarea, #day1 input, #day1 select, #day1 textarea, #day2 input, #day2 select, #day2 textarea').forEach(el => {
+    el.disabled = readOnlyMode;
+  });
+  document.querySelectorAll('#setup button, #day1 button, #day2 button').forEach(btn => {
+    if(btn.dataset.readonly === 'allow') return;
+    btn.disabled = readOnlyMode;
+  });
+}
+function unlockLiveView(){
+  localStorage.setItem(LIVE_VIEW_KEY, '1');
+  document.getElementById('live-paywall').style.display = 'none';
+  showToast('Live view unlocked — enjoy the weekend! 🏆', 'ok');
+}
+function unlockLeaderboard(){
+  localStorage.setItem(LB_UNLOCK_KEY, '1');
+  renderAll();
+  showToast('Full leaderboard unlocked — thanks for the support! 🙏', 'ok');
+}
+function isLeaderboardUnlocked(){
+  return masterMode || localStorage.getItem(LB_UNLOCK_KEY) === '1';
+}
+function checkLivePaywall(){
+  if(!window._cpiWatchEventId) return; // not in watch mode
+  if(localStorage.getItem(LIVE_VIEW_KEY) === '1') return; // already unlocked
+  document.getElementById('live-paywall').style.display = 'block';
+}
+
+function showQrOverlay(src, caption){
+  const el = document.getElementById('qr-overlay');
+  if(!el) return;
+  document.getElementById('qr-overlay-img').src = src;
+  document.getElementById('qr-overlay-caption').textContent = caption;
+  el.style.display = 'flex';
+}
+
+function renderFooter(){
+  const el = document.getElementById('app-footer');
+  if(!el) return;
+  const onAbout = state.ui.tab === 'about';
+  el.innerHTML = onAbout
+    ? `<button onclick="setTab('leaderboard')" style="background:transparent;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:8px 16px">← Back to app</button>`
+    : `<button onclick="setTab('about')" style="
+        background:rgba(214,176,90,0.10);
+        border:1px solid rgba(214,176,90,0.35);
+        color:var(--gold2);
+        font-size:12px;font-weight:700;
+        cursor:pointer;padding:9px 20px;
+        border-radius:20px;letter-spacing:.06em;
+        text-transform:uppercase">
+        🏆 About &amp; Credits · Tip Jar
+      </button>`;
+}
+
+function renderAbout(){
+  const el = document.getElementById('about');
+  if(!el) return;
+
+  // Version derived from storage key — bump manually when needed
+  const APP_VERSION = '5.0';
+  const BUILD_DATE  = '2026';
+
+  // ── WeChat Pay QR ────────────────────────────────────────────────────────
+  // Place your WeChat "Receive Money" QR image in the app folder as wechat_pay_qr.png
+  // WeChat → Me → Pay → Receive Money → Set amount optional → Save to photos
+  const qrImg = `<img src="./mph_pay_code.jpeg" alt="WeChat Pay"
+    onclick="showQrOverlay('./mph_pay_code.jpeg','① Save to photos  ② WeChat → Pay  ③ Photo Library / QR code  ④ Scan & pay')"
+    style="width:80px;height:auto;border-radius:8px;display:block;margin:0 auto;cursor:pointer;border:1px solid var(--gold)" />
+    <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">Tap to enlarge &amp; scan</div>`;
+
+  el.innerHTML = `
+    <div class="card" style="text-align:center;padding-top:24px">
+      <img src="./ChubbsIcon4.png" alt="Chubbs!" style="width:72px;height:72px;border-radius:16px;margin-bottom:12px;display:block;margin-left:auto;margin-right:auto" onerror="this.style.display='none'" />
+      <div style="font-size:22px;font-weight:900;letter-spacing:.02em">Chubbs!</div>
+      <div style="color:var(--muted);font-size:13px;margin-top:2px">Golf Scorer · v${APP_VERSION} · ${BUILD_DATE}</div>
+      <div style="color:var(--muted);font-size:12px;margin-top:6px;font-style:italic">"Just tap it in."</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">About</div>
+      <p style="font-size:14px;color:var(--fg);line-height:1.6;margin:0 0 10px">
+        Built for the <strong>Chubbs Peterson Invitational</strong> — a weekend golf event somewhere in China involving a rotating cast of semi-serious players, serious handicap debates, and at least one person 3-putting the easiest green on the course.
+      </p>
+      <p style="font-size:13px;color:var(--muted);line-height:1.6;margin:0">
+        Features: scramble scoring · Stableford · 3-putt poker · live leaderboard · Firebase cloud sync · Gold &amp; Clown Jacket history · offline PWA
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Credits</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:44px;height:44px;border-radius:50%;background:var(--gold2);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🏌️</div>
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px">
+              <div style="font-weight:800;font-size:15px">Michael Hanson</div>
+              <img src="./mph_contact_qr.png" alt="WeChat QR"
+                onclick="showQrOverlay('./mph_contact_qr.png','Long-press to scan · Add Michael on WeChat')"
+                style="width:38px;height:38px;border-radius:5px;cursor:pointer;border:1px solid var(--gold);flex-shrink:0"
+                title="Tap to scan · Add on WeChat" />
+            </div>
+            <div style="font-size:12px;color:var(--muted)">App design, product vision &amp; development</div>
+            <div onclick="navigator.clipboard.writeText('MPH_SIC').then(()=>showToast('WeChat ID copied — open WeChat and paste','ok'))" style="font-size:12px;color:var(--gold2);margin-top:2px;cursor:pointer">WeChat: MPH_SIC 📋</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:44px;height:44px;border-radius:50%;background:#5436DA;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🤖</div>
+          <div>
+            <a href="https://claude.ai" target="_blank" rel="noopener" style="font-weight:800;font-size:15px;color:var(--fg);text-decoration:none">Claude <span style="font-size:11px;color:var(--gold2);font-weight:400">↗ claude.ai</span></a>
+            <div style="font-size:12px;color:var(--muted)">AI co-developer &amp; coding partner · Anthropic<br/>
+              <span style="font-style:italic;opacity:.7">claude-sonnet-4-6 · Claude Code</span></div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:44px;height:44px;border-radius:50%;background:#1a3a2a;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🌐</div>
+          <div>
+            <a href="https://chubbshub.com" target="_blank" rel="noopener" style="font-weight:800;font-size:15px;color:var(--fg);text-decoration:none">ChubbsHub <span style="font-size:11px;color:var(--gold2);font-weight:400">↗ chubbshub.com</span></a>
+            <div style="font-size:12px;color:var(--muted)">Historical records &amp; achievement data</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="text-align:center">
+      <div class="section-title">Tip the Dev a Beer 🍺</div>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.5">
+        Chubbs Golf is 100% free for our group. If you’re enjoying the features, consider scanning below to contribute to the app’s 'green fees'. It all goes toward keeping Hanson caffeinated and the app updated!
+      </p>
+      ${qrImg}
+      <div style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.7">
+        ① Save QR to photos<br/>② WeChat → Pay → Photo Library / QR code<br/>③ Scan &amp; pay · any amount
+      </div>
+      <div style="margin-top:14px;padding:12px;background:var(--card2,#0e2018);border-radius:10px;font-size:12px;color:var(--muted);line-height:1.6;text-align:left">
+        <strong style="color:var(--fg)">Interested in sponsoring Chubbs?</strong><br/>
+        A small sponsor tile on the live leaderboard — seen by every player and scorer all weekend. Message <span style="color:var(--gold2)">MPH_SIC</span> on WeChat to chat.
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:20px 0 12px;color:var(--muted);font-size:11px;line-height:1.8">
+      Chubbs! v${APP_VERSION} · Built in China · PWA<br/>No ads · No data sold · No tracking
+    </div>
+  `;
+}
+
+function renderAll(){
+  renderModeBanner();
+  renderTabs();
+  renderMasterBtn();
+  renderSetup();
+  renderDay1();
+  renderDay2();
+  renderLeaderboard();
+  renderAbout();
+  renderFooter();
+  applyReadOnlyLocks();
+  // Keep gear button state in sync
+  const mb = document.getElementById('master-btn');
+  if(mb) mb.style.opacity = masterMode ? '1' : '0.55';
+  // Update hero subtitle with event dates when event is loaded
+  const heroSub = document.getElementById('hero-event-sub');
+  if(heroSub){
+    const ev = state.eventBundle && state.eventBundle.event;
+    if(ev && (ev.satDate || ev.sunDate)){
+      const sat = ev.satDate ? formatEventDate(ev.satDate,'short') : '';
+      const sun = ev.sunDate ? formatEventDate(ev.sunDate,'short') : '';
+      heroSub.textContent = [sat, sun].filter(Boolean).join(' · ');
+    } else {
+      heroSub.textContent = 'Golf scorer';
+    }
+  }
+}
+// ── Startup: Firebase init + jacket seed + watch mode bootstrap ──
+initFirebase();
+initRosterFromLegacy();  // seed 33 CPI players into cpi_roster_v1 if empty
+upgradeRosterJackets();  // patch any existing roster players missing jacket/role data
+if(loadAdminPin() && masterMode){ masterMode = false; localStorage.setItem('cpi_master','0'); }
+seedJacketHistory();     // apply badge data to event.json-imported players (Nick/Matt/Graeme etc)
+(function startupSync(){
+  // Re-sync if a live event was already in localStorage
+  if(!readOnlyMode && hasImportedEvent()){
+    const evId = state.eventBundle.event && state.eventBundle.event.eventId;
+    if(evId) initSync(evId);
+  }
+  
+  // NEW: Cloud Load mode via ?loadEvent=
+  if(window._cpiLoadEventId && SYNC.enabled && SYNC.db){
+    const eid = window._cpiLoadEventId;
+    SYNC.db.ref(`/events/${eid}/bundle`).once('value').then(snap => {
+      const bundle = snap.val();
+      if(bundle && bundle.players && bundle.event){
+        applyImportedEventBundle(bundle);
+        showToast('Event setup loaded securely from cloud!', 'ok', 4000);
+        // Clean URL so refreshing doesn't cause a re-load loop
+        const newUrl = window.location.pathname + window.location.search.replace(new RegExp('[?&]loadEvent=' + eid), '').replace(/^&/, '?');
+        window.history.replaceState({}, document.title, newUrl || window.location.pathname);
+      }
+    }).catch(err => {
+      showToast('Failed to load event setup from cloud.', 'err');
+    });
+  }
+  
+  // Watch mode: load event bundle from Firebase then subscribe
+  if(window._cpiWatchEventId && SYNC.enabled && SYNC.db){
+    const eid = window._cpiWatchEventId;
+    SYNC.db.ref(`/events/${eid}/bundle`).once('value').then(snap => {
+      const bundle = snap.val();
+      if(bundle && bundle.players && bundle.event){
+        state.eventBundle = {
+          version: 2,
+          players:           bundle.players,
+          day2Groups:        bundle.day2Groups        || [],
+          day1ScrambleTeams: bundle.day1ScrambleTeams || [],
+          event:             bundle.event             || {},
+          options:           bundle.options           || {}
+        };
+      }
+      initSync(eid);
+      renderAll();
+    }).catch(() => { initSync(eid); renderAll(); });
+  }
+})();
+renderAll();
+checkLivePaywall();
+checkPendingEvent(); // show import notification if admin sent an event from ChubbsAdmin
+
+// ── Rotating tagline ──
+(function(){
+  const lines=[
+    "Tap it in. Track it clean. Play for the jacket.",
+    "It's all in the hips.",
+    "Just tap it in.",
+    "Where the gator meets the green.",
+    "From the rough to the jacket.",
+    "More teeth than a handicap argument."
+  ];
+  let idx=0;
+  const el=document.getElementById('tagline-text');
+  if(!el) return;
+  setInterval(()=>{
+    el.style.opacity='0';
+    setTimeout(()=>{
+      idx=(idx+1)%lines.length;
+      el.textContent=lines[idx];
+      el.style.opacity='1';
+    },500);
+  },8000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2 @@
+﻿eventId,name,displayName,satDate,satTime,sunDate,sunTime,day1CourseId,day1CourseLabel,day1PalmIslandFront,day1PalmIslandBack,day2CourseId,day2CourseLabel,day2PalmIslandFront,day2PalmIslandBack,currency,notes
+2026-04-Nansha,Chubbs Peterson Invitational,Test Chubbs at Nansha,4/6/2026,6:48,4/7/2026,8:00,Nansha Mountain,Nansha Mountain,A,B,Nansha Valley,Nansha Valley,C,D,RMB,Saturday scramble teams and Sunday Stableford groups can be different. scorerPlayerId defaults to player1Id when blank.

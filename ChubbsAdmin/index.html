@@ -1,0 +1,1119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chubbs Admin · Event Setup</title>
+  <link rel="apple-touch-icon" href="./ChubbsIcon4.png" />
+  <link rel="icon" href="./ChubbsIcon4.png" type="image/png" />
+  
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  
+  <style>
+    :root {
+      --bg: #07150f; --bg2: #0c2017; --card: #10261c;
+      --line: rgba(255,255,255,0.08); --line2: rgba(214,176,90,0.35);
+      --text: #f4efe2; --muted: #a8b8ad; --gold: #d6b05a; --gold2: #f2dd97;
+      --green: #2aa36a; --red: #d16b5d; --blue: #79b0e3;
+      --shadow: 0 16px 40px rgba(0,0,0,0.34);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0; 
+      background: radial-gradient(circle at top, rgba(214,176,90,0.05), transparent 40%), var(--bg);
+      color: var(--text); font-family: Inter, "Segoe UI", Arial, sans-serif;
+      min-height: 100vh;
+    }
+    .header {
+      background: linear-gradient(180deg, rgba(16,38,28,0.95), rgba(10,25,18,0.98));
+      border-bottom: 1px solid var(--line2); padding: 16px 32px;
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 100; backdrop-filter: blur(10px);
+    }
+    .header h1 { margin: 0; font-family: Georgia, serif; color: var(--gold2); font-size: 24px; }
+    .header .subtitle { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
+    
+    .container { display: flex; padding: 24px; gap: 24px; max-width: 1600px; margin: 0 auto; align-items: flex-start; }
+    .col-left { flex: 0 0 380px; display: flex; flex-direction: column; gap: 20px; }
+    .col-right { flex: 1; display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+    .card-title { font-family: Georgia, serif; font-size: 20px; color: var(--gold2); margin: 0 0 16px 0; display: flex; justify-content: space-between; align-items: center;}
+    
+    label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    input[type="text"], input[type="date"], input[type="time"], input[type="number"], select, textarea {
+      width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line);
+      background: #0b1b14; color: var(--text); font-family: inherit; font-size: 14px; margin-bottom: 12px; color-scheme: dark;
+    }
+    select option { background: #0b1b14; color: var(--text); }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+
+    button { font-family: inherit; cursor: pointer; border-radius: 8px; padding: 10px 16px; font-weight: 700; font-size: 13px; border: 1px solid var(--line); background: #12251b; color: var(--text); transition: all 0.2s;}
+    button:hover { background: #1a3526; }
+    button.primary { background: linear-gradient(180deg, var(--gold2), var(--gold)); color: #251800; border: none; }
+    button.primary:hover { filter: brightness(1.1); }
+    button.danger { background: rgba(209,107,93,0.15); color: #ffb5ae; border-color: rgba(209,107,93,0.3); }
+    button.danger:hover { background: rgba(209,107,93,0.25); }
+    button.small { padding: 6px 10px; font-size: 11px; }
+    button.ghost { background: transparent; }
+
+    .segment-group { display: flex; background: rgba(255,255,255,0.05); border-radius: 8px; padding: 4px; gap: 4px; }
+    .segment-btn { flex: 1; text-align: center; padding: 6px 0; font-size: 11px; border-radius: 6px; cursor: pointer; color: var(--muted); border: 1px solid transparent; transition: all 0.2s; }
+    .segment-btn:hover { background: rgba(255,255,255,0.1); }
+    .segment-btn.active { background: #12251b; border-color: var(--line); color: var(--gold2); font-weight: 700; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+
+    .roster-list { max-height: 480px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: #0b1b14; padding: 8px; }
+    .player-row { display: flex; flex-direction: column; gap: 8px; padding: 12px 8px; border-bottom: 1px solid var(--line); }
+    .player-row:last-child { border-bottom: none; }
+    .player-row.selected { background: rgba(214,176,90,0.05); border-radius: 8px; border-bottom: transparent; }
+    .player-name { font-weight: 700; font-size: 13px; }
+    .player-hcp { color: var(--gold2); font-size: 11px; font-weight: 800; background: rgba(214,176,90,0.15); padding: 2px 6px; border-radius: 4px; }
+    
+    .captain-pill { border: 1px solid var(--line); padding: 6px 12px; border-radius: 16px; font-size: 12px; cursor: pointer; background: #0b1b14; color: var(--muted); transition: all 0.15s; }
+    .captain-pill.active { background: rgba(214,176,90,0.15); border-color: var(--gold); color: var(--gold2); font-weight: 800; }
+
+    /* Drag and Drop UI */
+    .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 16px; }
+    .team-card { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; }
+    .team-header { display: flex; gap: 8px; margin-bottom: 12px; }
+    .team-header input { margin-bottom: 0; }
+    
+    .drop-zone { 
+      background: #0b1b14; border: 1px dashed rgba(255,255,255,0.15); border-radius: 8px; 
+      padding: 12px; min-height: 80px; display: flex; flex-wrap: wrap; gap: 8px; align-content: flex-start;
+      transition: all 0.2s; flex: 1;
+    }
+    .drop-zone.dragover { background: rgba(214,176,90,0.1); border-color: var(--gold2); }
+    .drop-zone.full { border-style: solid; border-color: var(--line); }
+
+    .drag-pill { 
+      background: #12251b; border: 1px solid var(--line); color: var(--text); padding: 6px 12px; 
+      border-radius: 16px; font-size: 12px; cursor: grab; display: inline-flex; align-items: center; 
+      user-select: none; font-weight: 700; box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .drag-pill:active { cursor: grabbing; border-color: var(--gold2); }
+
+    .remove-btn { background: transparent; border: none; color: var(--muted); padding: 4px; cursor: pointer; }
+    .remove-btn:hover { color: var(--red); }
+
+    .unassigned-pool { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: rgba(214,176,90,0.05); border: 1px solid rgba(214,176,90,0.2); border-radius: 8px; margin-bottom: 16px; min-height: 60px; }
+    .section-divider { height: 1px; background: var(--line); margin: 24px 0; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+  </style>
+</head>
+<body>
+
+  <div id="player-modal" class="modal-overlay">
+    <div class="card" style="width: 400px; border-color: var(--gold);">
+      <h2 class="card-title" id="modal-title">Edit Player</h2>
+      <input type="hidden" id="modal-pid">
+      
+      <label>Display Name (Short)</label>
+      <input type="text" id="modal-dname" placeholder="e.g. Jordan🇨🇦">
+      
+      <label>Full Name</label>
+      <input type="text" id="modal-fname" placeholder="e.g. Jordan Smith">
+      
+      <div class="grid-2">
+         <div><label>Handicap</label><input type="number" id="modal-hcp"></div>
+         <div><label>Scramble Wins 🏆</label><input type="number" id="modal-scram"></div>
+         <div><label>Gold Jackets 🧥</label><input type="number" id="modal-gold"></div>
+         <div><label>Clown Jackets 🤡</label><input type="number" id="modal-clown"></div>
+      </div>
+      
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+        <button class="ghost" onclick="closePlayerModal()">Cancel</button>
+        <button class="primary" onclick="savePlayerModal()">Save Player</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="header">
+    <div style="display:flex; align-items:center; gap:16px;">
+      <img src="./ChubbsIcon4.png" alt="Chubbs Logo" style="width:96px; height:96px; border-radius:12px; border: 1px solid var(--gold2);" onerror="this.style.display='none'" />
+      <div>
+        <h1>Chubbs Admin</h1>
+        <div class="subtitle">Event Setup Portal</div>
+      </div>
+    </div>
+	<div style="display:flex; gap: 12px;">
+      <button class="danger" onclick="confirmReset()">🗑 Clear Setup</button>
+      <button onclick="document.getElementById('roster-upload').click()">📥 Import cpi_roster.json</button>
+      <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
+      
+      <button class="ghost" onclick="generateAndDownloadJson()">💾 Export JSON</button>
+      <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()">☁️ Send to App</button>
+    </div>
+  </div>
+
+  <div class="container">
+    
+    <div class="col-left">
+
+      <div class="card" style="border-color: var(--gold);">
+        <h2 class="card-title">1. WeChat Quick Import</h2>
+        <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px; line-height: 1.4;">Paste your WeChat sign-up list here. We will auto-detect the dates, course, and player attendance.</div>
+        <textarea id="wechat-text" placeholder="April Chubbs at Palm Island...&#10;April 25/26&#10;Saturday - 12:00&#10;1. Terry Madill - paid..."></textarea>
+        <button class="primary small" style="width: 100%" onclick="parseWeChatText()">⚡ Parse WeChat List</button>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">2. Event Rules</h2>
+        <label>Event Name</label>
+        <input type="text" id="ev-name" value="Chubbs Peterson Invitational">
+        <label>Display Name (Short)</label>
+        <input type="text" id="ev-display" value="Weekend Golf">
+        <label>Currency</label>
+        <input type="text" id="ev-currency" value="RMB">
+        
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="margin: 0; color: var(--gold2); font-size: 13px;">3-Putt Poker Defaults</label>
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-bottom: 12px; line-height: 1.4;">
+            Default pot and penalty values pushed to the mobile app. Players can configure and toggle poker on/off per group during the round.
+          </div>
+          <div class="grid-3">
+            <div><label>Ante</label><input type="number" id="ev-ante" value="50"></div>
+            <div><label>3-Putt</label><input type="number" id="ev-pen3" value="10"></div>
+            <div><label>4+ Putt</label><input type="number" id="ev-pen4" value="20"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h2 class="card-title" style="margin:0;">
+            3. Attendance <span id="attending-count" style="font-size:14px; color:var(--muted); font-family:Inter, sans-serif;">0 total</span>
+          </h2>
+          <button class="small ghost" style="border: 1px dashed var(--gold2); color: var(--gold2);" onclick="openAddPlayer()">+ Add Player</button>
+        </div>
+        
+        <div style="display:flex; gap: 8px; margin-bottom: 12px;">
+          <button class="small ghost" onclick="selectAllAttendance()" style="flex:1">Set All to 'Both'</button>
+          <button class="small danger" onclick="clearAttendance()" style="flex:1">Clear All</button>
+        </div>
+        <div class="roster-list" id="roster-container">
+          </div>
+      </div>
+    </div>
+
+    <div class="col-right">
+      
+      <div class="card">
+        <h2 class="card-title">4. Scramble Setup</h2>
+        <div class="grid-3">
+          <div><label>Date</label><input type="date" id="scramble-date"></div>
+          <div><label>Time</label><input type="time" id="scramble-time"></div>
+          <div>
+            <label>Course</label>
+            <select id="scramble-course" onchange="togglePalmSelectors('scramble')"></select>
+          </div>
+        </div>
+        <div class="grid-2" id="scramble-palm-selectors" style="display:none;">
+          <div><label>Front 9</label><select id="scramble-front"><option value="A">A - Lychee</option><option value="B">B - Lake</option><option value="C">C - River</option></select></div>
+          <div><label>Back 9</label><select id="scramble-back"><option value="B">B - Lake</option><option value="C">C - River</option><option value="A">A - Lychee</option></select></div>
+        </div>
+
+        <div class="section-divider"></div>
+        
+        <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div>
+              <label style="margin: 0; color: var(--gold2);">Captain Selection & Draft Prep</label>
+              <div style="font-size: 11px; color: var(--muted);">Click players to nominate Captains, then auto-build teams.</div>
+            </div>
+            <button class="primary small" onclick="generateTeamsFromCaptains()">Auto-Build Teams</button>
+          </div>
+          <div id="captain-pool" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:14px; color:var(--gold2)">Scramble Teams (Drag & Drop)</h3>
+          <button class="small ghost" onclick="addScrambleTeam()">+ Add Blank Team</button>
+        </div>
+        
+        <label>Unassigned Scramble Players</label>
+        <div class="drop-zone unassigned-pool" id="scramble-unassigned"
+             ondragover="handleDragOver(event, 'scramble')" 
+             ondragleave="handleDragLeave(event)" 
+             ondrop="handleDrop(event, 'scramble', -1)">
+        </div>
+
+        <div class="team-grid" id="scramble-teams-container">
+          </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">5. Stableford Setup</h2>
+        <div class="grid-3">
+          <div><label>Date</label><input type="date" id="stableford-date"></div>
+          <div><label>First Tee Time</label><input type="time" id="stableford-time"></div>
+          <div>
+            <label>Course</label>
+            <select id="stableford-course" onchange="togglePalmSelectors('stableford')"></select>
+          </div>
+        </div>
+        <div class="grid-2" id="stableford-palm-selectors" style="display:none;">
+          <div><label>Front 9</label><select id="stableford-front"><option value="A">A - Lychee</option><option value="B">B - Lake</option><option value="C">C - River</option></select></div>
+          <div><label>Back 9</label><select id="stableford-back"><option value="B">B - Lake</option><option value="C">C - River</option><option value="A">A - Lychee</option></select></div>
+        </div>
+
+        <div class="section-divider"></div>
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:14px; color:var(--gold2)">Stableford Groups (Drag & Drop)</h3>
+          <div>
+            <button class="small primary" onclick="smartShuffleStableford()">🎲 Smart Shuffle Pairings</button>
+            <button class="small ghost" onclick="addStablefordGroup()">+ Add Blank Group</button>
+          </div>
+        </div>
+
+        <label>Unassigned Stableford Players</label>
+        <div class="drop-zone unassigned-pool" id="stableford-unassigned"
+             ondragover="handleDragOver(event, 'stableford')" 
+             ondragleave="handleDragLeave(event)" 
+             ondrop="handleDrop(event, 'stableford', -1)">
+        </div>
+
+        <div class="team-grid" id="stableford-groups-container">
+          </div>
+      </div>
+
+    </div>
+  </div>
+
+<script>
+// --- DATA STUBS ---
+const COURSE_LIBRARY = {
+  palmIsland: { name: 'Palm Island' }, birdsNest: { name: "Bird's Nest" },
+  firestone: { name: 'Firestone' }, gaoming: { name: 'Gaoming' },
+  junan: { name: 'Junan' }, lotusHill: { name: 'Lotus Hill' },
+  mountain: { name: 'Nansha Mountain' }, valley: { name: 'Nansha Valley' },
+  qingyuan: { name: 'Qingyuan' }, tangspring: { name: 'Tangspring' },
+  yinli: { name: 'Yinli' }, zhaoqing: { name: 'Zhaoqing' }, zhuhai: { name: 'Zhuhai' }
+};
+
+const baseRosterData = [
+  {name:'KASPER', hcp:4, gold:0, clown:0, scram:0}, {name:'DIEGO', hcp:11, gold:2, clown:0, scram:3}, 
+  {name:'AARON', hcp:14, gold:1, clown:0, scram:0}, {name:'AKI', hcp:15, gold:1, clown:0, scram:3}, 
+  {name:'RYAN N', hcp:15, gold:1, clown:0, scram:2}, {name:'LUKE', hcp:16, gold:4, clown:0, scram:3}, 
+  {name:'JULIUS', hcp:17, gold:0, clown:0, scram:1}, {name:'JACK S', hcp:19, gold:4, clown:1, scram:2}, 
+  {name:'MIKE W', hcp:19, gold:2, clown:1, scram:2}, {name:'KEVIN A', hcp:20, gold:2, clown:1, scram:0}, 
+  {name:'POS', hcp:20, gold:1, clown:2, scram:1}, {name:'JAMIE', hcp:22, gold:3, clown:0, scram:2}, 
+  {name:'HANSON', hcp:22, gold:1, clown:0, scram:1}, {name:'DARYL', hcp:24, gold:0, clown:1, scram:0}, 
+  {name:'MARK', hcp:25, gold:1, clown:0, scram:0}, {name:'ADAM', hcp:25, gold:0, clown:0, scram:0}, 
+  {name:'ANTHONY', hcp:25, gold:0, clown:1, scram:2}, {name:'JAMES S', hcp:25, gold:1, clown:0, scram:0}, 
+  {name:'STUART', hcp:25, gold:0, clown:1, scram:1}, {name:'JACK M', hcp:26, gold:1, clown:0, scram:0}, 
+  {name:'SPENNY', hcp:27, gold:0, clown:0, scram:0}, {name:'JORDAN', hcp:28, gold:1, clown:0, scram:3}, 
+  {name:'STEVE', hcp:28, gold:0, clown:1, scram:3}, {name:'TAPAS', hcp:28, gold:0, clown:1, scram:1}, 
+  {name:'TERRY', hcp:28, gold:1, clown:1, scram:2}, {name:'MATTY B', hcp:29, gold:0, clown:0, scram:0}, 
+  {name:'ROSS', hcp:29, gold:1, clown:0, scram:1}, {name:'ANDY', hcp:30, gold:1, clown:0, scram:1}, 
+  {name:'RICARDO', hcp:30, gold:0, clown:0, scram:2}, {name:'TONY', hcp:30, gold:0, clown:0, scram:1}, 
+  {name:'RYAN S', hcp:32, gold:0, clown:3, scram:0}, {name:'DAVE P', hcp:36, gold:1, clown:0, scram:1}, 
+  {name:'MILSON', hcp:36, gold:0, clown:2, scram:1},
+  {name:'MATT', hcp:12, gold:0, clown:0, scram:0}, {name:'MATTHEW', hcp:22, gold:0, clown:0, scram:0}, 
+  {name:'NICK', hcp:25, gold:0, clown:0, scram:0}, {name:'GRAEME', hcp:28, gold:0, clown:0, scram:0}, 
+  {name:'GEORGE', hcp:24, gold:0, clown:0, scram:0}, {name:'RYAN', hcp:12, gold:0, clown:0, scram:0}
+];
+
+let masterRoster = baseRosterData.map(r => ({
+  playerId: r.name.replace(/\s+/g,'').slice(0,12),
+  displayName: r.name, fullName: r.name, playingHandicap: r.hcp,
+  goldJackets: r.gold || 0, clownJackets: r.clown || 0, scrambleWins: r.scram || 0
+}));
+
+// --- APP STATE ---
+let state = {
+  attendance: {},       
+  captains: [],         
+  scrambleTeams: [],    
+  stablefordGroups: []  
+};
+
+// --- INITIALIZATION ---
+function init() {
+  const c1 = document.getElementById('scramble-course');
+  const c2 = document.getElementById('stableford-course');
+  let opts = '';
+  for(const [id, c] of Object.entries(COURSE_LIBRARY)){ opts += `<option value="${id}">${c.name}</option>`; }
+  c1.innerHTML = opts; c2.innerHTML = opts;
+  c1.value = 'mountain'; c2.value = 'valley';
+  
+  document.getElementById('scramble-date').value = "";
+  document.getElementById('scramble-time').value = "";
+  document.getElementById('stableford-date').value = "";
+  document.getElementById('stableford-time').value = "";
+  document.getElementById('wechat-text').value = "";
+
+  masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
+  renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+}
+
+function confirmReset() {
+  if(confirm("Are you sure you want to clear all data and start from scratch?")) {
+    state.scrambleTeams = []; state.stablefordGroups = []; state.captains = [];
+    document.getElementById('ev-name').value = "Chubbs Peterson Invitational";
+    document.getElementById('ev-display').value = "Weekend Golf";
+    init(); 
+  }
+}
+
+function togglePalmSelectors(prefix) {
+  const isPalm = document.getElementById(`${prefix}-course`).value === 'palmIsland';
+  document.getElementById(`${prefix}-palm-selectors`).style.display = isPalm ? 'grid' : 'none';
+}
+
+// --- TIME HELPER ---
+function addMinutesToTime(timeStr, mins) {
+  if(!timeStr) return "";
+  let [h, m] = timeStr.split(':').map(Number);
+  let d = new Date();
+  d.setHours(h, m, 0, 0);
+  d.setMinutes(d.getMinutes() + mins);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// --- PLAYER ADD / EDIT MODAL ---
+function openAddPlayer() {
+  document.getElementById('modal-title').textContent = "Add Player";
+  document.getElementById('modal-pid').value = "";
+  document.getElementById('modal-dname').value = "";
+  document.getElementById('modal-fname').value = "";
+  document.getElementById('modal-hcp').value = "20";
+  document.getElementById('modal-gold').value = "0";
+  document.getElementById('modal-clown').value = "0";
+  document.getElementById('modal-scram').value = "0";
+  document.getElementById('player-modal').style.display = "flex";
+}
+
+function openEditPlayer(pid) {
+  const p = masterRoster.find(x => x.playerId === pid);
+  if(!p) return;
+  document.getElementById('modal-title').textContent = "Edit Player";
+  document.getElementById('modal-pid').value = p.playerId;
+  document.getElementById('modal-dname').value = p.displayName || "";
+  document.getElementById('modal-fname').value = p.fullName || "";
+  document.getElementById('modal-hcp').value = p.playingHandicap || 0;
+  document.getElementById('modal-gold').value = p.goldJackets || 0;
+  document.getElementById('modal-clown').value = p.clownJackets || 0;
+  document.getElementById('modal-scram').value = p.scrambleWins || 0;
+  document.getElementById('player-modal').style.display = "flex";
+}
+
+function closePlayerModal() {
+  document.getElementById('player-modal').style.display = "none";
+}
+
+function savePlayerModal() {
+  const pid = document.getElementById('modal-pid').value;
+  const dname = document.getElementById('modal-dname').value || "Unknown";
+  const fname = document.getElementById('modal-fname').value || dname;
+  const hcp = parseInt(document.getElementById('modal-hcp').value) || 0;
+  const gold = parseInt(document.getElementById('modal-gold').value) || 0;
+  const clown = parseInt(document.getElementById('modal-clown').value) || 0;
+  const scram = parseInt(document.getElementById('modal-scram').value) || 0;
+
+  if (pid) {
+     const p = masterRoster.find(x => x.playerId === pid);
+     if(p) {
+        p.displayName = dname;
+        p.fullName = fname;
+        p.playingHandicap = hcp;
+        p.goldJackets = gold;
+        p.clownJackets = clown;
+        p.scrambleWins = scram;
+     }
+  } else {
+     const newId = dname.replace(/\s+/g,'').slice(0,12) + Date.now().toString().slice(-4);
+     masterRoster.push({
+        playerId: newId, displayName: dname, fullName: fname,
+        playingHandicap: hcp, goldJackets: gold, clownJackets: clown, scrambleWins: scram, roles: []
+     });
+     state.attendance[newId] = 'none';
+  }
+  closePlayerModal();
+  renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+}
+
+// --- WECHAT QUICK IMPORT ---
+function parseWeChatText() {
+  const text = document.getElementById('wechat-text').value;
+  if (!text.trim()) return;
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+
+  masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
+  state.scrambleTeams = []; state.stablefordGroups = []; state.captains = [];
+  
+  let unassignedCount = 0;
+  let datesFound = false;
+  let satTimeFound = false;
+  let sunTimeFound = false;
+  const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+  lines.forEach((line, idx) => {
+    if (idx === 0 && !/^\d/.test(line) && !line.toLowerCase().includes('cost')) {
+      document.getElementById('ev-display').value = line;
+      if (line.toLowerCase().includes('palm island')) {
+        document.getElementById('scramble-course').value = 'palmIsland'; document.getElementById('stableford-course').value = 'palmIsland';
+        togglePalmSelectors('scramble'); togglePalmSelectors('stableford');
+      } else if (line.toLowerCase().includes('nansha')) {
+        document.getElementById('scramble-course').value = 'mountain'; document.getElementById('stableford-course').value = 'valley';
+        togglePalmSelectors('scramble'); togglePalmSelectors('stableford');
+      }
+    }
+
+    if (!datesFound) {
+        const dateMatch1 = line.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?/i);
+        const dateMatch2 = line.match(/(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i);
+        
+        if (dateMatch1 || dateMatch2) {
+          let mStr, d1Str, d2Str;
+          if (dateMatch1) { mStr = dateMatch1[1]; d1Str = dateMatch1[2]; d2Str = dateMatch1[3]; } 
+          else { d1Str = dateMatch2[1]; d2Str = dateMatch2[2]; mStr = dateMatch2[3]; }
+          
+          const mStr3 = mStr.substring(0, 3).toLowerCase();
+          const monthIdx = monthNames.indexOf(mStr3);
+          if (monthIdx > -1) {
+            const day1 = parseInt(d1Str, 10);
+            const day2 = d2Str ? parseInt(d2Str, 10) : day1 + 1;
+            const year = new Date().getFullYear();
+            const fmtDate = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+            document.getElementById('scramble-date').value = fmtDate(year, monthIdx, day1);
+            document.getElementById('stableford-date').value = fmtDate(year, monthIdx, day2);
+            datesFound = true; 
+          }
+        }
+    }
+
+    if (!satTimeFound) {
+        const satTimeMatch = line.match(/(?:Saturday|Scramble).*?(\d{1,2}:\d{2})/i);
+        if(satTimeMatch) { document.getElementById('scramble-time').value = satTimeMatch[1].padStart(5, '0'); satTimeFound = true; }
+    }
+    if (!sunTimeFound) {
+        const sunTimeMatch = line.match(/(?:Sunday|Stableford).*?(\d{1,2}:\d{2})/i);
+        if(sunTimeMatch) { document.getElementById('stableford-time').value = sunTimeMatch[1].padStart(5, '0'); sunTimeFound = true; }
+    }
+
+    const playerMatch = line.match(/^\d+\.\s*(.+)/);
+    if (playerMatch) {
+      const rawString = playerMatch[1];
+      const parts = rawString.split('-');
+      let rawName = parts[0].trim();
+
+      let status = 'both';
+      const lowerLine = line.toLowerCase();
+      if (lowerLine.includes('sunday') || lowerLine.includes('stableford') || lowerLine.includes(' sun ')) status = 'stableford';
+      if (lowerLine.includes('saturday') || lowerLine.includes('scramble') || lowerLine.includes(' sat ')) status = 'scramble';
+      if ((lowerLine.includes('sunday') || lowerLine.includes('stableford') || lowerLine.includes(' sun')) && 
+          (lowerLine.includes('saturday') || lowerLine.includes('scramble') || lowerLine.includes(' sat'))) status = 'both';
+
+      const cleanName = (n) => n.replace(/[^\w\s]/gi, '').toLowerCase().trim();
+      const target = cleanName(rawName);
+
+      let matchedId = null;
+      for (const p of masterRoster) {
+        if (cleanName(p.displayName) === target || cleanName(p.fullName) === target) { matchedId = p.playerId; break; }
+      }
+      if (!matchedId) {
+         for (const p of masterRoster) {
+            if(cleanName(p.displayName).includes(target) || target.includes(cleanName(p.displayName))) { matchedId = p.playerId; break; }
+         }
+      }
+
+      if (matchedId) {
+        state.attendance[matchedId] = status;
+      } else {
+        const newId = rawName.replace(/\s+/g,'').slice(0,12) + Date.now().toString().slice(-4);
+        masterRoster.push({ playerId: newId, displayName: rawName, fullName: rawName, playingHandicap: 0, goldJackets: 0, clownJackets: 0, scrambleWins: 0 });
+        state.attendance[newId] = status;
+        unassignedCount++;
+      }
+    }
+  });
+
+  renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+  alert("WeChat list parsed successfully!" + (unassignedCount > 0 ? `\n\nAdded ${unassignedCount} new players.` : ""));
+}
+
+// --- ROSTER MANAGEMENT ---
+function importRoster(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const arr = JSON.parse(e.target.result);
+      if(Array.isArray(arr)) {
+        masterRoster = arr;
+        masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
+        state.scrambleTeams = []; state.stablefordGroups = []; state.captains = [];
+        renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+        alert(`Imported ${masterRoster.length} players.`);
+      }
+    } catch(err) { alert("Invalid roster file."); }
+  };
+  reader.readAsText(file);
+}
+
+function selectAllAttendance() {
+  masterRoster.forEach(p => state.attendance[p.playerId] = 'both');
+  renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+}
+
+function clearAttendance() {
+  if(confirm("This will set everyone to Off and remove them from drafted teams. Continue?")) {
+    masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
+    state.scrambleTeams.forEach(t => { t.players = []; t.scorerId = ''; });
+    state.stablefordGroups.forEach(g => { g.players = []; g.scorerId = ''; });
+    state.captains = [];
+    renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+  }
+}
+
+function setAttendance(pid, status) {
+  state.attendance[pid] = status;
+  if(status === 'none' || status === 'stableford') {
+    state.scrambleTeams.forEach(t => { 
+      t.players = t.players.filter(id => id !== pid); 
+      if(t.scorerId === pid && !t.players.includes(pid)) t.scorerId = '';
+    });
+    state.captains = state.captains.filter(id => id !== pid); 
+  }
+  if(status === 'none' || status === 'scramble') {
+    state.stablefordGroups.forEach(g => { 
+      g.players = g.players.filter(id => id !== pid); 
+      if(g.scorerId === pid && !g.players.includes(pid)) g.scorerId = '';
+    });
+  }
+  renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+}
+
+function renderRoster() {
+  const rc = document.getElementById('roster-container');
+  
+  // Sort: Attending first -> then Alphabetical -> then Handicap
+  masterRoster.sort((a,b) => {
+    const aIsAttending = state.attendance[a.playerId] && state.attendance[a.playerId] !== 'none';
+    const bIsAttending = state.attendance[b.playerId] && state.attendance[b.playerId] !== 'none';
+
+    if (aIsAttending && !bIsAttending) return -1;
+    if (!aIsAttending && bIsAttending) return 1;
+
+    const nameA = String(a.displayName || a.playerId || '').toLowerCase();
+    const nameB = String(b.displayName || b.playerId || '').toLowerCase();
+    if (nameA < nameB) return -1;
+    if (nameA > nameB) return 1;
+
+    const hcpA = parseInt(a.playingHandicap) || 0;
+    const hcpB = parseInt(b.playingHandicap) || 0;
+    return hcpA - hcpB;
+  });
+  
+  let html = '';
+  let addedSeparator = false;
+  const totalAttending = Object.values(state.attendance).filter(s => s !== 'none').length;
+
+  masterRoster.forEach((p, idx) => {
+    const status = state.attendance[p.playerId] || 'none';
+    
+    // Add visual separator before the first 'none' status player if there are mixed statuses
+    if (status === 'none' && !addedSeparator && totalAttending > 0 && totalAttending < masterRoster.length) {
+      html += `
+        <div style="position: relative; text-align: center; margin: 16px 0 12px;">
+          <hr style="position: absolute; top: 50%; left: 0; right: 0; border: none; border-top: 1px dashed var(--line); margin: 0; z-index: 1;">
+          <span style="position: relative; background: #0b1b14; padding: 0 10px; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; z-index: 2;">Not Attending</span>
+        </div>`;
+      addedSeparator = true;
+    }
+
+    // Badge Generation
+    let badges = '';
+    if(p.goldJackets) badges += '🧥'.repeat(p.goldJackets);
+    if(p.scrambleWins) badges += '🏆'.repeat(p.scrambleWins);
+    if(p.clownJackets) badges += '🤡'.repeat(p.clownJackets);
+
+    html += `
+      <div class="player-row ${status !== 'none' ? 'selected' : ''}">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="display:flex; align-items:center;">
+            <span class="player-name">${p.displayName || p.playerId}</span>
+            <span style="font-size:10px; margin-left:6px; letter-spacing:1px;">${badges}</span>
+            <button class="ghost" style="padding:0; min-width:auto; height:auto; border:none; margin-left:6px; font-size:12px; opacity:0.6;" onclick="openEditPlayer('${p.playerId}')" title="Edit Player">✏️</button>
+          </div>
+          <span class="player-hcp">HCP ${p.playingHandicap ?? '-'}</span>
+        </div>
+        <div class="segment-group">
+          <div class="segment-btn ${status === 'none' ? 'active' : ''}" onclick="setAttendance('${p.playerId}', 'none')">Off</div>
+          <div class="segment-btn ${status === 'scramble' ? 'active' : ''}" onclick="setAttendance('${p.playerId}', 'scramble')">Scramble Only</div>
+          <div class="segment-btn ${status === 'stableford' ? 'active' : ''}" onclick="setAttendance('${p.playerId}', 'stableford')">Stableford Only</div>
+          <div class="segment-btn ${status === 'both' ? 'active' : ''}" onclick="setAttendance('${p.playerId}', 'both')">Both</div>
+        </div>
+      </div>`;
+  });
+  rc.innerHTML = html;
+  document.getElementById('attending-count').textContent = `${totalAttending} total`;
+}
+
+// --- DRAFT / CAPTAINS ---
+function toggleCaptain(pid) {
+  const idx = state.captains.indexOf(pid);
+  if(idx > -1) state.captains.splice(idx, 1);
+  else state.captains.push(pid);
+  renderCaptainSelection();
+}
+
+function renderCaptainSelection() {
+  const pool = document.getElementById('captain-pool');
+  const satPlayers = masterRoster.filter(p => state.attendance[p.playerId] === 'scramble' || state.attendance[p.playerId] === 'both');
+  if(satPlayers.length === 0) {
+    pool.innerHTML = `<span style="font-size: 12px; color: var(--muted);">Set players to Scramble/Both to nominate captains.</span>`; return;
+  }
+  
+  satPlayers.sort((a, b) => {
+    const hcpA = parseInt(a.playingHandicap) || 0;
+    const hcpB = parseInt(b.playingHandicap) || 0;
+    if (hcpA !== hcpB) return hcpA - hcpB;
+    return String(a.displayName || '').localeCompare(String(b.displayName || ''));
+  });
+
+  pool.innerHTML = satPlayers.map(p => {
+    const isCap = state.captains.includes(p.playerId);
+    return `<div class="captain-pill ${isCap ? 'active' : ''}" onclick="toggleCaptain('${p.playerId}')">${isCap ? '👑 ' : ''}${p.displayName}</div>`;
+  }).join('');
+}
+
+function generateTeamsFromCaptains() {
+  if(state.captains.length === 0) { alert("Select at least one captain first."); return; }
+  if(state.scrambleTeams.length > 0 && !confirm("This will overwrite your current Scramble teams. Continue?")) return;
+
+  state.scrambleTeams = state.captains.map((capId, idx) => ({
+    id: `sat-${Date.now()}-${idx}`, name: `Team ${idx + 1}`, scorerId: capId, players: [capId]
+  }));
+  renderTeams();
+}
+
+// --- SMART SHUFFLE ---
+function smartShuffleStableford() {
+  const sunPlayers = masterRoster.filter(p => state.attendance[p.playerId] === 'stableford' || state.attendance[p.playerId] === 'both').map(p => p.playerId);
+  if (sunPlayers.length === 0) { alert("No Stableford players available to shuffle."); return; }
+
+  const conflicts = new Set();
+  state.scrambleTeams.forEach(t => {
+    for(let i=0; i<t.players.length; i++){
+      for(let j=i+1; j<t.players.length; j++){
+         let p1=t.players[i], p2=t.players[j];
+         if(p1>p2) {let tmp=p1; p1=p2; p2=tmp;}
+         conflicts.add(p1+"|"+p2);
+      }
+    }
+  });
+
+  function getGroupSizes(num) {
+    if (num <= 4) return [num];
+    if (num === 5) return [3, 2];
+    if (num === 6) return [3, 3];
+    if (num === 7) return [4, 3];
+    let numFours = Math.floor(num / 4);
+    let rem = num % 4;
+    let numThrees = 0;
+    if (rem === 1) { numFours -= 2; numThrees = 3; }
+    else if (rem === 2) { numFours -= 1; numThrees = 2; }
+    else if (rem === 3) { numThrees = 1; }
+    const sizes = [];
+    for (let i=0; i<numFours; i++) sizes.push(4);
+    for (let i=0; i<numThrees; i++) sizes.push(3);
+    return sizes;
+  }
+  
+  const groupSizes = getGroupSizes(sunPlayers.length);
+
+  let bestGroups = [];
+  let bestScore = Infinity;
+
+  for(let i=0; i<100; i++){
+    let shuffled = [...sunPlayers];
+    for (let k = shuffled.length - 1; k > 0; k--) {
+      const j = Math.floor(Math.random() * (k + 1));
+      [shuffled[k], shuffled[j]] = [shuffled[j], shuffled[k]];
+    }
+
+    let groups = [];
+    let currentIndex = 0;
+    for (let size of groupSizes) {
+      groups.push(shuffled.slice(currentIndex, currentIndex + size));
+      currentIndex += size;
+    }
+
+    let score = 0;
+    groups.forEach(g => {
+      for(let x=0; x<g.length; x++){
+        for(let y=x+1; y<g.length; y++){
+           let p1=g[x], p2=g[y];
+           if(p1>p2) {let tmp=p1; p1=p2; p2=tmp;}
+           if(conflicts.has(p1+"|"+p2)) score++;
+        }
+      }
+    });
+
+    if (score < bestScore) {
+       bestScore = score;
+       bestGroups = groups;
+       if (score === 0) break;
+    }
+  }
+
+  let startTime = document.getElementById('stableford-time').value || "08:00";
+  state.stablefordGroups = bestGroups.map((gPlayers, idx) => ({
+     id: `sun-${Date.now()}-${idx}`,
+     name: `Group ${idx + 1}`,
+     time: addMinutesToTime(startTime, idx * 8),
+     scorerId: gPlayers[0] || '',
+     players: gPlayers
+  }));
+
+  renderGroups();
+}
+
+// --- DRAG AND DROP LOGIC ---
+let draggedPlayerId = null;
+let draggedContext = null;
+
+function handleDragStart(ev, pid, context) {
+  draggedPlayerId = pid;
+  draggedContext = context;
+  ev.dataTransfer.setData('text/plain', pid);
+  ev.dataTransfer.effectAllowed = 'move';
+  setTimeout(() => ev.target.style.opacity = '0.4', 10);
+}
+
+function handleDragEnd(ev) {
+  ev.target.style.opacity = '1';
+  document.querySelectorAll('.drop-zone').forEach(el => el.classList.remove('dragover'));
+}
+
+function handleDragOver(ev, context) {
+  if (context !== draggedContext) return; 
+  ev.preventDefault();
+  ev.dataTransfer.dropEffect = 'move';
+  ev.currentTarget.classList.add('dragover');
+}
+
+function handleDragLeave(ev) {
+  ev.currentTarget.classList.remove('dragover');
+}
+
+function handleDrop(ev, context, teamIdx) {
+  ev.preventDefault();
+  ev.currentTarget.classList.remove('dragover');
+  if (context !== draggedContext || !draggedPlayerId) return;
+
+  const pid = draggedPlayerId;
+
+  if (context === 'scramble') {
+    state.scrambleTeams.forEach(t => {
+      t.players = t.players.filter(id => id !== pid);
+      if(t.scorerId === pid && !t.players.includes(pid)) t.scorerId = '';
+    });
+    if (teamIdx > -1) {
+       if(state.scrambleTeams[teamIdx].players.length < 4) {
+          state.scrambleTeams[teamIdx].players.push(pid);
+       } else { alert("Team is full (max 4 players)."); }
+    }
+    renderTeams();
+  } else {
+    state.stablefordGroups.forEach(g => {
+      g.players = g.players.filter(id => id !== pid);
+      if(g.scorerId === pid && !g.players.includes(pid)) g.scorerId = '';
+    });
+    if (teamIdx > -1) {
+       if(state.stablefordGroups[teamIdx].players.length < 4) {
+          state.stablefordGroups[teamIdx].players.push(pid);
+       } else { alert("Group is full (max 4 players)."); }
+    }
+    renderGroups();
+  }
+}
+
+// --- TEAM RENDERERS ---
+function getPlayerInfo(pid) { return masterRoster.find(p => p.playerId === pid) || { displayName: 'Unknown' }; }
+
+function getAvailablePlayers(context) {
+  const used = [];
+  const availableIds = [];
+  if(context === 'scramble') {
+    state.scrambleTeams.forEach(t => used.push(...t.players));
+    masterRoster.forEach(p => { if(state.attendance[p.playerId] === 'scramble' || state.attendance[p.playerId] === 'both') availableIds.push(p.playerId); });
+  } else {
+    state.stablefordGroups.forEach(g => used.push(...g.players));
+    masterRoster.forEach(p => { if(state.attendance[p.playerId] === 'stableford' || state.attendance[p.playerId] === 'both') availableIds.push(p.playerId); });
+  }
+  
+  return availableIds
+    .filter(id => !used.includes(id))
+    .sort((a, b) => {
+      const pA = getPlayerInfo(a);
+      const pB = getPlayerInfo(b);
+      const hcpA = parseInt(pA.playingHandicap) || 0;
+      const hcpB = parseInt(pB.playingHandicap) || 0;
+      if (hcpA !== hcpB) return hcpA - hcpB;
+      const nameA = String(pA.displayName || pA.playerId || '').toLowerCase();
+      const nameB = String(pB.displayName || pB.playerId || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+}
+
+function generatePill(pid, context) {
+  const p = getPlayerInfo(pid);
+  return `<div class="drag-pill" draggable="true" 
+            ondragstart="handleDragStart(event, '${pid}', '${context}')" 
+            ondragend="handleDragEnd(event)">
+            ${p.displayName} 
+            <span style="color:var(--muted); font-weight:normal; font-size:10px; margin-left:4px;">(${p.playingHandicap})</span>
+          </div>`;
+}
+
+// SCRAMBLE
+function addScrambleTeam() {
+  state.scrambleTeams.push({ id: `sat-${Date.now()}`, name: `Team ${state.scrambleTeams.length + 1}`, scorerId: '', players: [] });
+  renderTeams();
+}
+function removeScrambleTeam(tIdx) { state.scrambleTeams.splice(tIdx, 1); renderTeams(); }
+function updateScrambleField(tIdx, field, val) { state.scrambleTeams[tIdx][field] = val; renderTeams(); }
+
+function renderTeams() {
+  const container = document.getElementById('scramble-teams-container');
+  const available = getAvailablePlayers('scramble');
+  
+  const pool = document.getElementById('scramble-unassigned');
+  if(Object.values(state.attendance).filter(s => s !== 'none').length === 0) {
+    pool.innerHTML = `<span style="font-size:12px; color:var(--muted); width:100%">No players attending yet.</span>`;
+  } else if(available.length === 0) {
+    pool.innerHTML = `<span style="font-size:12px; color:var(--green); width:100%">All Scramble players assigned!</span>`;
+  } else {
+    pool.innerHTML = available.map(pid => generatePill(pid, 'scramble')).join('');
+  }
+
+  container.innerHTML = state.scrambleTeams.map((team, tIdx) => {
+    let scorerOpts = `<option value="">-- Auto (Player 1) --</option>`;
+    team.players.forEach(pid => {
+      scorerOpts += `<option value="${pid}" ${team.scorerId===pid?'selected':''}>${getPlayerInfo(pid).displayName}</option>`;
+    });
+
+    const isFull = team.players.length >= 4;
+    return `
+      <div class="team-card">
+        <div class="team-header">
+          <input type="text" value="${team.name}" onchange="updateScrambleField(${tIdx}, 'name', this.value)" style="flex:1">
+          <button class="remove-btn" onclick="removeScrambleTeam(${tIdx})">✕</button>
+        </div>
+        
+        <div class="drop-zone ${isFull ? 'full' : ''}" 
+             ondragover="handleDragOver(event, 'scramble')" 
+             ondragleave="handleDragLeave(event)" 
+             ondrop="handleDrop(event, 'scramble', ${tIdx})">
+          ${team.players.map(pid => generatePill(pid, 'scramble')).join('')}
+          ${team.players.length === 0 ? `<span style="color:var(--muted);font-size:12px;margin:auto;">Drop players here</span>` : ''}
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Designated Scorer</label>
+          <select onchange="updateScrambleField(${tIdx}, 'scorerId', this.value)" style="margin:0">${scorerOpts}</select>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// STABLEFORD
+function addStablefordGroup() {
+  let newTime = document.getElementById('stableford-time').value || "08:00";
+  if (state.stablefordGroups.length > 0) {
+     const lastTime = state.stablefordGroups[state.stablefordGroups.length - 1].time;
+     newTime = addMinutesToTime(lastTime, 8);
+  }
+  state.stablefordGroups.push({ id: `sun-${Date.now()}`, name: `Group ${state.stablefordGroups.length + 1}`, time: newTime, scorerId: '', players: [] });
+  renderGroups();
+}
+function removeStablefordGroup(gIdx) { state.stablefordGroups.splice(gIdx, 1); renderGroups(); }
+function updateStablefordField(gIdx, field, val) { state.stablefordGroups[gIdx][field] = val; renderGroups(); }
+
+function renderGroups() {
+  const container = document.getElementById('stableford-groups-container');
+  const available = getAvailablePlayers('stableford');
+  
+  const pool = document.getElementById('stableford-unassigned');
+  if(Object.values(state.attendance).filter(s => s !== 'none').length === 0) {
+    pool.innerHTML = `<span style="font-size:12px; color:var(--muted); width:100%">No players attending yet.</span>`;
+  } else if(available.length === 0) {
+    pool.innerHTML = `<span style="font-size:12px; color:var(--green); width:100%">All Stableford players assigned!</span>`;
+  } else {
+    pool.innerHTML = available.map(pid => generatePill(pid, 'stableford')).join('');
+  }
+
+  container.innerHTML = state.stablefordGroups.map((grp, gIdx) => {
+    let scorerOpts = `<option value="">-- Auto (Player 1) --</option>`;
+    grp.players.forEach(pid => {
+      scorerOpts += `<option value="${pid}" ${grp.scorerId===pid?'selected':''}>${getPlayerInfo(pid).displayName}</option>`;
+    });
+
+    const isFull = grp.players.length >= 4;
+    return `
+      <div class="team-card">
+        <div class="team-header">
+          <input type="text" value="${grp.name}" onchange="updateStablefordField(${gIdx}, 'name', this.value)" style="flex:1; width:60%">
+          <input type="time" value="${grp.time}" onchange="updateStablefordField(${gIdx}, 'time', this.value)" style="flex:0 0 100px; margin-left:8px;">
+          <button class="remove-btn" onclick="removeStablefordGroup(${gIdx})">✕</button>
+        </div>
+        
+        <div class="drop-zone ${isFull ? 'full' : ''}" 
+             ondragover="handleDragOver(event, 'stableford')" 
+             ondragleave="handleDragLeave(event)" 
+             ondrop="handleDrop(event, 'stableford', ${gIdx})">
+          ${grp.players.map(pid => generatePill(pid, 'stableford')).join('')}
+          ${grp.players.length === 0 ? `<span style="color:var(--muted);font-size:12px;margin:auto;">Drop players here</span>` : ''}
+        </div>
+
+        <div style="margin-top:12px">
+          <label>Designated Scorer</label>
+          <select onchange="updateStablefordField(${gIdx}, 'scorerId', this.value)" style="margin:0">${scorerOpts}</select>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// --- GENERATOR ---
+// --- FIREBASE CLOUD PUSH ---
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBbuOgOICrb_nt64fCdfOMY-Nn1ySDKIu4",
+  authDomain: "chubbs-golf.firebaseapp.com",
+  databaseURL: "https://chubbs-golf-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "chubbs-golf",
+  storageBucket: "chubbs-golf.firebasestorage.app",
+  messagingSenderId: "462454481032",
+  appId: "1:462454481032:web:6ddc74ffb7ff543f3b3f3d"
+};
+
+let db = null;
+function initFirebase() {
+  try {
+    if(typeof firebase !== 'undefined' && firebase.apps.length === 0) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.database();
+    }
+  } catch(e) { console.warn('Firebase init failed', e); }
+}
+
+function buildEventBundle() {
+  const opts = {
+    threePuttPoker: true, pokerMode: "digital", 
+    ante: parseInt(document.getElementById('ev-ante').value) || 50,
+    penalty3: parseInt(document.getElementById('ev-pen3').value) || 10,
+    penalty4plus: parseInt(document.getElementById('ev-pen4').value) || 20
+  };
+
+  const playersOut = masterRoster.filter(p => state.attendance[p.playerId] && state.attendance[p.playerId] !== 'none');
+
+  const d1Teams = state.scrambleTeams.map(t => {
+    let players = t.players.filter(p => p);
+    let scorer = t.scorerId || (players[0] || "");
+    if (scorer && players.includes(scorer)) {
+      players = players.filter(p => p !== scorer);
+      players.push(scorer); 
+    }
+    return { teamId: t.id, teamName: t.name, scorerPlayerId: scorer, playerIds: players };
+  }).filter(t => t.playerIds.length > 0);
+
+  const d2Groups = state.stablefordGroups.map(g => {
+    let players = g.players.filter(p => p);
+    let scorer = g.scorerId || (players[0] || "");
+    if (scorer && players.includes(scorer)) {
+      players = players.filter(p => p !== scorer);
+      players.push(scorer); 
+    }
+    return { groupId: g.id, groupName: g.name, teeTime: g.time, scorerPlayerId: scorer, playerIds: players };
+  }).filter(g => g.playerIds.length > 0);
+
+  const fmtDate = (dString) => {
+    if(!dString) return "";
+    const [y,m,d] = dString.split('-');
+    return `${parseInt(m)}/${parseInt(d)}/${y}`; 
+  };
+
+  return {
+    version: 2,
+    event: {
+      eventId: `${document.getElementById('scramble-date').value.split('-')[0]}-${document.getElementById('ev-name').value.replace(/\s+/g,'-').substring(0,10)}`,
+      name: document.getElementById('ev-name').value,
+      displayName: document.getElementById('ev-display').value,
+      satDate: fmtDate(document.getElementById('scramble-date').value), satTime: document.getElementById('scramble-time').value,
+      sunDate: fmtDate(document.getElementById('stableford-date').value), sunTime: document.getElementById('stableford-time').value,
+      day1CourseId: document.getElementById('scramble-course').value, day1CourseLabel: COURSE_LIBRARY[document.getElementById('scramble-course').value]?.name || "",
+      day1PalmIslandFront: document.getElementById('scramble-front').value, day1PalmIslandBack: document.getElementById('scramble-back').value,
+      day2CourseId: document.getElementById('stableford-course').value, day2CourseLabel: COURSE_LIBRARY[document.getElementById('stableford-course').value]?.name || "",
+      day2PalmIslandFront: document.getElementById('stableford-front').value, day2PalmIslandBack: document.getElementById('stableford-back').value,
+      currency: document.getElementById('ev-currency').value,
+      notes: "Generated via Chubbs Admin Desktop Tool"
+    },
+    options: opts, players: playersOut, day1ScrambleTeams: d1Teams, day2Groups: d2Groups
+  };
+}
+
+function generateAndDownloadJson() {
+  const eventJson = buildEventBundle();
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(eventJson, null, 2));
+  const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "event.json");
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function pushToLiveApp() {
+  if(!db) { alert("Database not connected. Please refresh the page."); return; }
+
+  const eventJson = buildEventBundle();
+  const eventId = eventJson.event.eventId;
+  const btn = document.getElementById('push-btn');
+  const origText = btn.innerHTML;
+  btn.innerHTML = "⏳ Uploading...";
+
+  // Write to /pending_events/ — does NOT push directly into player apps.
+  // The mobile app (admin/organiser view) checks this path on open and
+  // shows a notification prompting the organiser to import the event.
+  const payload = {
+    ...eventJson,
+    _publishedAt: Date.now(),
+    _publishedBy: 'ChubbsAdmin'
+  };
+
+  db.ref(`/pending_events/${eventId}`).set(payload)
+    .then(() => {
+      btn.innerHTML = "✅ Sent!";
+      setTimeout(() => btn.innerHTML = origText, 3000);
+      alert(
+        `Event sent to cloud ✅\n\n` +
+        `"${eventJson.event.displayName || eventJson.event.name}"\n\n` +
+        `Next step: open the Chubbs mobile app in organiser mode.\n` +
+        `A notification will appear prompting you to import this event.`
+      );
+    })
+    .catch(err => {
+      btn.innerHTML = "❌ Failed";
+      setTimeout(() => btn.innerHTML = origText, 3000);
+      alert("Upload failed: " + err.message);
+    });
+}
+
+window.onload = () => {
+  initFirebase();
+  init();
+};
+</script>
+</body>
+</html>

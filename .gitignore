@@ -1,0 +1,27 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+*.swp
+*.swo
+
+# Not tracked — use Archive/ and VersionZips/ for these
+Archive/
+VersionZips/
+Backup/
+
+# Large binary assets (app icons stored at root, not in subfolders)
+AppIcons/
+Courses/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Secrets (never commit)
+.env
+*.env

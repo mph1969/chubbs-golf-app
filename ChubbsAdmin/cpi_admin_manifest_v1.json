@@ -1,0 +1,28 @@
+{
+  "name": "ChubbsAdmin!",
+  "short_name": "ChubbsAdmin!",
+  "description": "Chubbs Peterson Invitational golf admin desktop page.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07150f",
+  "theme_color": "#07150f",
+  "categories": [
+    "sports",
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "./ChubbsIcon4.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./cpi_badge.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

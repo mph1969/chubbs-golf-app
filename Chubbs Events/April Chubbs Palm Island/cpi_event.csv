@@ -1,0 +1,2 @@
+﻿eventId,name,displayName,satDate,satTime,sunDate,sunTime,day1CourseId,day1CourseLabel,day1PalmIslandFront,day1PalmIslandBack,day2CourseId,day2CourseLabel,day2PalmIslandFront,day2PalmIslandBack,currency,notes
+2026-04-palm-island,Chubbs Peterson Invitational,April Chubbs at Palm Island,4/25/2026,12:00,4/26/2026,8:00,palmIsland,Palm Island,A,B,palmIsland,Palm Island,B,C,RMB,Saturday scramble teams and Sunday Stableford groups can be different. scorerPlayerId defaults to player1Id when blank.

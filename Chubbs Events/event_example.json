@@ -1,0 +1,230 @@
+{
+  "version": 2,
+  "event": {
+    "eventId": "2026-Chubbs-Pet",
+    "name": "Chubbs Peterson Invitational",
+    "displayName": "April Chubbs at Palm Island",
+    "satDate": "4/25/2026",
+    "satTime": "12:00",
+    "sunDate": "4/26/2026",
+    "sunTime": "08:00",
+    "day1CourseId": "palmIsland",
+    "day1CourseLabel": "Palm Island",
+    "day1PalmIslandFront": "A",
+    "day1PalmIslandBack": "B",
+    "day2CourseId": "palmIsland",
+    "day2CourseLabel": "Palm Island",
+    "day2PalmIslandFront": "A",
+    "day2PalmIslandBack": "B",
+    "currency": "RMB",
+    "notes": "Generated via Chubbs Admin Desktop Tool"
+  },
+  "options": {
+    "threePuttPoker": true,
+    "pokerMode": "digital",
+    "ante": 50,
+    "penalty3": 10,
+    "penalty4plus": 20
+  },
+  "players": [
+    {
+      "playerId": "DARYL",
+      "displayName": "DARYL",
+      "fullName": "DARYL",
+      "playingHandicap": 24,
+      "goldJackets": 0,
+      "clownJackets": 1,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "DIEGO",
+      "displayName": "DIEGO",
+      "fullName": "DIEGO",
+      "playingHandicap": 11,
+      "goldJackets": 2,
+      "clownJackets": 0,
+      "scrambleWins": 3
+    },
+    {
+      "playerId": "GEORGE",
+      "displayName": "GEORGE",
+      "fullName": "GEORGE",
+      "playingHandicap": 24,
+      "goldJackets": 0,
+      "clownJackets": 0,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "GRAEME",
+      "displayName": "GRAEME",
+      "fullName": "GRAEME",
+      "playingHandicap": 28,
+      "goldJackets": 0,
+      "clownJackets": 0,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "HANSON",
+      "displayName": "HANSON",
+      "fullName": "HANSON",
+      "playingHandicap": 15,
+      "goldJackets": 1,
+      "clownJackets": 0,
+      "scrambleWins": 1
+    },
+    {
+      "playerId": "JAMIE",
+      "displayName": "JAMIE",
+      "fullName": "JAMIE",
+      "playingHandicap": 22,
+      "goldJackets": 3,
+      "clownJackets": 0,
+      "scrambleWins": 2
+    },
+    {
+      "playerId": "JORDAN",
+      "displayName": "JORDAN",
+      "fullName": "JORDAN",
+      "playingHandicap": 28,
+      "goldJackets": 1,
+      "clownJackets": 0,
+      "scrambleWins": 3
+    },
+    {
+      "playerId": "KEVINA",
+      "displayName": "KEVIN A",
+      "fullName": "KEVIN A",
+      "playingHandicap": 20,
+      "goldJackets": 2,
+      "clownJackets": 1,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "MATT",
+      "displayName": "MATT",
+      "fullName": "MATT",
+      "playingHandicap": 12,
+      "goldJackets": 0,
+      "clownJackets": 0,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "MATTHEW",
+      "displayName": "MATTHEW",
+      "fullName": "MATTHEW",
+      "playingHandicap": 22,
+      "goldJackets": 0,
+      "clownJackets": 0,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "NICK",
+      "displayName": "NICK",
+      "fullName": "NICK",
+      "playingHandicap": 25,
+      "goldJackets": 0,
+      "clownJackets": 0,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "RYAN",
+      "displayName": "RYAN",
+      "fullName": "RYAN",
+      "playingHandicap": 12,
+      "goldJackets": 0,
+      "clownJackets": 0,
+      "scrambleWins": 0
+    },
+    {
+      "playerId": "TERRY",
+      "displayName": "TERRY",
+      "fullName": "TERRY",
+      "playingHandicap": 28,
+      "goldJackets": 1,
+      "clownJackets": 1,
+      "scrambleWins": 2
+    }
+  ],
+  "day1ScrambleTeams": [
+    {
+      "teamId": "sat-1775116664979-0",
+      "teamName": "Team 1",
+      "scorerPlayerId": "TERRY",
+      "playerIds": [
+        "TERRY",
+        "DIEGO",
+        "MATTHEW",
+        "DARYL"
+      ]
+    },
+    {
+      "teamId": "sat-1775116664979-1",
+      "teamName": "Team 2",
+      "scorerPlayerId": "JORDAN",
+      "playerIds": [
+        "JORDAN",
+        "MATT",
+        "JAMIE",
+        "GEORGE"
+      ]
+    },
+    {
+      "teamId": "sat-1775116664979-2",
+      "teamName": "Team 3",
+      "scorerPlayerId": "HANSON",
+      "playerIds": [
+        "GRAEME",
+        "RYAN",
+        "HANSON",
+        "NICK"
+      ]
+    }
+  ],
+  "day2Groups": [
+    {
+      "groupId": "sun-1775116704924-0",
+      "groupName": "Group 1",
+      "teeTime": "08:00",
+      "scorerPlayerId": "HANSON",
+      "playerIds": [
+        "HANSON",
+        "DIEGO",
+        "MATT",
+        "KEVINA"
+      ]
+    },
+    {
+      "groupId": "sun-1775116704924-1",
+      "groupName": "Group 2",
+      "teeTime": "08:08",
+      "scorerPlayerId": "JORDAN",
+      "playerIds": [
+        "JORDAN",
+        "NICK",
+        "MATTHEW"
+      ]
+    },
+    {
+      "groupId": "sun-1775116704924-2",
+      "groupName": "Group 3",
+      "teeTime": "08:16",
+      "scorerPlayerId": "DARYL",
+      "playerIds": [
+        "DARYL",
+        "JAMIE",
+        "GRAEME"
+      ]
+    },
+    {
+      "groupId": "sun-1775116704924-3",
+      "groupName": "Group 4",
+      "teeTime": "08:24",
+      "scorerPlayerId": "RYAN",
+      "playerIds": [
+        "RYAN",
+        "GEORGE",
+        "TERRY"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,212 @@
+{
+  "version": 2,
+  "event": {
+    "eventId": "2026-04-Nansha",
+    "name": "Chubbs Peterson Invitational",
+    "displayName": "Test Chubbs at Nansha",
+    "satDate": "4/6/2026",
+    "satTime": "6:48",
+    "sunDate": "4/7/2026",
+    "sunTime": "8:00",
+    "day1CourseId": "Nansha Mountain",
+    "day1CourseLabel": "Nansha Mountain",
+    "day1PalmIslandFront": "A",
+    "day1PalmIslandBack": "B",
+    "day2CourseId": "Nansha Valley",
+    "day2CourseLabel": "Nansha Valley",
+    "day2PalmIslandFront": "C",
+    "day2PalmIslandBack": "D",
+    "currency": "RMB",
+    "notes": "Saturday scramble teams and Sunday Stableford groups can be different. scorerPlayerId defaults to player1Id when blank."
+  },
+  "options": {
+    "threePuttPoker": true,
+    "pokerMode": "digital",
+    "ante": 50,
+    "penalty3": 10,
+    "penalty4plus": 20
+  },
+  "players": [
+    {
+      "playerId": "TerryM",
+      "displayName": "Tmoney",
+      "fullName": "Terry Madill",
+      "shortName": "Terry",
+      "playingHandicap": 25,
+      "defaultTee": "Blue",
+      "wechatName": "terrmadi"
+    },
+    {
+      "playerId": "JordanCa",
+      "displayName": "Junk Yard Dog",
+      "fullName": "Jordan",
+      "shortName": "Jordan",
+      "playingHandicap": 25,
+      "defaultTee": "Blue",
+      "wechatName": "Jordan365"
+    },
+    {
+      "playerId": "Diego",
+      "displayName": "Diego",
+      "fullName": "Diego Wells",
+      "shortName": "Diego",
+      "playingHandicap": 11,
+      "defaultTee": "Blue",
+      "wechatName": "jaydiego"
+    },
+    {
+      "playerId": "Jamie",
+      "displayName": "Jamie",
+      "fullName": "Jamie Arnett",
+      "shortName": "Jamie",
+      "playingHandicap": 18,
+      "defaultTee": "Blue",
+      "wechatName": "JamieArnett"
+    },
+    {
+      "playerId": "Nick",
+      "displayName": "Nick",
+      "fullName": "Nick Ellicot",
+      "shortName": "Nick",
+      "playingHandicap": 25,
+      "defaultTee": "Blue",
+      "wechatName": "NEllicott"
+    },
+    {
+      "playerId": "Matthew",
+      "displayName": "Matthew",
+      "fullName": "Matthew",
+      "shortName": "Matthew",
+      "playingHandicap": 22,
+      "defaultTee": "Blue",
+      "wechatName": ""
+    },
+    {
+      "playerId": "Matt",
+      "displayName": "Matt",
+      "fullName": "Matt Dillon",
+      "shortName": "Matt",
+      "playingHandicap": 12,
+      "defaultTee": "Blue",
+      "wechatName": "MattDillon123"
+    },
+    {
+      "playerId": "Graeme",
+      "displayName": "GraemeBo",
+      "fullName": "Graeme Webster",
+      "shortName": "Graeme",
+      "playingHandicap": 28,
+      "defaultTee": "Blue",
+      "wechatName": "gswebby13"
+    },
+    {
+      "playerId": "George",
+      "displayName": "GeorgieBoy",
+      "fullName": "George Tewson",
+      "shortName": "George",
+      "playingHandicap": 24,
+      "defaultTee": "Blue",
+      "wechatName": "gtewson1"
+    },
+    {
+      "playerId": "Kevin",
+      "displayName": "Kevin",
+      "fullName": "Kevin Exjei",
+      "shortName": "Kevin",
+      "playingHandicap": 15,
+      "defaultTee": "Blue",
+      "wechatName": "Kevin Exjei"
+    },
+    {
+      "playerId": "Ryan",
+      "displayName": "Ryan",
+      "fullName": "Ryan Niimo",
+      "shortName": "Ryan",
+      "playingHandicap": 12,
+      "defaultTee": "Blue",
+      "wechatName": "ry_try"
+    },
+    {
+      "playerId": "Daryl",
+      "displayName": "Daryl",
+      "fullName": "Daryl",
+      "shortName": "Daryl",
+      "playingHandicap": 18,
+      "defaultTee": "Blue",
+      "wechatName": "daryljj"
+    }
+  ],
+  "day1ScrambleTeams": [
+    {
+      "teamId": "sat-1",
+      "teamName": "Neon Cats",
+      "scorerPlayerId": "TerryM",
+      "playerIds": [
+        "TerryM",
+        "JordanCa",
+        "Diego",
+        "Jamie"
+      ]
+    },
+    {
+      "teamId": "sat-2",
+      "teamName": "Arctic Pussys",
+      "scorerPlayerId": "Nick",
+      "playerIds": [
+        "Nick",
+        "Matthew",
+        "Matt",
+        "Graeme"
+      ]
+    },
+    {
+      "teamId": "sat-3",
+      "teamName": "Blow Hards",
+      "scorerPlayerId": "George",
+      "playerIds": [
+        "George",
+        "Kevin",
+        "Ryan",
+        "Daryl"
+      ]
+    }
+  ],
+  "day2Groups": [
+    {
+      "groupId": "sun-1",
+      "groupName": "Group 1",
+      "teeTime": "8:00",
+      "scorerPlayerId": "Daryl",
+      "playerIds": [
+        "Daryl",
+        "TerryM",
+        "Nick",
+        "George"
+      ]
+    },
+    {
+      "groupId": "sun-2",
+      "groupName": "Group 2",
+      "teeTime": "8:04",
+      "scorerPlayerId": "Ryan",
+      "playerIds": [
+        "Ryan",
+        "JordanCa",
+        "Kevin",
+        "Graeme"
+      ]
+    },
+    {
+      "groupId": "sun-3",
+      "groupName": "Group 3",
+      "teeTime": "8:08",
+      "scorerPlayerId": "Jamie",
+      "playerIds": [
+        "Jamie",
+        "Diego",
+        "Matt",
+        "Matthew"
+      ]
+    }
+  ]
+}

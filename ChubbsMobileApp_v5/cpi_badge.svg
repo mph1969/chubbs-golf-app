@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CPI badge">
+  <defs>
+    <linearGradient id="g" x1="0" x2="1">
+      <stop offset="0%" stop-color="#d6b05a"/>
+      <stop offset="100%" stop-color="#f2dd97"/>
+    </linearGradient>
+    <linearGradient id="r" x1="0" x2="1">
+      <stop offset="0%" stop-color="#a62323"/>
+      <stop offset="100%" stop-color="#d44141"/>
+    </linearGradient>
+  </defs>
+  <rect x="18" y="18" width="476" height="476" rx="72" fill="#0a2418" stroke="url(#g)" stroke-width="16"/>
+  <g fill="none" stroke="url(#g)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M124 340 L210 254 L298 342" stroke-width="24"/>
+    <path d="M210 254 L256 300 L320 236" stroke-width="24"/>
+    <path d="M308 120 L308 334" stroke-width="12"/>
+  </g>
+  <path d="M308 128 C344 122, 370 132, 396 158 C374 166, 350 172, 308 170 Z" fill="url(#r)"/>
+  <path d="M304 196 C352 196, 392 224, 402 268 C412 312, 386 352, 344 366 C320 374, 286 374, 258 356 C276 342, 288 324, 294 304 C302 274, 298 236, 304 196 Z" fill="url(#g)"/>
+  <path d="M356 236 C342 220, 326 220, 314 230 C330 236, 340 246, 346 260 C356 258, 366 250, 370 238 C366 232, 362 230, 356 236 Z" fill="#0a2418" opacity="0.95"/>
+  <circle cx="336" cy="368" r="58" fill="#f7f5ef"/>
+  <g fill="#d6d0c6">
+    <circle cx="304" cy="340" r="7"/><circle cx="330" cy="336" r="7"/><circle cx="356" cy="340" r="7"/>
+    <circle cx="292" cy="366" r="7"/><circle cx="318" cy="362" r="7"/><circle cx="344" cy="362" r="7"/><circle cx="370" cy="366" r="7"/>
+    <circle cx="304" cy="392" r="7"/><circle cx="330" cy="388" r="7"/><circle cx="356" cy="392" r="7"/>
+  </g>
+  <text x="86" y="406" font-family="Georgia, serif" font-size="92" font-weight="700" fill="url(#g)">CPI</text>
+</svg>
