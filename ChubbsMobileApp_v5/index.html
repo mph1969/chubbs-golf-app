@@ -784,52 +784,54 @@ function pushToFirebase(){
   }).catch(()=>{});
 }
 function checkPendingEvent(){
-  // Only runs in organiser/admin mode — shows a notification when a new event
-  // was sent from ChubbsAdmin via /pending_events/. Does not auto-import.
+  // Only runs in organiser/admin mode. Scans /events/ for any bundle that was
+  // pushed from ChubbsAdmin (_publishedBy flag) and hasn't been loaded yet.
   if(!masterMode || !SYNC.enabled || !SYNC.db) return;
-  SYNC.db.ref('/pending_events').once('value', snap => {
+  SYNC.db.ref('/events').once('value', snap => {
     if(!snap.exists()) return;
-    const pending = snap.val();
-    const entries = Object.entries(pending);
-    if(!entries.length) return;
-    // Use the most recently published pending event
-    const [eid, bundle] = entries.reduce((best, cur) =>
-      ((cur[1]._publishedAt || 0) > (best[1]._publishedAt || 0) ? cur : best)
-    );
+    const events = snap.val();
+    const currentId = state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId;
+    // Find the most recently published ChubbsAdmin entry that isn't already loaded
+    let best = null;
+    Object.entries(events).forEach(([eid, data]) => {
+      const bundle = data && data.bundle;
+      if(!bundle || bundle._publishedBy !== 'ChubbsAdmin') return;
+      if(eid === currentId) return; // already loaded
+      if(!best || (bundle._publishedAt || 0) > (best.bundle._publishedAt || 0)){
+        best = { eid, bundle };
+      }
+    });
+    if(!best) return;
+    const { eid, bundle } = best;
     const name = (bundle.event && (bundle.event.displayName || bundle.event.name)) || eid;
-    const pub  = bundle._publishedAt ? new Date(bundle._publishedAt).toLocaleString() : '';
-    const el   = document.getElementById('pendingEventBanner');
+    const pub  = bundle._publishedAt
+      ? new Date(bundle._publishedAt).toLocaleString() : '';
+    const el = document.getElementById('pendingEventBanner');
     if(!el) return;
     el.innerHTML = `
       <div class="status info" style="display:flex;align-items:center;gap:12px;margin:0;border-radius:0;padding:10px 14px">
         <div style="flex:1;min-width:0">
-          <strong>Event ready to import</strong><br/>
+          <strong>New event ready to import</strong><br/>
           <span class="small">${name}${pub ? ' · sent ' + pub : ''}</span>
         </div>
         <button class="btn gold slim" data-readonly="allow" onclick="importPendingEvent('${eid}')">Import</button>
-        <button class="btn ghost slim" data-readonly="allow" onclick="dismissPendingEvent('${eid}')">✕</button>
+        <button class="btn ghost slim" data-readonly="allow" onclick="dismissPendingEvent()">✕</button>
       </div>`;
     el.style.display = 'block';
   });
 }
 function importPendingEvent(eid){
   if(!SYNC.enabled || !SYNC.db) return;
-  SYNC.db.ref(`/pending_events/${eid}`).once('value', snap => {
+  SYNC.db.ref(`/events/${eid}/bundle`).once('value', snap => {
     if(!snap.exists()){ showToast('Event no longer available.', 'err'); return; }
     const bundle = snap.val();
-    // Strip admin metadata before importing
     const { _publishedAt, _publishedBy, ...cleanBundle } = bundle;
     applyImportedEventBundle(cleanBundle, null);
-    // Remove from pending so it won't show again
-    SYNC.db.ref(`/pending_events/${eid}`).remove().catch(()=>{});
     document.getElementById('pendingEventBanner').style.display = 'none';
     showToast('Event imported from cloud.', 'ok');
   });
 }
-function dismissPendingEvent(eid){
-  if(SYNC.enabled && SYNC.db){
-    SYNC.db.ref(`/pending_events/${eid}`).remove().catch(()=>{});
-  }
+function dismissPendingEvent(){
   document.getElementById('pendingEventBanner').style.display = 'none';
 }
 function playerTotalsFromRemote(playerId, groupData){
