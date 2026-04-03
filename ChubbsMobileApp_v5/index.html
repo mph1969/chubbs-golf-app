@@ -2818,12 +2818,13 @@ function renderSetup(){
         <div id="cloud-event-list"><div class="status info tight">Scanning for events…</div></div>
         <div id="cloud-player-pick" style="display:none"></div>
         <div id="cloud-load-status"></div>
-      </div>
-      <script>if(typeof scanCloudEvents==='function') scanCloudEvents();</script>` : ''}
+      </div>` : ''}
       <div style="text-align:center;margin-top:8px;padding-bottom:4px">
         <button onclick="toggleMasterMode()" style="background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:8px 12px;">⚙️ Organiser / admin view</button>
       </div>
     `;
+    // Trigger cloud event scan after innerHTML is set (can't use <script> in innerHTML)
+    if(!imported && typeof scanCloudEvents === 'function') scanCloudEvents();
     return;
   }
 
