@@ -324,7 +324,8 @@ const SYNC = {
   remoteGroups: {},   // {groupId: {players, holes, hole, ts}}
   remoteTeams:  {},   // {teamId:  {players, holes, hole, teamName, ts}}
   listeners:    [],   // [{ref, fn}] for teardown
-  status:       'offline' // 'offline' | 'live' | 'err'
+  status:       'offline', // 'offline' | 'live' | 'err'
+  _leaderboardRevealed: false // set by Firebase listener when admin reveals
 };
 
 // ── CPI member roster with ChubbsHub achievement data (source: chubbshub.com) ─
@@ -830,6 +831,11 @@ function initSync(eventId){
   });
   listen(`/events/${eventId}/teams`, data => {
     SYNC.remoteTeams = data;
+    renderLeaderboard();
+  });
+  // Listen for leaderboard reveal flag (admin can reveal/hide mid-event)
+  listen(`/events/${eventId}/leaderboardRevealed`, data => {
+    SYNC._leaderboardRevealed = !!data;
     renderLeaderboard();
   });
 }
@@ -3038,7 +3044,21 @@ function renderSetup(){
       </div>
     </div>`;
 
+  const lbModeLabel = {open:'Open — everyone sees live scores', locked:'Locked — hidden until you reveal', fee:'Unlock with fee'}[getLeaderboardAccess()] || 'Open';
+  const lbModeColor = {open:'var(--green)', locked:'var(--blue)', fee:'var(--gold2)'}[getLeaderboardAccess()] || 'var(--green)';
   const settingsTab = `
+    <div class="card">
+      <div class="section-title">Leaderboard access <span style="color:${lbModeColor}">· ${getLeaderboardAccess().toUpperCase()}</span></div>
+      <div class="small tight">${lbModeLabel}${getLeaderboardAccess()==='fee' ? ' · '+getLeaderboardFee()+' '+ ((state.eventBundle&&state.eventBundle.event&&state.eventBundle.event.currency)||'RMB') +' per player' : ''}</div>
+      ${getLeaderboardAccess()==='locked' ? `
+      <div class="toolbar tight" style="margin-top:10px">
+        ${SYNC._leaderboardRevealed
+          ? `<button class="btn warn slim full" onclick="hideLeaderboard()">🔒 Hide leaderboard</button>`
+          : `<button class="btn gold slim full" onclick="revealLeaderboard()">🏆 Reveal results to all</button>`}
+      </div>` : ''}
+      <div class="inline-note" style="margin-top:8px">Leaderboard mode is set in ChubbsAdmin before pushing the event. Scorers always see their own group's scores.</div>
+    </div>
+
     <div class="card">
       <div class="section-title">3-putt poker <span style="color:${state.options.threePuttPoker?'var(--gold2)':'var(--muted)'}">· ${state.options.threePuttPoker?'ON':'OFF'}</span></div>
       <div class="small tight">3-putt poker is configured by the Stableford scorer on the <strong>Stableford tab</strong> before play begins. The setup card appears at the top until poker is turned on.</div>
@@ -3679,7 +3699,7 @@ function renderLeaderboard(){
         <div class="meta ${toParClass(scramble.toPar)}"><div class="k">To par</div><div class="v">${fmtToPar(scramble.toPar)}</div></div>
       </div>
       <div class="inline-note" style="margin-bottom:10px">${day1Course.name} · ${state.scramble.teamName.trim() || 'Team TBC'}</div>
-      ${lbUnlocked ? driveHtml : `<div style="text-align:center;margin-top:4px"><button class="btn ghost slim" onclick="unlockLeaderboard()">See drive tracker</button></div>`}
+      ${lbUnlocked ? driveHtml : (lbMode === 'locked' && !SYNC._leaderboardRevealed ? `<div class="small" style="color:var(--muted);text-align:center;margin-top:6px">Drive tracker hidden until results are revealed.</div>` : `<div style="text-align:center;margin-top:4px"><button class="btn ghost slim" onclick="unlockLeaderboard()">See drive tracker</button></div>`)}
     </div>`;
   } else {
     scrambleCard = `<div class="card">
@@ -3697,13 +3717,42 @@ function renderLeaderboard(){
   // ── STABLEFORD SECTION ───────────────────────────────────────────
   const anyStableScores = ranking.some(r => r.entered > 0);
   const leader = ranking[0];
-  const paywall = `<div style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.22);border-radius:12px;padding:14px 16px;text-align:center;margin-top:8px">
-    <div style="font-size:13px;font-weight:700;color:var(--gold2);margin-bottom:4px">Full leaderboard</div>
-    <div class="small" style="color:var(--muted);margin-bottom:6px">Buy the organiser a beer and unlock the full ranked board for this device.</div>
-    <div class="small" style="color:var(--muted);margin-bottom:10px">① Save QR to photos &nbsp;② WeChat → Pay &nbsp;③ Photo Library / QR code &nbsp;④ Scan &amp; pay</div>
-    <button class="btn ghost slim" style="margin-right:8px" onclick="showQrOverlay('./mph_pay_code.jpeg','① Save to photos  ② WeChat → Pay  ③ Photo Library / QR code  ④ Scan & pay')">WeChat Pay 🍺</button>
-    <button class="btn gold slim" onclick="unlockLeaderboard()">Unlocked ✓</button>
-  </div>`;
+  const lbMode = getLeaderboardAccess();
+  const lbFee = getLeaderboardFee();
+  const currency = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency) || 'RMB';
+
+  // Admin reveal/hide controls (only in locked mode)
+  const adminRevealBtn = masterMode && lbMode === 'locked'
+    ? (SYNC._leaderboardRevealed
+      ? `<div style="margin-top:8px"><button class="btn warn slim full" onclick="hideLeaderboard()">🔒 Hide leaderboard from players</button></div>`
+      : `<div style="margin-top:8px"><button class="btn gold slim full" onclick="revealLeaderboard()">🏆 Reveal results to all players</button></div>`)
+    : '';
+
+  let paywall;
+  if(lbMode === 'locked' && !SYNC._leaderboardRevealed){
+    paywall = `<div style="background:rgba(121,176,227,0.06);border:1px solid rgba(121,176,227,0.22);border-radius:12px;padding:14px 16px;text-align:center;margin-top:8px">
+      <div style="font-size:28px;margin-bottom:6px">🔒</div>
+      <div style="font-size:14px;font-weight:700;color:var(--blue);margin-bottom:4px">Leaderboard locked</div>
+      <div class="small" style="color:var(--muted)">The organiser will reveal the full results — stay tuned!</div>
+    </div>${adminRevealBtn}`;
+  } else if(lbMode === 'fee'){
+    paywall = `<div style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.22);border-radius:12px;padding:14px 16px;text-align:center;margin-top:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold2);margin-bottom:4px">Full leaderboard · ${lbFee} ${currency}</div>
+      <div class="small" style="color:var(--muted);margin-bottom:6px">Pay the organiser to unlock the ranked board. All fees go to the weekend reward pool.</div>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">① Save QR to photos &nbsp;② WeChat → Pay &nbsp;③ Photo Library / QR code &nbsp;④ Scan &amp; pay</div>
+      <button class="btn ghost slim" style="margin-right:8px" onclick="showQrOverlay('./mph_pay_code.jpeg','① Save to photos  ② WeChat → Pay  ③ Photo Library / QR code  ④ Scan & pay')">WeChat Pay</button>
+      <button class="btn gold slim" onclick="unlockLeaderboard()">I've paid · Unlock ✓</button>
+    </div>`;
+  } else {
+    // Legacy paywall for events without the setting (backwards compatible)
+    paywall = `<div style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.22);border-radius:12px;padding:14px 16px;text-align:center;margin-top:8px">
+      <div style="font-size:13px;font-weight:700;color:var(--gold2);margin-bottom:4px">Full leaderboard</div>
+      <div class="small" style="color:var(--muted);margin-bottom:6px">Buy the organiser a beer and unlock the full ranked board for this device.</div>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">① Save QR to photos &nbsp;② WeChat → Pay &nbsp;③ Photo Library / QR code &nbsp;④ Scan &amp; pay</div>
+      <button class="btn ghost slim" style="margin-right:8px" onclick="showQrOverlay('./mph_pay_code.jpeg','① Save to photos  ② WeChat → Pay  ③ Photo Library / QR code  ④ Scan & pay')">WeChat Pay 🍺</button>
+      <button class="btn gold slim" onclick="unlockLeaderboard()">Unlocked ✓</button>
+    </div>`;
+  }
 
   const fullRankHtml = ranking.map((row, i) => {
     const isAway = row.source === 'none';
@@ -3744,6 +3793,7 @@ function renderLeaderboard(){
       <div class="section-title">Stableford · Golden Jacket board</div>
       <div class="inline-note">${day2Course.name} · Sorted by pts, back-9 countback</div>
       <div class="stack tight" style="margin-top:10px">${fullRankHtml}</div>
+      ${adminRevealBtn}
     </div>`;
   } else {
     // Teaser: show leader + summary, paywall for full list
@@ -3849,8 +3899,37 @@ function unlockLeaderboard(){
   renderAll();
   showToast('Full leaderboard unlocked — thanks for the support! 🙏', 'ok');
 }
+function getLeaderboardAccess(){
+  if(!state.eventBundle || !state.eventBundle.options) return 'open';
+  return state.eventBundle.options.leaderboardAccess || 'open';
+}
+function getLeaderboardFee(){
+  if(!state.eventBundle || !state.eventBundle.options) return 0;
+  return parseInt(state.eventBundle.options.leaderboardFee, 10) || 0;
+}
 function isLeaderboardUnlocked(){
-  return masterMode || localStorage.getItem(LB_UNLOCK_KEY) === '1';
+  if(masterMode) return true;
+  const mode = getLeaderboardAccess();
+  if(mode === 'open') return true;
+  if(mode === 'locked') return !!SYNC._leaderboardRevealed;
+  if(mode === 'fee') return localStorage.getItem(LB_UNLOCK_KEY) === '1';
+  return true;
+}
+function revealLeaderboard(){
+  if(!SYNC.enabled || !SYNC.db || !SYNC.eventId) return;
+  SYNC.db.ref(`/events/${SYNC.eventId}/leaderboardRevealed`).set(true).then(() => {
+    SYNC._leaderboardRevealed = true;
+    renderAll();
+    showToast('Leaderboard revealed to all players!', 'ok');
+  });
+}
+function hideLeaderboard(){
+  if(!SYNC.enabled || !SYNC.db || !SYNC.eventId) return;
+  SYNC.db.ref(`/events/${SYNC.eventId}/leaderboardRevealed`).set(false).then(() => {
+    SYNC._leaderboardRevealed = false;
+    renderAll();
+    showToast('Leaderboard hidden from players.', 'ok');
+  });
 }
 function checkLivePaywall(){
   if(!window._cpiWatchEventId) return; // not in watch mode

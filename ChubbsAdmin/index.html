@@ -181,6 +181,31 @@
         
         <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="margin: 0; color: var(--gold2); font-size: 13px;">Leaderboard Access</label>
+          </div>
+          <div style="font-size: 11px; color: var(--muted); margin-bottom: 12px; line-height: 1.4;">
+            Control who can see the live leaderboard during the event.
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+            <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;font-size:12px;text-transform:none;letter-spacing:0">
+              <input type="radio" name="lb-access" value="open" checked> <strong>Open</strong> — Everyone sees live scores
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;font-size:12px;text-transform:none;letter-spacing:0">
+              <input type="radio" name="lb-access" value="locked"> <strong>Locked</strong> — Hidden until you reveal results
+            </label>
+            <label style="display:flex;align-items:center;gap:8px;margin:0;cursor:pointer;font-size:12px;text-transform:none;letter-spacing:0">
+              <input type="radio" name="lb-access" value="fee" onchange="document.getElementById('lb-fee-row').style.display=this.checked?'flex':'none'"> <strong>Unlock with fee</strong> — Players pay to see the board
+            </label>
+          </div>
+          <div id="lb-fee-row" style="display:none;align-items:center;gap:8px;margin-bottom:8px">
+            <label style="margin:0;flex-shrink:0;font-size:12px">Fee amount</label>
+            <input type="number" id="ev-lb-fee" value="20" min="1" style="width:80px;text-align:center">
+            <span style="font-size:11px;color:var(--muted)">per player (goes to organiser reward pool)</span>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <label style="margin: 0; color: var(--gold2); font-size: 13px;">3-Putt Poker Defaults</label>
           </div>
           <div style="font-size: 11px; color: var(--muted); margin-bottom: 12px; line-height: 1.4;">
@@ -361,6 +386,13 @@ function init() {
   document.getElementById('stableford-date').value = "";
   document.getElementById('stableford-time').value = "";
   document.getElementById('wechat-text').value = "";
+
+  // Wire up leaderboard access radio buttons to show/hide fee row
+  document.querySelectorAll('input[name="lb-access"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.getElementById('lb-fee-row').style.display = document.querySelector('input[name="lb-access"]:checked').value === 'fee' ? 'flex' : 'none';
+    });
+  });
 
   masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
   renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
@@ -1023,11 +1055,15 @@ function initFirebase() {
 }
 
 function buildEventBundle() {
+  const lbRadio = document.querySelector('input[name="lb-access"]:checked');
+  const lbAccess = lbRadio ? lbRadio.value : 'open';
   const opts = {
-    threePuttPoker: true, pokerMode: "digital", 
+    threePuttPoker: true, pokerMode: "digital",
     ante: parseInt(document.getElementById('ev-ante').value) || 50,
     penalty3: parseInt(document.getElementById('ev-pen3').value) || 10,
-    penalty4plus: parseInt(document.getElementById('ev-pen4').value) || 20
+    penalty4plus: parseInt(document.getElementById('ev-pen4').value) || 20,
+    leaderboardAccess: lbAccess,
+    leaderboardFee: lbAccess === 'fee' ? (parseInt(document.getElementById('ev-lb-fee').value) || 20) : 0
   };
 
   const playersOut = masterRoster.filter(p => state.attendance[p.playerId] && state.attendance[p.playerId] !== 'none');
