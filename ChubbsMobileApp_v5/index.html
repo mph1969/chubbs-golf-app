@@ -3774,6 +3774,16 @@ function renderLeaderboard(){
     </div>`;
   }).join('\n');
 
+  // ── Spenny Easter Egg: if not playing, permanently last on leaderboard ──
+  const spennyPlaying = ranking.some(r => r.name && r.name.toUpperCase().includes('SPENNY'));
+  const spennyRow = spennyPlaying ? '' : `<div class="player-card leader away" style="opacity:0.35;border-left:3px solid var(--muted)">
+    <div class="player-head">
+      <div><span class="rank" style="background:rgba(255,255,255,0.05);color:var(--muted)">💀</span><strong>SPENNY</strong><span class="rank-badge" style="font-size:10px"> Co-chair</span></div>
+      <div class="hcp-badge" style="background:rgba(255,255,255,0.05);border-color:var(--line);color:var(--muted)">HCP 27</div>
+    </div>
+    <div style="padding:6px 0;font-size:13px;font-style:italic;color:var(--muted)">He went home.</div>
+  </div>`;
+
   let stablefordCard;
   if(!anyStableScores){
     stablefordCard = `<details>
@@ -3792,7 +3802,7 @@ function renderLeaderboard(){
     stablefordCard = `<div class="card">
       <div class="section-title">Stableford · Golden Jacket board</div>
       <div class="inline-note">${day2Course.name} · Sorted by pts, back-9 countback</div>
-      <div class="stack tight" style="margin-top:10px">${fullRankHtml}</div>
+      <div class="stack tight" style="margin-top:10px">${fullRankHtml}${spennyRow}</div>
       ${adminRevealBtn}
     </div>`;
   } else {
