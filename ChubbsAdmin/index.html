@@ -1126,7 +1126,7 @@ function showPlayerLinksPanel(eventJson) {
     return `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
       <span style="flex:1;font-size:13px;font-weight:600">${label}</span>
       <span style="flex:2;font-size:11px;color:#a8b8ad;word-break:break-all">${url}</span>
-      <button onclick="navigator.clipboard.writeText('${url}').then(()=>this.textContent='✓').catch(()=>{})"
+      <button onclick="copyText('${url}').then(()=>this.textContent='✓')"
         style="flex-shrink:0;padding:4px 10px;font-size:11px;border-radius:6px;
                background:#12251b;border:1px solid rgba(255,255,255,0.1);color:#f4efe2;cursor:pointer">
         Copy
@@ -1139,6 +1139,10 @@ function showPlayerLinksPanel(eventJson) {
     const label = p.displayName || p.fullName || p.playerId;
     return `${label}: ${APP_BASE_URL}/?loadEvent=${encodeURIComponent(eventId)}&player=${pid}`;
   }).join('\n');
+
+  // Store link data globally so onclick handlers can reference it without inline escaping
+  window._cpiAllLinks = allLinks;
+  window._cpiAdminLink = `${APP_BASE_URL}/?loadEvent=${encodeURIComponent(eventId)}`;
 
   const panel = document.getElementById('player-links-panel');
   panel.innerHTML = `
@@ -1153,20 +1157,31 @@ function showPlayerLinksPanel(eventJson) {
     </p>
     <div style="margin-bottom:12px">${rows}</div>
     <div style="display:flex;gap:8px">
-      <button class="primary small" onclick="
-        navigator.clipboard.writeText(${JSON.stringify(allLinks)})
-          .then(()=>showToast('All links copied — paste into WeChat group','ok'))
-          .catch(()=>{})">
+      <button class="primary small" onclick="copyText(window._cpiAllLinks).then(()=>showToast('All links copied — paste into WeChat group','ok'))">
         📋 Copy all links
       </button>
-      <button class="ghost small" onclick="
-        const admin = '${APP_BASE_URL}/?loadEvent=${encodeURIComponent(eventId)}';
-        navigator.clipboard.writeText(admin).then(()=>showToast('Admin import link copied','ok'))">
+      <button class="ghost small" onclick="copyText(window._cpiAdminLink).then(()=>showToast('Admin import link copied','ok'))">
         Copy organiser import link
       </button>
     </div>`;
   panel.style.display = 'block';
   panel.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+function copyText(text){
+  if(navigator.clipboard && window.isSecureContext){
+    return navigator.clipboard.writeText(text);
+  }
+  // Fallback for file:// and HTTP contexts
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;left:-9999px;top:-9999px;opacity:0';
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  try{ document.execCommand('copy'); } catch(e){}
+  ta.remove();
+  return Promise.resolve();
 }
 
 function showToast(msg, type) {

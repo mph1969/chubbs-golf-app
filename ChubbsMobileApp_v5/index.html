@@ -212,6 +212,21 @@
     .jbadge.role{background:rgba(121,176,227,0.10);border:1px solid rgba(121,176,227,0.28);color:#dcecff;font-size:10px;text-transform:uppercase;letter-spacing:.06em}
     /* Mini badge for leaderboard rank */
     .rank-badge{font-size:11px;margin-left:3px;vertical-align:middle}
+    /* ── Tee-time countdown popup ── */
+    .tee-countdown-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9600;display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn 0.22s ease}
+    .tee-countdown-box{background:linear-gradient(180deg,#132b1f,#0a1f15);border:2px solid var(--gold);border-radius:28px;padding:24px 20px;width:100%;max-width:420px;box-shadow:0 24px 56px rgba(0,0,0,0.7);text-align:center}
+    .tee-countdown-box .tee-icon{font-size:44px;margin-bottom:8px}
+    .tee-countdown-box .tee-title{font-size:20px;font-weight:900;color:var(--gold2);font-family:Georgia,serif;margin-bottom:4px}
+    .tee-countdown-box .tee-course{font-size:12px;color:var(--muted);margin-bottom:14px}
+    .tee-countdown-box .tee-clock{font-size:42px;font-weight:900;color:var(--text);font-family:'Courier New',monospace;letter-spacing:.06em;margin:10px 0}
+    .tee-countdown-box .tee-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:16px}
+    .tee-countdown-box .tee-quote{font-size:14px;line-height:1.5;color:var(--gold2);font-style:italic;padding:12px 14px;border-radius:16px;background:rgba(214,176,90,0.08);border:1px solid rgba(214,176,90,0.2);margin-bottom:6px}
+    .tee-countdown-box .tee-character{font-size:11px;color:var(--muted);font-weight:700;margin-bottom:16px}
+    .tee-countdown-box .tee-dismiss{padding:10px 20px;border-radius:14px;border:1px solid var(--line);background:transparent;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer}
+    .tee-countdown-box .tee-dismiss:active{background:rgba(255,255,255,0.06)}
+    @keyframes teeCountPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
+    .tee-countdown-box.urgent .tee-clock{color:var(--red);animation:teeCountPulse 1.2s ease infinite}
+    .tee-countdown-box.urgent{border-color:var(--red)}
   </style>
 </head>
 <body>
@@ -2877,6 +2892,33 @@ function renderSetup(){
       </div>
       <button class="btn gold slim" style="margin-top:8px" onclick="doSetAdminPin()">Set PIN</button>`}
       <div class="inline-note" style="margin-top:8px">PIN is stored on this device only. Set the same PIN on every device used for admin access.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Tee-Time Countdown Alerts</div>
+      <div class="small tight">Players get a popup countdown before their scheduled tee time with a random motivational quote from the Happy Gilmore crew (Chubbs, Shooter, Happy).</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-top:12px">
+        <label style="margin:0;flex-shrink:0;font-size:12px">Alert</label>
+        <input type="number" id="tee-alert-mins-admin" min="1" max="120" step="5"
+          value="${typeof getTeeAlertMinutes==='function'?getTeeAlertMinutes():30}"
+          onchange="if(typeof setTeeAlertMinutes==='function'){setTeeAlertMinutes(this.value);showToast('Tee alert set to '+this.value+' min','ok')}"
+          style="width:70px;text-align:center;padding:10px" />
+        <span style="font-size:12px;color:var(--muted)">minutes before tee time</span>
+      </div>
+      <div class="toolbar tight" style="margin-top:10px">
+        <button class="btn slim blue" onclick="(function(){
+          var overlay=document.getElementById('tee-countdown-overlay');if(overlay)overlay.remove();
+          var testTee={day:'Stableford',dateTime:new Date(Date.now()+15*60000),key:'test-preview'};
+          if(typeof showTeeCountdownPreview==='function')showTeeCountdownPreview(testTee);
+          else showToast('Countdown will appear before next tee time','info');
+        })()">Preview countdown</button>
+      </div>
+      <div class="rule-list tight">
+        <div class="rule"><strong>Auto-trigger:</strong> Popup fires based on imported event tee times (Scramble uses shared tee time, Stableford uses group-specific time)</div>
+        <div class="rule"><strong>Urgent mode:</strong> Clock turns red and pulses when under 5 minutes</div>
+        <div class="rule"><strong>Dismiss:</strong> Once dismissed, won't re-appear for that tee time (resets after 48h)</div>
+      </div>
+      <div class="inline-note" style="margin-top:8px">This setting is per-device. Each player can also adjust it from the About tab.</div>
     </div>`;
 
   const history   = loadHistory();
@@ -3702,6 +3744,19 @@ function renderAbout(){
     </div>
 
     <div class="card">
+      <div class="section-title">Tee-Time Alerts ⛳</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <label style="margin:0;flex-shrink:0;font-size:12px">Alert me</label>
+        <input type="number" id="tee-alert-mins" min="1" max="120" step="5"
+          value="${typeof getTeeAlertMinutes==='function'?getTeeAlertMinutes():30}"
+          onchange="if(typeof setTeeAlertMinutes==='function'){setTeeAlertMinutes(this.value);showToast('Tee alert set to '+this.value+' min','ok')}"
+          style="width:70px;text-align:center;padding:10px" />
+        <span style="font-size:12px;color:var(--muted)">min before tee time</span>
+      </div>
+      <div class="inline-note">You'll get a countdown popup with a random quote from Chubbs, Shooter, or Happy before each round.</div>
+    </div>
+
+    <div class="card">
       <div class="section-title">Credits</div>
       <div style="display:flex;flex-direction:column;gap:12px">
         <div style="display:flex;align-items:center;gap:12px">
@@ -3859,6 +3914,231 @@ checkPendingEvent(); // show import notification if admin sent an event from Chu
       el.style.opacity='1';
     },500);
   },8000);
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Tee-Time Countdown System ──
+// ══════════════════════════════════════════════════════════════════════════════
+(function teeCountdownSystem(){
+  const TEE_ALERT_KEY    = 'cpi_tee_alert_mins';   // configurable lead time
+  const TEE_DISMISS_KEY  = 'cpi_tee_dismissed';     // tracks dismissed alerts per tee time
+  const DEFAULT_LEAD_MIN = 30;
+
+  // ── Character quote banks ──
+  const QUOTES = {
+    chubbs: [
+      { text: "It's all in the hips. And the tee time. Don't be late.", character: "Chubbs Peterson" },
+      { text: "I didn't lose my hand to a gator just so you could miss your tee time.", character: "Chubbs Peterson" },
+      { text: "A champion shows up early. A fool shows up to the wrong hole.", character: "Chubbs Peterson" },
+      { text: "Son, the green don't wait for nobody. Get your shoes on.", character: "Chubbs Peterson" },
+      { text: "Every great round starts with showing up. Now go show up.", character: "Chubbs Peterson" },
+      { text: "You've got the talent. Now have the punctuality.", character: "Chubbs Peterson" },
+      { text: "Grip it, rip it, but first — get to the tee box on time.", character: "Chubbs Peterson" },
+    ],
+    shooter: [
+      { text: "You're gonna need a blankie and your binky if you miss this tee time, pal.", character: "Shooter McGavin" },
+      { text: "I eat pieces of s*** like you for breakfast. But I'm never late.", character: "Shooter McGavin" },
+      { text: "Stay out of my way... and stay on schedule.", character: "Shooter McGavin" },
+      { text: "Gold jacket, green jacket, who gives a s***? Just be there on time.", character: "Shooter McGavin" },
+      { text: "You know what's worse than a double bogey? Being a no-show.", character: "Shooter McGavin" },
+      { text: "The price is wrong if you think they'll hold the tee for you.", character: "Shooter McGavin" },
+      { text: "I saw two big fat naked bikers... they were still on time for their round.", character: "Shooter McGavin" },
+    ],
+    happy: [
+      { text: "You're gonna die, clown! …But first, get to the first tee.", character: "Happy Gilmore" },
+      { text: "The ball's not gonna hit itself. And neither is that tee time.", character: "Happy Gilmore" },
+      { text: "Just tap it in. But you gotta BE there to tap it in.", character: "Happy Gilmore" },
+      { text: "I didn't come all the way from hockey to miss a tee time. Let's go!", character: "Happy Gilmore" },
+      { text: "Are you too good for your home?! ARE YOU TOO GOOD FOR YOUR TEE TIME?!", character: "Happy Gilmore" },
+      { text: "That's your HOME, ball! …and this is YOUR tee time. Don't miss it.", character: "Happy Gilmore" },
+      { text: "Running late? Talk to me when the gator bites YOUR hand off. Get moving.", character: "Happy Gilmore" },
+    ]
+  };
+
+  function getLeadMinutes(){
+    const stored = parseInt(localStorage.getItem(TEE_ALERT_KEY), 10);
+    return Number.isFinite(stored) && stored > 0 ? stored : DEFAULT_LEAD_MIN;
+  }
+
+  function setLeadMinutes(mins){
+    localStorage.setItem(TEE_ALERT_KEY, String(Math.max(1, Math.min(120, parseInt(mins,10) || DEFAULT_LEAD_MIN))));
+  }
+
+  function getDismissed(){
+    try { return JSON.parse(localStorage.getItem(TEE_DISMISS_KEY) || '{}'); }
+    catch(e){ return {}; }
+  }
+
+  function setDismissed(key){
+    const d = getDismissed();
+    d[key] = Date.now();
+    // Clean old entries (>48h)
+    const cutoff = Date.now() - 48*60*60*1000;
+    for(const k of Object.keys(d)){ if(d[k] < cutoff) delete d[k]; }
+    localStorage.setItem(TEE_DISMISS_KEY, JSON.stringify(d));
+  }
+
+  function randomQuote(){
+    const characters = Object.keys(QUOTES);
+    const charKey = characters[Math.floor(Math.random() * characters.length)];
+    const bank = QUOTES[charKey];
+    return bank[Math.floor(Math.random() * bank.length)];
+  }
+
+  // Parse a date string ("4/25/2026" or "2026-04-25") and time ("08:00") into a Date
+  function parseTeeDateTime(dateStr, timeStr){
+    if(!dateStr || !timeStr) return null;
+    // Normalize date: handle "M/D/YYYY" or "YYYY-MM-DD"
+    let d;
+    if(dateStr.includes('/')){
+      const parts = dateStr.split('/');
+      if(parts.length === 3){
+        const [m, day, y] = parts;
+        d = new Date(parseInt(y,10), parseInt(m,10)-1, parseInt(day,10));
+      }
+    } else {
+      d = new Date(dateStr);
+    }
+    if(!d || isNaN(d)) return null;
+    const [hh, mm] = timeStr.split(':').map(Number);
+    if(!Number.isFinite(hh)) return null;
+    d.setHours(hh, mm || 0, 0, 0);
+    return d;
+  }
+
+  // Get the player's next upcoming tee time(s)
+  function getPlayerTeeTimes(){
+    if(!state.eventBundle || !state.eventBundle.event) return [];
+    const ev = state.eventBundle.event;
+    const times = [];
+
+    // Day 1 — Scramble: all teams share satTime
+    if(state.day1TeamId && ev.satDate && ev.satTime){
+      const dt = parseTeeDateTime(ev.satDate, ev.satTime);
+      if(dt) times.push({ day:'Scramble', dateTime:dt, key:'d1-'+ev.satDate+'-'+ev.satTime });
+    }
+
+    // Day 2 — Stableford: group-specific tee time, fallback to sunTime
+    const day2Group = activeEventDay2Group();
+    if(day2Group && ev.sunDate){
+      const tTime = day2Group.teeTime || ev.sunTime || '';
+      if(tTime){
+        const dt = parseTeeDateTime(ev.sunDate, tTime);
+        if(dt) times.push({ day:'Stableford', dateTime:dt, key:'d2-'+ev.sunDate+'-'+tTime });
+      }
+    }
+
+    return times;
+  }
+
+  function formatCountdown(ms){
+    if(ms <= 0) return '00:00';
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if(h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  let activePopup = null;
+  let countdownInterval = null;
+
+  function showTeeCountdown(tee){
+    if(activePopup){ activePopup.remove(); activePopup = null; }
+    if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+
+    const quote = randomQuote();
+    const overlay = document.createElement('div');
+    overlay.className = 'tee-countdown-overlay';
+    overlay.id = 'tee-countdown-overlay';
+
+    const ev = state.eventBundle && state.eventBundle.event;
+    const courseName = (() => {
+      const dayKey = tee.day === 'Scramble' ? 'day1' : 'day2';
+      const cid = ev && ev[dayKey+'CourseId'] || '';
+      const lib = COURSE_LIBRARY[cid];
+      return lib ? lib.name : (cid || '');
+    })();
+
+    overlay.innerHTML = `
+      <div class="tee-countdown-box" id="tee-countdown-box">
+        <div class="tee-icon">⛳</div>
+        <div class="tee-title">${tee.day} Tee Time</div>
+        <div class="tee-course">${courseName ? courseName + ' · ' : ''}${tee.dateTime.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
+        <div class="tee-clock" id="tee-clock">--:--</div>
+        <div class="tee-label">until tee off</div>
+        <div class="tee-quote">"${quote.text}"</div>
+        <div class="tee-character">— ${quote.character}</div>
+        <button class="tee-dismiss" onclick="dismissTeeCountdown('${tee.key}')">Got it, I'm on my way</button>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    activePopup = overlay;
+
+    // Overlay dismiss on background click
+    overlay.addEventListener('click', e => {
+      if(e.target === overlay) dismissTeeCountdown(tee.key);
+    });
+
+    function tick(){
+      const now = Date.now();
+      const remaining = tee.dateTime.getTime() - now;
+      const clockEl = document.getElementById('tee-clock');
+      const boxEl = document.getElementById('tee-countdown-box');
+      if(!clockEl){ clearInterval(countdownInterval); return; }
+      if(remaining <= 0){
+        clockEl.textContent = "TEE TIME!";
+        if(boxEl) boxEl.classList.add('urgent');
+      } else {
+        clockEl.textContent = formatCountdown(remaining);
+        // Urgent mode when <5 min remaining
+        if(remaining < 5*60*1000 && boxEl) boxEl.classList.add('urgent');
+      }
+    }
+    tick();
+    countdownInterval = setInterval(tick, 1000);
+  }
+
+  // Expose globally so the dismiss button works
+  window.dismissTeeCountdown = function(key){
+    setDismissed(key);
+    if(activePopup){ activePopup.remove(); activePopup = null; }
+    if(countdownInterval){ clearInterval(countdownInterval); countdownInterval = null; }
+  };
+
+  // Expose lead-time config for admin settings
+  window.getTeeAlertMinutes = getLeadMinutes;
+  window.setTeeAlertMinutes = setLeadMinutes;
+
+  // ── Background checker: runs every 30s ──
+  function checkTeeCountdowns(){
+    if(readOnlyMode) return; // Spectators don't need tee alerts
+    const teeTimes = getPlayerTeeTimes();
+    const leadMs = getLeadMinutes() * 60 * 1000;
+    const now = Date.now();
+    const dismissed = getDismissed();
+
+    for(const tee of teeTimes){
+      const remaining = tee.dateTime.getTime() - now;
+      // Show popup if: within lead window, not yet past tee time by >10min, and not dismissed
+      if(remaining <= leadMs && remaining > -10*60*1000 && !dismissed[tee.key]){
+        if(!activePopup){ // Don't stack — show one at a time
+          showTeeCountdown(tee);
+        }
+        break;
+      }
+    }
+  }
+
+  // Expose preview for the About settings card
+  window.showTeeCountdownPreview = function(tee){
+    showTeeCountdown(tee);
+  };
+
+  // Check immediately and then every 30 seconds
+  setTimeout(checkTeeCountdowns, 3000); // slight delay so state is fully loaded
+  setInterval(checkTeeCountdowns, 30000);
 })();
 </script>
 </body>
