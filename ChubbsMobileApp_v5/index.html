@@ -1596,6 +1596,55 @@ function importEventBundleFile(input){
   reader.readAsText(file);
 }
 
+function loadEventFromCloud(){
+  const eidInput = document.getElementById('cloud-event-id');
+  const nameInput = document.getElementById('cloud-player-name');
+  const statusEl = document.getElementById('cloud-load-status');
+  const eid = (eidInput && eidInput.value || '').trim();
+  const playerName = (nameInput && nameInput.value || '').trim().toUpperCase();
+
+  if(!eid){
+    showToast('Enter an Event ID.', 'err');
+    if(eidInput) eidInput.focus();
+    return;
+  }
+  if(!SYNC.enabled || !SYNC.db){
+    showToast('Cloud sync not available. Check your connection.', 'err');
+    return;
+  }
+
+  if(statusEl) statusEl.innerHTML = '<div class="status info tight" style="margin-top:10px">Loading from cloud…</div>';
+
+  SYNC.db.ref(`/events/${eid}/bundle`).once('value').then(snap => {
+    const bundle = snap.val();
+    if(!bundle || !bundle.players || !bundle.event){
+      if(statusEl) statusEl.innerHTML = '<div class="status warn tight" style="margin-top:10px">Event not found. Check the Event ID and try again.</div>';
+      return;
+    }
+
+    // If player name provided, try to match it
+    let requestedPlayerId = null;
+    if(playerName){
+      const match = bundle.players.find(p => {
+        const pid = String(p.playerId || '').toUpperCase();
+        const dname = String(p.displayName || '').toUpperCase();
+        const fname = String(p.fullName || '').toUpperCase();
+        const sname = String(p.shortName || '').toUpperCase();
+        return pid === playerName || dname === playerName || fname === playerName || sname === playerName
+          || pid.includes(playerName) || playerName.includes(pid)
+          || dname.includes(playerName) || playerName.includes(dname);
+      });
+      if(match) requestedPlayerId = String(match.playerId);
+    }
+
+    const { _publishedAt, _publishedBy, ...cleanBundle } = bundle;
+    applyImportedEventBundle(cleanBundle, requestedPlayerId);
+    showToast('Event loaded from cloud!' + (requestedPlayerId ? ' Playing as ' + requestedPlayerId : ''), 'ok', 4000);
+  }).catch(err => {
+    if(statusEl) statusEl.innerHTML = '<div class="status warn tight" style="margin-top:10px">Failed to load. Check your connection and try again.</div>';
+  });
+}
+
 function encodeJoinPayload(payload){
   return btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
 }
@@ -2702,7 +2751,23 @@ function renderSetup(){
     document.getElementById('setup').innerHTML = `
       ${whoCard}
       ${myLineupCard}
-      ${!imported ? `<div class="card"><div class="empty-note">Waiting for the organiser to load the event. Check back before tee time.</div></div>` : ''}
+      ${!imported ? `
+      <div class="card">
+        <div class="section-title">Load Event from Cloud</div>
+        <div class="small tight" style="margin-bottom:12px">Enter your event details to pull the weekend setup from the cloud. Your organiser can give you the Event ID, or check your WeChat link.</div>
+        <div class="stack">
+          <div>
+            <label>Event ID</label>
+            <input type="text" id="cloud-event-id" placeholder="e.g. 2026-BrainTrust-Demo" />
+          </div>
+          <div>
+            <label>Your name</label>
+            <input type="text" id="cloud-player-name" placeholder="e.g. HANSON" style="text-transform:uppercase" />
+          </div>
+          <button class="btn gold full" onclick="loadEventFromCloud()">☁️ Load Event</button>
+        </div>
+        <div id="cloud-load-status"></div>
+      </div>` : ''}
       <div style="text-align:center;margin-top:8px;padding-bottom:4px">
         <button onclick="toggleMasterMode()" style="background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:8px 12px;">⚙️ Organiser / admin view</button>
       </div>
@@ -3892,6 +3957,46 @@ seedJacketHistory();     // apply badge data to event.json-imported players (Nic
 renderAll();
 checkLivePaywall();
 checkPendingEvent(); // show import notification if admin sent an event from ChubbsAdmin
+
+// ── Service Worker: registration + update prompt ──
+(function(){
+  if(!('serviceWorker' in navigator)) return;
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    // Check for updates on every launch
+    reg.addEventListener('updatefound', () => {
+      const newSW = reg.installing;
+      newSW.addEventListener('statechange', () => {
+        // New SW installed and waiting — show update banner
+        if(newSW.state === 'installed' && navigator.serviceWorker.controller){
+          showUpdateBanner(newSW);
+        }
+      });
+    });
+  }).catch(err => console.warn('SW registration failed:', err));
+
+  // If the controller changes (new SW took over), reload to get fresh code
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if(!refreshing){ refreshing = true; window.location.reload(); }
+  });
+
+  function showUpdateBanner(waitingSW){
+    const bar = document.createElement('div');
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#1a3d2b,#0f2a1d);border-bottom:2px solid var(--gold,#d6b05a);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;animation:toastIn 0.22s ease';
+    bar.innerHTML = `
+      <span style="font-size:13px;font-weight:700;color:#f4efe2">⛳ New version available</span>
+      <div style="display:flex;gap:8px">
+        <button id="sw-update-btn" style="padding:7px 14px;border-radius:10px;border:none;background:var(--gold2,#f2dd97);color:#251800;font-size:12px;font-weight:800;cursor:pointer">Update now</button>
+        <button id="sw-dismiss-btn" style="padding:7px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#a8b8ad;font-size:12px;cursor:pointer">Later</button>
+      </div>`;
+    document.body.appendChild(bar);
+    document.getElementById('sw-update-btn').onclick = () => {
+      waitingSW.postMessage('skipWaiting');
+      bar.remove();
+    };
+    document.getElementById('sw-dismiss-btn').onclick = () => bar.remove();
+  }
+})();
 
 // ── Rotating tagline ──
 (function(){
