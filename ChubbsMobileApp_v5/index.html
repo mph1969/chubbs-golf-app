@@ -2205,6 +2205,11 @@ function setBlob(idx){
   state.stableford.holes[state.stableford.hole].gross[idx] = gross;
   saveState();
   renderAll();
+  // Fire the Spenny alert
+  const players = currentPlayers('stableford');
+  const pName = players[idx] ? players[idx].name : 'Someone';
+  const hole = state.stableford.hole + 1;
+  fireSpennyAlert(pName, hole);
 }
 function setDriver(idx){
   holeWarning = null;
@@ -4555,6 +4560,116 @@ checkPendingEvent(); // show import notification if admin sent an event from Chu
   }
   // Also run on each sync update
   setInterval(() => { if(SYNC.status==='live') checkForNotableScores(SYNC.remoteGroups); }, 15000);
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── DRINK FOR SPENNY! Alert System ──
+// ══════════════════════════════════════════════════════════════════════════════
+(function spennyAlertSystem(){
+  const SPENNY_QUOTES = [
+    {text:"Everybody drink! {player} just Spenny'd hole {hole}.", who:"Chubbs Peterson"},
+    {text:"{player} hit the Spenny on {hole}. That's a round for the group.", who:"Chubbs Peterson"},
+    {text:"{player} Spenny'd {hole}?! I'd never Spenny. I'm too good. …Drink up.", who:"Shooter McGavin"},
+    {text:"{player} just blobbed hole {hole}. DRINK! Are you too good for your home?!", who:"Happy Gilmore"},
+    {text:"A Spenny on {hole}? {player}, that's not golf. That's charity. Everyone drink!", who:"Shooter McGavin"},
+    {text:"{player} got the blob on {hole}. Chubbs says drink. So drink.", who:"Chubbs Peterson"},
+  ];
+  const SPENNY_WECHAT_ID = 'SpencerDuncan';
+  let lastSpennyId = localStorage.getItem('cpi_last_spenny') || '';
+
+  function pickSpennyQuote(player, hole){
+    const q = SPENNY_QUOTES[Math.floor(Math.random()*SPENNY_QUOTES.length)];
+    return {text:q.text.replace(/\{player\}/g, player).replace(/\{hole\}/g, hole), who:q.who};
+  }
+
+  function buildSpennyMsg(player, hole){
+    return `🍺 SPENNY! ${player} blobbed hole ${hole}. That's a drink for everyone!\n— The Chubbs Peterson Invitational`;
+  }
+
+  function showSpennyOverlay(player, hole, quote){
+    // Remove any existing overlay
+    const old = document.getElementById('spenny-overlay');
+    if(old) old.remove();
+
+    const msg = buildSpennyMsg(player, hole);
+    const overlay = document.createElement('div');
+    overlay.id = 'spenny-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn 0.22s ease';
+    overlay.innerHTML = `
+      <div style="background:linear-gradient(180deg,#1a3c34,#0d1f19);border:2px solid #c9a84c;border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center">
+        <div style="font-size:52px;margin-bottom:8px">🍺</div>
+        <div style="font-family:'Playfair Display',serif;font-size:24px;font-weight:900;color:#c9a84c;letter-spacing:0.02em;margin-bottom:4px">DRINK FOR SPENNY!</div>
+        <div style="font-size:13px;color:#f0ead8;margin-bottom:12px;font-weight:700">Courtesy of <span style="color:#c9a84c">${player}</span> on hole ${hole}</div>
+        <div style="font-size:12px;color:#7aaa8a;font-style:italic;line-height:1.5;margin-bottom:16px">"${quote.text}"<br/>— ${quote.who}</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button onclick="spennyTellSpenny('${msg.replace(/'/g,"\\'").replace(/\n/g,"\\n")}')" style="padding:10px 16px;border-radius:10px;background:rgba(74,176,224,0.15);border:1px solid rgba(74,176,224,0.4);color:#79b0e3;font-size:12px;font-weight:700;cursor:pointer">📱 Tell Spenny</button>
+          <button onclick="document.getElementById('spenny-overlay').remove()" style="padding:10px 16px;border-radius:10px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:#c9a84c;font-size:12px;font-weight:700;cursor:pointer">🍻 Cheers!</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    // Auto-dismiss after 12 seconds
+    setTimeout(()=>{ const el=document.getElementById('spenny-overlay'); if(el) el.remove(); }, 12000);
+  }
+
+  // Fire alert: push to Firebase + show overlay locally
+  window.fireSpennyAlert = function(player, hole){
+    const quote = pickSpennyQuote(player, hole);
+    // Show locally immediately
+    showSpennyOverlay(player, hole, quote);
+    // Push to Firebase so all devices see it
+    if(SYNC.enabled && SYNC.db && SYNC.eventId){
+      const alertId = `${Date.now()}_${hole}_${player}`;
+      SYNC.db.ref(`/events/${SYNC.eventId}/spennyAlerts/${alertId}`).set({
+        player, hole, quote: quote.text, who: quote.who, ts: Date.now()
+      }).catch(()=>{});
+    }
+  };
+
+  // Tell Spenny: copy message + open WeChat
+  window.spennyTellSpenny = function(msg){
+    const text = msg || '🍺 SPENNY! Someone blobbed. Drink for everyone!';
+    if(navigator.clipboard && window.isSecureContext){
+      navigator.clipboard.writeText(text).then(()=>{
+        showToast('📋 Copied! Opening WeChat…', 'ok', 2500);
+        setTimeout(()=>{ window.open('weixin://', '_blank'); }, 800);
+      }).catch(()=>{
+        showToast('📋 Copy the message and send to Spenny on WeChat (ID: ${SPENNY_WECHAT_ID})', 'info', 4000);
+      });
+    } else {
+      const ta = document.createElement('textarea'); ta.value = text;
+      ta.style.cssText = 'position:fixed;left:-9999px';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      document.execCommand('copy'); document.body.removeChild(ta);
+      showToast('📋 Copied! Send to Spenny on WeChat: ' + SPENNY_WECHAT_ID, 'ok', 3500);
+    }
+  };
+
+  // Listen for Spenny alerts from other devices via Firebase
+  function listenForSpennyAlerts(){
+    if(!SYNC.enabled || !SYNC.db || !SYNC.eventId) return;
+    const ref = SYNC.db.ref(`/events/${SYNC.eventId}/spennyAlerts`);
+    ref.orderByChild('ts').limitToLast(1).on('child_added', snap => {
+      const data = snap.val();
+      if(!data) return;
+      const alertId = snap.key;
+      // Don't re-show alerts we've already seen or our own
+      if(alertId === lastSpennyId) return;
+      if(Date.now() - data.ts > 30000) return; // ignore old alerts
+      lastSpennyId = alertId;
+      try{ localStorage.setItem('cpi_last_spenny', alertId); }catch(e){}
+      const quote = {text: data.quote, who: data.who};
+      showSpennyOverlay(data.player, data.hole, quote);
+    });
+  }
+
+  // Hook into sync init — start listening when Firebase connects
+  const origInitSync = window.initSync;
+  if(typeof origInitSync === 'function'){
+    window.initSync = function(eventId){
+      origInitSync(eventId);
+      setTimeout(listenForSpennyAlerts, 1000);
+    };
+  }
 })();
 
 // ══════════════════════════════════════════════════════════════════════════════
