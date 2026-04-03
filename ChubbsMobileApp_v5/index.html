@@ -227,6 +227,21 @@
     @keyframes teeCountPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}
     .tee-countdown-box.urgent .tee-clock{color:var(--red);animation:teeCountPulse 1.2s ease infinite}
     .tee-countdown-box.urgent{border-color:var(--red)}
+    /* ── Compact scorecard grid ── */
+    .sc-grid{display:grid;grid-template-columns:auto repeat(9,1fr) auto;gap:0;font-size:10px;font-weight:700;overflow-x:auto}
+    .sc-grid .sc-hdr{padding:4px 3px;text-align:center;color:var(--muted);font-size:9px;text-transform:uppercase;border-bottom:1px solid var(--line)}
+    .sc-grid .sc-cell{padding:5px 3px;text-align:center;border-bottom:1px solid var(--line);cursor:pointer;min-width:24px}
+    .sc-grid .sc-cell.birdie{color:#a5f0c5;background:rgba(42,163,106,0.1)}
+    .sc-grid .sc-cell.eagle{color:#5cf5a0;background:rgba(42,163,106,0.2);font-weight:900}
+    .sc-grid .sc-cell.bogey{color:#f5d85c;background:rgba(214,176,90,0.06)}
+    .sc-grid .sc-cell.dbl{color:#ffb5ae;background:rgba(209,107,93,0.08)}
+    .sc-grid .sc-cell.active{outline:2px solid var(--gold);outline-offset:-1px;border-radius:4px}
+    .sc-grid .sc-lbl{padding:5px 6px;text-align:left;font-size:10px;font-weight:800;border-bottom:1px solid var(--line);white-space:nowrap}
+    .sc-grid .sc-tot{padding:5px 4px;text-align:center;font-weight:900;border-bottom:1px solid var(--line);color:var(--gold2)}
+    /* ── Results card ── */
+    .results-card{border:2px solid var(--gold);background:linear-gradient(180deg,rgba(214,176,90,0.06),rgba(16,38,28,0.95))}
+    .results-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+    .results-item:last-child{border-bottom:none}
   </style>
 </head>
 <body>
@@ -828,6 +843,7 @@ function initSync(eventId){
     SYNC.status = 'live';
     updateSyncBadge();
     renderLeaderboard();
+    if(typeof window._liveAlertCheck === 'function') window._liveAlertCheck();
   });
   listen(`/events/${eventId}/teams`, data => {
     SYNC.remoteTeams = data;
@@ -2333,6 +2349,17 @@ function courseMapUrl(course, lang){
   const query = `${loc.name} ${loc.address}`.trim();
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
 }
+function copyText(text){
+  if(navigator.clipboard && window.isSecureContext){
+    return navigator.clipboard.writeText(text);
+  }
+  const ta=document.createElement('textarea');
+  ta.value=text;ta.style.cssText='position:fixed;left:-9999px;top:-9999px;opacity:0';
+  document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand('copy');}catch(e){}
+  ta.remove();
+  return Promise.resolve();
+}
 function copyTextValue(text, label){
   const value = String(text || '').trim();
   if(!value){
@@ -3114,6 +3141,15 @@ function renderSetup(){
         <div class="rule"><strong>Dismiss:</strong> Once dismissed, won't re-appear for that tee time (resets after 48h)</div>
       </div>
       <div class="inline-note" style="margin-top:8px">This setting is per-device. Each player can also adjust it from the About tab.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">Live Score Alerts <span style="color:${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'var(--gold2)':'var(--muted)'}">· ${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'ON':'OFF'}</span></div>
+      <div class="small tight">Get fun notifications when other groups score birdies, eagles, 4-putts, or triple bogeys — with character commentary from Chubbs, Shooter, and Happy.</div>
+      <div class="toolbar tight" style="margin-top:10px">
+        <button class="btn slim ${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'gold':'ghost'}" onclick="if(typeof toggleLiveAlerts==='function')toggleLiveAlerts();renderAll();">${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'Turn off':'Turn on'}</button>
+      </div>
+      <div class="inline-note" style="margin-top:8px">Only fires for other groups (not your own). Max 1 alert per 30 seconds. Per-device setting.</div>
     </div>`;
 
   const history   = loadHistory();
@@ -3174,6 +3210,175 @@ function renderSetup(){
 }
 
 
+
+// ── Compact 18-hole scorecard grids ──
+function scoreColorClass(gross, par){
+  if(typeof gross !== 'number' || typeof par !== 'number') return '';
+  const diff = gross - par;
+  if(diff <= -2) return 'eagle';
+  if(diff === -1) return 'birdie';
+  if(diff === 1) return 'bogey';
+  if(diff >= 2) return 'dbl';
+  return '';
+}
+function renderScrambleScorecard(){
+  const course = activeCourse('day1');
+  const scramblePlayers = currentPlayers('scramble');
+  const holes = state.scramble.holes;
+  function half(start){
+    let parTot=0, grossTot=0, entered=0;
+    let html = '<div class="sc-grid">';
+    html += '<div class="sc-hdr"></div>';
+    for(let i=start;i<start+9;i++) html += `<div class="sc-hdr">${i+1}</div>`;
+    html += '<div class="sc-hdr">Tot</div>';
+    // Par row
+    html += '<div class="sc-lbl">Par</div>';
+    for(let i=start;i<start+9;i++){
+      const p = course.holes[i] ? course.holes[i].par : null;
+      if(p) parTot += p;
+      html += `<div class="sc-cell" onclick="state.scramble.hole=${i};saveState();renderAll()">${p??'—'}</div>`;
+    }
+    html += `<div class="sc-tot">${parTot||'—'}</div>`;
+    // Gross row
+    html += '<div class="sc-lbl">Gross</div>';
+    for(let i=start;i<start+9;i++){
+      const g = holes[i] ? holes[i].gross : null;
+      const p = course.holes[i] ? course.holes[i].par : null;
+      if(typeof g==='number'){grossTot+=g;entered++;}
+      const cls = scoreColorClass(g, p);
+      const act = i===state.scramble.hole ? ' active' : '';
+      html += `<div class="sc-cell ${cls}${act}" onclick="state.scramble.hole=${i};saveState();renderAll()">${typeof g==='number'?g:'·'}</div>`;
+    }
+    html += `<div class="sc-tot">${entered?grossTot:'—'}</div>`;
+    // Driver initials row
+    html += '<div class="sc-lbl">Drive</div>';
+    for(let i=start;i<start+9;i++){
+      const d = holes[i] ? holes[i].driver : null;
+      const initial = d!==null && scramblePlayers[d] ? scramblePlayers[d].name.charAt(0) : '·';
+      html += `<div class="sc-cell" style="font-size:9px;color:var(--muted)" onclick="state.scramble.hole=${i};saveState();renderAll()">${initial}</div>`;
+    }
+    html += '<div class="sc-tot"></div>';
+    html += '</div>';
+    return html;
+  }
+  return `<div class="card"><div class="section-title">Scramble Scorecard</div>
+    <div class="small tight" style="margin-bottom:8px">Tap any hole to jump to it. Front 9:</div>${half(0)}
+    <div class="small" style="margin-top:8px;margin-bottom:4px">Back 9:</div>${half(9)}</div>`;
+}
+
+function renderStablefordScorecard(){
+  const course = activeCourse('day2');
+  const players = currentPlayers('stableford');
+  const holes = state.stableford.holes;
+  function half(start){
+    let html = '<div class="sc-grid" style="grid-template-columns:auto repeat(9,1fr) auto">';
+    html += '<div class="sc-hdr"></div>';
+    for(let i=start;i<start+9;i++) html += `<div class="sc-hdr">${i+1}</div>`;
+    html += '<div class="sc-hdr">Tot</div>';
+    // Par row
+    html += '<div class="sc-lbl">Par</div>';
+    let parTot=0;
+    for(let i=start;i<start+9;i++){
+      const p = course.holes[i]?course.holes[i].par:null;
+      if(p)parTot+=p;
+      html += `<div class="sc-cell" onclick="state.stableford.hole=${i};saveState();renderAll()">${p??'—'}</div>`;
+    }
+    html += `<div class="sc-tot">${parTot||'—'}</div>`;
+    // Per-player gross + points
+    players.forEach((pl,idx) => {
+      let gTot=0,pTot=0,ent=0;
+      html += `<div class="sc-lbl" style="color:${['#2aa36a','#79b0e3','#d6b05a','#e07060'][idx]||'var(--text)'}">${pl.name.substring(0,5)}</div>`;
+      for(let i=start;i<start+9;i++){
+        const g = holes[i]?holes[i].gross[idx]:null;
+        const p = course.holes[i]?course.holes[i].par:null;
+        const si = course.holes[i]?course.holes[i].si:null;
+        const pts = typeof g==='number'&&p&&si ? stablefordPoints(g,p,shotsReceived(pl.hcp,si)) : null;
+        if(typeof g==='number'){gTot+=g;ent++;}
+        if(typeof pts==='number')pTot+=pts;
+        const cls = scoreColorClass(g,p);
+        const act = i===state.stableford.hole?' active':'';
+        const label = typeof g==='number'?g:'·';
+        html += `<div class="sc-cell ${cls}${act}" onclick="state.stableford.hole=${i};saveState();renderAll()" title="${typeof pts==='number'?pts+'pts':''}">${label}</div>`;
+      }
+      html += `<div class="sc-tot">${ent?gTot+' ('+pTot+')':'—'}</div>`;
+    });
+    html += '</div>';
+    return html;
+  }
+  return `<div class="card"><div class="section-title">Stableford Scorecard</div>
+    <div class="small tight" style="margin-bottom:8px">Gross scores · (Stableford pts) in totals. Tap any cell to jump.</div>${half(0)}
+    <div class="small" style="margin-top:8px;margin-bottom:4px">Back 9:</div>${half(9)}</div>`;
+}
+
+// ── End-of-Round Results Summary ──
+function renderResultsSummary(){
+  const ranking = leaderboardPlayers().sort((a,b) =>
+    b.points - a.points || b.back9 - a.back9 || b.entered - a.entered || a.hcp - b.hcp
+  );
+  const scramble = scrambleTotals();
+  const poker = pokerSummary();
+  const currency = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency) || 'RMB';
+
+  // Check if round is sufficiently complete
+  const anyScored = ranking.some(r => r.entered >= 9);
+  if(!anyScored) return '';
+
+  const gold = ranking[0] || null;
+  const clown = [...ranking].filter(r=>r.entered>0).sort((a,b) => a.points - b.points || a.back9 - b.back9)[0] || null;
+  const scrambleResult = scramble.entered > 0 ? `${state.scramble.teamName||'Team'} · ${scramble.total} gross · ${fmtToPar(scramble.toPar)}` : '';
+
+  // Spenny check
+  const spennyPlaying = ranking.some(r => r.name && r.name.toUpperCase().includes('SPENNY'));
+
+  const items = [];
+  if(gold && gold.entered > 0) items.push(`<div class="results-item"><div>🥇 <strong>Gold Jacket</strong></div><div style="text-align:right"><strong>${gold.name}</strong> · ${gold.points} pts</div></div>`);
+  if(clown && clown.entered > 0 && clown !== gold) items.push(`<div class="results-item"><div>🤡 <strong>Clown Jacket</strong></div><div style="text-align:right"><strong>${clown.name}</strong> · ${clown.points} pts</div></div>`);
+  if(scrambleResult) items.push(`<div class="results-item"><div>🏆 <strong>Scramble</strong></div><div style="text-align:right">${scrambleResult}</div></div>`);
+  if(state.options.threePuttPoker && poker.pot > 0){
+    const winner = poker.players.reduce((a,b) => a.cards > b.cards ? a : b, poker.players[0]);
+    items.push(`<div class="results-item"><div>🃏 <strong>Poker Pot</strong></div><div style="text-align:right">${poker.pot} ${currency} · ${winner ? winner.name : '?'} (${winner ? winner.cards : 0} cards)</div></div>`);
+  }
+  if(!spennyPlaying) items.push(`<div class="results-item" style="opacity:0.4"><div>💀 <strong>SPENNY</strong></div><div style="text-align:right;font-style:italic">He went home.</div></div>`);
+
+  // Build copyable text
+  const copyLines = [];
+  copyLines.push('🏆 CHUBBS RESULTS');
+  if(gold && gold.entered > 0) copyLines.push(`🥇 Gold Jacket: ${gold.name} — ${gold.points} pts`);
+  if(clown && clown.entered > 0 && clown !== gold) copyLines.push(`🤡 Clown Jacket: ${clown.name} — ${clown.points} pts`);
+  if(scrambleResult) copyLines.push(`🏆 Scramble: ${scrambleResult}`);
+  ranking.filter(r=>r.entered>0).forEach((r,i) => copyLines.push(`${i+1}. ${r.name} — ${r.points} pts (${r.gross} gross)`));
+  if(state.options.threePuttPoker && poker.pot > 0) copyLines.push(`🃏 Poker: ${poker.pot} ${currency}`);
+  if(!spennyPlaying) copyLines.push(`💀 SPENNY — He went home.`);
+
+  return `<div class="card results-card">
+    <div class="section-title" style="margin-bottom:10px">🏆 Weekend Results</div>
+    ${items.join('')}
+    <div style="margin-top:12px">
+      <button class="btn gold full" onclick="copyText(${JSON.stringify(copyLines.join('\n')).replace(/'/g,'\\\'')}).then(()=>showToast('Results copied — paste into WeChat!','ok'))">📋 Copy results to WeChat</button>
+    </div>
+    ${masterMode ? `<div style="margin-top:8px">
+      <button class="btn blue full" onclick="showConfirm('Award Gold Jacket to ${gold?gold.name:'?'} and Clown Jacket to ${clown&&clown!==gold?clown.name:'?'}?',awardJackets)">🧥 Award Jackets</button>
+    </div>` : ''}
+  </div>`;
+}
+function awardJackets(){
+  const ranking = leaderboardPlayers().sort((a,b) => b.points-a.points||b.back9-a.back9);
+  const clownRank = [...ranking].filter(r=>r.entered>0).sort((a,b)=>a.points-b.points||a.back9-b.back9);
+  const gold = ranking[0];
+  const clown = clownRank[0] && clownRank[0] !== gold ? clownRank[0] : null;
+  const roster = loadRoster();
+  let msg = [];
+  if(gold){
+    const r = roster.find(p => p.displayName && p.displayName.toUpperCase() === gold.name.toUpperCase());
+    if(r){ r.goldJackets = (r.goldJackets||0)+1; msg.push(`🥇 ${r.displayName} → ${r.goldJackets} Gold Jacket${r.goldJackets>1?'s':''}`); }
+  }
+  if(clown){
+    const r = roster.find(p => p.displayName && p.displayName.toUpperCase() === clown.name.toUpperCase());
+    if(r){ r.clownJackets = (r.clownJackets||0)+1; msg.push(`🤡 ${r.displayName} → ${r.clownJackets} Clown Jacket${r.clownJackets>1?'s':''}`); }
+  }
+  if(msg.length){ saveRoster(roster); showToast(msg.join(' · '), 'ok', 5000); renderAll(); }
+  else showToast('Could not find players in roster.', 'err');
+}
 
 function renderDay1(){
   const scramblePlayers = currentPlayers('scramble');
@@ -3251,13 +3456,7 @@ function renderDay1(){
       ${summary}
     </div>
 
-    <div class="card">
-      <div class="section-title">Scramble scorecard</div>
-      <table>
-        <thead><tr><th>Hole</th><th>Par</th><th>S.I.</th><th>Gross</th><th class="left">Drive used</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    ${renderScrambleScorecard()}
 
     ${scrambleAllScored ? `
     <div class="card" style="text-align:center">
@@ -3403,6 +3602,8 @@ function renderDay2(){
     </div>
 
     <div class="stack">${playerCards}</div>
+
+    ${renderStablefordScorecard()}
 
     ${stablefordAllScored ? `
     <div class="card" style="text-align:center">
@@ -3859,8 +4060,10 @@ function renderLeaderboard(){
 
     ${pokerSection}
 
+    ${renderResultsSummary()}
+
     ${renderSponsorTile()}
-    <div onclick="navigator.clipboard.writeText('MPH_SIC').then(()=>showToast('WeChat ID copied — open WeChat and paste','ok'))"
+    <div onclick="copyText('MPH_SIC').then(()=>showToast('WeChat ID copied — open WeChat and paste','ok'))"
       style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.2);border-radius:12px;
              padding:12px 14px;margin-top:4px;margin-bottom:8px;cursor:pointer">
       <div style="font-size:13px;font-weight:700;color:var(--gold2);margin-bottom:4px">Interested in sponsoring Chubbs?</div>
@@ -4218,6 +4421,117 @@ checkPendingEvent(); // show import notification if admin sent an event from Chu
       el.style.opacity='1';
     },500);
   },8000);
+})();
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── Live Score Alerts with Character Commentary ──
+// ══════════════════════════════════════════════════════════════════════════════
+(function liveScoreAlerts(){
+  const ALERT_QUOTES = {
+    eagle:[
+      {text:"{player} just EAGLED hole {hole}! That's Gold Jacket material.", who:"Chubbs"},
+      {text:"{player} — eagle on {hole}. Now THAT'S how you play golf.", who:"Chubbs"},
+      {text:"{player} eagled {hole}?! Even I couldn't do that. …Actually, yes I could.", who:"Shooter"},
+    ],
+    birdie:[
+      {text:"{player} birdied hole {hole}. One shot closer to the jacket.", who:"Chubbs"},
+      {text:"{player} just dropped a birdie on {hole}. Keep that up.", who:"Chubbs"},
+      {text:"{player} birdied {hole}. Big deal. I birdie in my sleep.", who:"Shooter"},
+    ],
+    fourPutt:[
+      {text:"{player} just 4-putted hole {hole}. 🤡", who:"Happy"},
+      {text:"{player} 4-putted {hole}! ARE YOU TOO GOOD FOR YOUR HOME?!", who:"Happy"},
+      {text:"{player} 4-putted {hole}. I eat pieces of s*** like {player} for breakfast.", who:"Shooter"},
+    ],
+    tripleBogey:[
+      {text:"{player} triple-bogeyed {hole}. Clown Jacket territory.", who:"Shooter"},
+      {text:"{player} just made a {score} on hole {hole}. That's not golf, that's hiking.", who:"Chubbs"},
+      {text:"{player} triple on {hole}?! Talk to me when the gator bites YOUR hand off.", who:"Happy"},
+    ]
+  };
+
+  let prevSnapshot = {};
+  let lastAlertTime = 0;
+  const COOLDOWN = 30000; // 30 sec between alerts
+  const ALERT_KEY = 'cpi_live_alerts'; // localStorage toggle
+
+  function alertsEnabled(){
+    return localStorage.getItem(ALERT_KEY) !== '0'; // default ON
+  }
+  window.toggleLiveAlerts = function(){
+    localStorage.setItem(ALERT_KEY, alertsEnabled() ? '0' : '1');
+    showToast(alertsEnabled() ? 'Live alerts ON' : 'Live alerts OFF', 'ok');
+  };
+  window.areLiveAlertsOn = alertsEnabled;
+
+  function pickQuote(bank, data){
+    const q = bank[Math.floor(Math.random()*bank.length)];
+    let txt = q.text;
+    for(const [k,v] of Object.entries(data)) txt = txt.replace(new RegExp('\\{'+k+'\\}','g'), v);
+    return {text:txt, who:q.who};
+  }
+
+  function checkForNotableScores(remoteGroups){
+    if(!alertsEnabled() || readOnlyMode) return;
+    const now = Date.now();
+    if(now - lastAlertTime < COOLDOWN) return;
+
+    const myGroupId = state.day2GroupId;
+    const course = activeCourse('day2');
+
+    for(const [gid, gData] of Object.entries(remoteGroups)){
+      if(gid === myGroupId) continue; // skip own group
+      if(!gData || !gData.holes) continue;
+      const prev = prevSnapshot[gid];
+      if(!prev || !prev.holes) continue;
+
+      const players = gData.players || [];
+      for(let hIdx=0; hIdx<18; hIdx++){
+        const h = gData.holes[hIdx];
+        const ph = prev.holes[hIdx];
+        if(!h || !ph) continue;
+        const par = course.holes[hIdx] ? course.holes[hIdx].par : null;
+
+        for(let pIdx=0; pIdx<(h.gross||[]).length; pIdx++){
+          const g = h.gross[pIdx];
+          const pg = ph.gross ? ph.gross[pIdx] : null;
+          if(typeof g !== 'number' || g === pg) continue; // no change
+          const pName = players[pIdx] ? (players[pIdx].name || players[pIdx].playerId || 'Someone') : 'Someone';
+          const hole = hIdx + 1;
+          let quote = null;
+
+          if(par && g <= par - 2) quote = pickQuote(ALERT_QUOTES.eagle, {player:pName, hole, score:g});
+          else if(par && g === par - 1) quote = pickQuote(ALERT_QUOTES.birdie, {player:pName, hole, score:g});
+          else if(par && g >= par + 3) quote = pickQuote(ALERT_QUOTES.tripleBogey, {player:pName, hole, score:g});
+
+          // Check putts
+          const putts = h.putts ? h.putts[pIdx] : null;
+          const pPutts = ph.putts ? ph.putts[pIdx] : null;
+          if(typeof putts === 'number' && putts >= 4 && putts !== pPutts){
+            quote = pickQuote(ALERT_QUOTES.fourPutt, {player:pName, hole, score:g});
+          }
+
+          if(quote){
+            showToast(`${quote.text} — ${quote.who}`, 'info', 5000);
+            lastAlertTime = now;
+            // Save snapshot and exit — one alert per cycle
+            prevSnapshot = JSON.parse(JSON.stringify(remoteGroups));
+            return;
+          }
+        }
+      }
+    }
+    prevSnapshot = JSON.parse(JSON.stringify(remoteGroups));
+  }
+
+  // Hook into the existing Firebase group listener
+  const origRenderLB = window.renderLeaderboard;
+  if(typeof origRenderLB === 'function'){
+    // Patch: after leaderboard renders from remote data, check for alerts
+    window._liveAlertCheck = function(){ checkForNotableScores(SYNC.remoteGroups); };
+  }
+  // Also run on each sync update
+  setInterval(() => { if(SYNC.status==='live') checkForNotableScores(SYNC.remoteGroups); }, 15000);
 })();
 
 // ══════════════════════════════════════════════════════════════════════════════
