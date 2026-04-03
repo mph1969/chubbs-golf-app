@@ -494,10 +494,61 @@ const COURSE_LIBRARY = {
     ]
   },
   zhaoqing:{name:'Zhaoqing', club:'Zhaoqing Resort Golf Club', city:'Zhaoqing', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
-  zhuhai:{name:'Zhuhai', club:'Zhuhai Golden Golf', city:'Zhuhai', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()}
+  zhuhai:{name:'Zhuhai', club:'Zhuhai Golden Golf', city:'Zhuhai', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  // ── Thailand (Bangkok area) ──
+  muangKaew:{
+    name:'Muang Kaew',
+    club:'Muang Kaew Golf Course',
+    city:'Samut Prakan',
+    note:'Schmidt-Curley design. Blue 6,729y · CR 72.6/128. White 6,252y · CR 70.2/125. 25 min from downtown Bangkok.',
+    holes:[
+      {par:4,si:15},{par:4,si:9},{par:3,si:17},{par:5,si:13},{par:4,si:3},{par:5,si:1},{par:3,si:7},{par:4,si:5},{par:4,si:11},
+      {par:4,si:16},{par:5,si:6},{par:4,si:10},{par:5,si:4},{par:3,si:8},{par:4,si:2},{par:3,si:18},{par:3,si:14},{par:5,si:12}
+    ]
+  },
+  muangAke:{
+    name:'Muang Ake',
+    club:'Muang Ake Golf Club',
+    city:'Pathum Thani',
+    note:'Est. 1986. Yellow 6,527y · White 6,076y. No CR/Slope online — verify on-site. H15 is a 638y par-5 monster.',
+    holes:[
+      {par:4,si:13},{par:4,si:3},{par:5,si:9},{par:4,si:5},{par:5,si:7},{par:3,si:17},{par:4,si:1},{par:3,si:15},{par:4,si:11},
+      {par:4,si:2},{par:5,si:8},{par:3,si:16},{par:4,si:12},{par:4,si:14},{par:5,si:6},{par:4,si:4},{par:3,si:18},{par:4,si:10}
+    ]
+  },
+  unicoGrande:{
+    name:'Unico Grande',
+    club:'Unico Grande Golf Course',
+    city:'Bangkok',
+    note:'PAR 63 — unusual layout. Back 9 = 8 par-3s + par-5. H16 = 61 yards. Public course. Blue 3,656y · CR 59.1/94.',
+    holes:[
+      {par:4,si:2},{par:4,si:1},{par:4,si:7},{par:4,si:8},{par:3,si:4},{par:4,si:17},{par:3,si:18},{par:3,si:3},{par:5,si:11},
+      {par:3,si:6},{par:3,si:13},{par:3,si:9},{par:3,si:15},{par:3,si:14},{par:3,si:5},{par:3,si:10},{par:3,si:16},{par:5,si:12}
+    ]
+  },
+  krungthepKreetha:{
+    name:'Krungthep Kreetha',
+    club:'Krungthep Kreetha Sports Club',
+    city:'Bangkok',
+    note:'James Vaughn 1995 redesign. Blue 6,735y · CR 72.7/129. H14 = 238y par-3, hardest hole (SI 1). White per-hole yardages need on-site verification.',
+    holes:[
+      {par:4,si:15},{par:5,si:11},{par:4,si:5},{par:3,si:18},{par:4,si:2},{par:5,si:13},{par:4,si:5},{par:3,si:9},{par:4,si:7},
+      {par:4,si:16},{par:5,si:17},{par:4,si:3},{par:4,si:12},{par:3,si:1},{par:5,si:10},{par:3,si:14},{par:4,si:6},{par:4,si:4}
+    ]
+  },
+  bangpoo:{
+    name:'Bangpoo',
+    club:'Bangpoo Golf & Sports Club',
+    city:'Samut Prakan',
+    note:'Only Arnold Palmer design in Thailand. Blue 7,048y · CR 72.5/121. Seaside course near Gulf of Thailand. H17 = SI 1 at 451y.',
+    holes:[
+      {par:4,si:14},{par:4,si:11},{par:5,si:5},{par:3,si:16},{par:4,si:2},{par:4,si:12},{par:5,si:3},{par:3,si:17},{par:4,si:7},
+      {par:4,si:15},{par:3,si:8},{par:4,si:4},{par:5,si:6},{par:4,si:13},{par:4,si:9},{par:3,si:18},{par:4,si:1},{par:5,si:10}
+    ]
+  }
 };
 
-const COURSE_ORDER = ['palmIsland','birdsNest','firestone','gaoming','junan','lotusHill','mountain','valley','qingyuan','tangspring','yinli','zhaoqing','zhuhai'];
+const COURSE_ORDER = ['palmIsland','birdsNest','firestone','gaoming','junan','lotusHill','mountain','valley','qingyuan','tangspring','yinli','zhaoqing','zhuhai','muangKaew','muangAke','unicoGrande','krungthepKreetha','bangpoo'];
 
 const COURSE_LOCATIONS = {
   palmIsland:{zhClub:'惠州棕榈岛高尔夫俱乐部', zhAddress:'广东省惠州市惠阳区高尔夫路一号', enAddress:'Huiyang, Huizhou, Guangdong, China'},
@@ -512,7 +563,13 @@ const COURSE_LOCATIONS = {
   tangspring:{zhClub:'惠州汤泉高尔夫俱乐部', zhAddress:'广东省惠州市博罗县汤泉', enAddress:'Boluo, Huizhou, Guangdong, China'},
   yinli:{zhClub:'东莞银利外商高尔夫俱乐部', zhAddress:'广东省东莞市清溪镇', enAddress:'Qingxi, Dongguan, Guangdong, China'},
   zhaoqing:{zhClub:'金立肇庆高尔夫俱乐部', zhAddress:'广东省肇庆高要市回龙镇', enAddress:'Gaoyao, Zhaoqing, Guangdong, China'},
-  zhuhai:{zhClub:'珠海金湾高尔夫俱乐部', zhAddress:'广东省珠海市金湾区金海岸金湾大道', enAddress:'Jinwan, Zhuhai, Guangdong, China'}
+  zhuhai:{zhClub:'珠海金湾高尔夫俱乐部', zhAddress:'广东省珠海市金湾区金海岸金湾大道', enAddress:'Jinwan, Zhuhai, Guangdong, China'},
+  // ── Thailand (Bangkok area) ──
+  muangKaew:{zhClub:'เมืองแก้ว กอล์ฟ คอร์ส', zhAddress:'52 Moo 8 Bangna-Trad Hwy KM 7.7, Bangkaew, Bangplee, Samut Prakan 10540', enAddress:'Bangkaew, Bangplee, Samut Prakan, Thailand'},
+  muangAke:{zhClub:'เมืองเอก กอล์ฟ คลับ', zhAddress:'52 Moo 7, Phaholyothin Rd, Luk Hok, Muang, Pathum Thani 12000', enAddress:'Luk Hok, Muang, Pathum Thani, Thailand'},
+  unicoGrande:{zhClub:'ยูนิโก้ แกรนด์ กอล์ฟ คอร์ส', zhAddress:'2 Krung Thep Kritha Rd, Thap Chang, Saphan Sung, Bangkok 10250', enAddress:'Thap Chang, Saphan Sung, Bangkok, Thailand'},
+  krungthepKreetha:{zhClub:'กรุงเทพกรีฑา สปอร์ต คลับ', zhAddress:'282 Krungthep Kreetha Rd, Hua Mak, Bang Kapi, Bangkok 10240', enAddress:'Hua Mak, Bang Kapi, Bangkok, Thailand'},
+  bangpoo:{zhClub:'บางปู กอล์ฟ แอนด์ สปอร์ต', zhAddress:'191 Moo 3, Sukhumvit Rd, Phraek-Gasa-Mai, Muang, Samut Prakan 10280', enAddress:'Phraek-Gasa-Mai, Muang, Samut Prakan, Thailand'}
 };
 
 
