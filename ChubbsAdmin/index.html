@@ -376,8 +376,13 @@ let state = {
 function init() {
   const c1 = document.getElementById('scramble-course');
   const c2 = document.getElementById('stableford-course');
-  let opts = '';
-  for(const [id, c] of Object.entries(COURSE_LIBRARY)){ opts += `<option value="${id}">${c.name}</option>`; }
+  const courseGroups = [
+    {label:'China', ids:['birdsNest','firestone','gaoming','junan','lotusHill','mountain','palmIsland','qingyuan','tangspring','valley','yinli','zhaoqing','zhuhai']},
+    {label:'Thailand', ids:['bangpoo','krungthepKreetha','muangAke','muangKaew','unicoGrande']}
+  ];
+  let opts = courseGroups.map(g =>
+    `<optgroup label="${g.label}">${g.ids.map(id => COURSE_LIBRARY[id] ? `<option value="${id}">${COURSE_LIBRARY[id].name}</option>` : '').join('')}</optgroup>`
+  ).join('');
   c1.innerHTML = opts; c2.innerHTML = opts;
   c1.value = 'mountain'; c2.value = 'valley';
   

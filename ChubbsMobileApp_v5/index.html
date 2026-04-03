@@ -564,7 +564,11 @@ const COURSE_LIBRARY = {
   }
 };
 
-const COURSE_ORDER = ['palmIsland','birdsNest','firestone','gaoming','junan','lotusHill','mountain','valley','qingyuan','tangspring','yinli','zhaoqing','zhuhai','muangKaew','muangAke','unicoGrande','krungthepKreetha','bangpoo'];
+const COURSE_GROUPS = [
+  {label:'China', ids:['birdsNest','firestone','gaoming','junan','lotusHill','mountain','palmIsland','qingyuan','tangspring','valley','yinli','zhaoqing','zhuhai']},
+  {label:'Thailand', ids:['bangpoo','krungthepKreetha','muangAke','muangKaew','unicoGrande']}
+];
+const COURSE_ORDER = COURSE_GROUPS.flatMap(g => g.ids);
 
 const COURSE_LOCATIONS = {
   palmIsland:{zhClub:'惠州棕榈岛高尔夫俱乐部', zhAddress:'广东省惠州市惠阳区高尔夫路一号', enAddress:'Huiyang, Huizhou, Guangdong, China'},
@@ -1898,6 +1902,21 @@ function resetApp(){
 }
 
 function fmtName(name, idx){ return (name || `Player ${idx+1}`).trim(); }
+function jacketDots(name){
+  if(!hasImportedEvent() || !state.eventBundle || !state.eventBundle.players) return '';
+  const p = state.eventBundle.players.find(pl => {
+    const n = (pl.displayName || pl.fullName || pl.playerId || '').toUpperCase();
+    return n === (name||'').toUpperCase();
+  });
+  if(!p) return '';
+  const gold = p.goldJackets || 0;
+  const clown = p.clownJackets || 0;
+  if(!gold && !clown) return '';
+  let dots = '';
+  for(let i=0;i<Math.min(gold,6);i++) dots += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d6b05a;margin-left:2px"></span>';
+  for(let i=0;i<Math.min(clown,6);i++) dots += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d16b5d;margin-left:2px"></span>';
+  return `<span style="margin-left:4px;vertical-align:middle">${dots}</span>`;
+}
 function normalizeDayKey(day){ return day === 'day2' ? 'day2' : 'day1'; }
 function currentCourseEditorTarget(){ return state.ui && state.ui.courseEditorTarget === 'day2' ? 'day2' : 'day1'; }
 function activeCourseDay(){
@@ -2650,10 +2669,12 @@ function renderSetup(){
   const locationInfo = courseLocationInfo(editorCourse, locationLang);
   const mapUrl = courseMapUrl(editorCourse, locationLang);
 
-  const courseOptionsFor = selectedId => COURSE_ORDER.map(id => {
-    const item = COURSE_LIBRARY[id];
-    return `<option value="${id}" ${selectedId===id?'selected':''}>${item.name} · ${item.city}</option>`;
-  }).join('\n');
+  const courseOptionsFor = selectedId => COURSE_GROUPS.map(g =>
+    `<optgroup label="${g.label}">${g.ids.map(id => {
+      const item = COURSE_LIBRARY[id];
+      return `<option value="${id}" ${selectedId===id?'selected':''}>${item.name}</option>`;
+    }).join('')}</optgroup>`
+  ).join('\n');
 
   const palmOptions = selected => ['A','B','C'].map(code => `<option value="${code}" ${selected===code?'selected':''}>${code} · ${PALM_NINES[code].name}</option>`).join('\n');
 
@@ -3261,9 +3282,10 @@ function renderScrambleScorecard(){
     html += '</div>';
     return html;
   }
-  return `<div class="card"><div class="section-title">Scramble Scorecard</div>
+  return `<details><summary style="list-style:none;cursor:pointer"><div class="card" style="margin-bottom:0"><div style="display:flex;align-items:center;justify-content:space-between"><div class="section-title" style="margin:0">Scramble Scorecard</div><span class="small" style="color:var(--muted)">tap to expand ▸</span></div></div></summary>
+    <div class="card" style="border-top:none;border-radius:0 0 22px 22px;margin-top:-1px">
     <div class="small tight" style="margin-bottom:8px">Tap any hole to jump to it. Front 9:</div>${half(0)}
-    <div class="small" style="margin-top:8px;margin-bottom:4px">Back 9:</div>${half(9)}</div>`;
+    <div class="small" style="margin-top:8px;margin-bottom:4px">Back 9:</div>${half(9)}</div></details>`;
 }
 
 function renderStablefordScorecard(){
@@ -3305,9 +3327,10 @@ function renderStablefordScorecard(){
     html += '</div>';
     return html;
   }
-  return `<div class="card"><div class="section-title">Stableford Scorecard</div>
+  return `<details><summary style="list-style:none;cursor:pointer"><div class="card" style="margin-bottom:0"><div style="display:flex;align-items:center;justify-content:space-between"><div class="section-title" style="margin:0">Stableford Scorecard</div><span class="small" style="color:var(--muted)">tap to expand ▸</span></div></div></summary>
+    <div class="card" style="border-top:none;border-radius:0 0 22px 22px;margin-top:-1px">
     <div class="small tight" style="margin-bottom:8px">Gross scores · (Stableford pts) in totals. Tap any cell to jump.</div>${half(0)}
-    <div class="small" style="margin-top:8px;margin-bottom:4px">Back 9:</div>${half(9)}</div>`;
+    <div class="small" style="margin-top:8px;margin-bottom:4px">Back 9:</div>${half(9)}</div></details>`;
 }
 
 // ── End-of-Round Results Summary ──
@@ -3409,7 +3432,7 @@ function renderDay1(){
   }).join('\n');
 
   const driverButtons = scramblePlayers.map((p, idx) =>
-    `<button class="driver-btn ${hole.driver===idx?'on':''}" onclick="setDriver(${idx})">${fmtName(p.name, idx)}${hole.driver===idx?' · selected':''}</button>`
+    `<button class="driver-btn ${hole.driver===idx?'on':''}" onclick="setDriver(${idx})">${fmtName(p.name, idx)}${jacketDots(p.name)}${hole.driver===idx?' · selected':''}</button>`
   ).join('\n');
 
   const rows = state.scramble.holes.map((h, idx) => {
@@ -3545,7 +3568,7 @@ function renderDay2(){
     return `
       <div class="player-card p${idx}">
         <div class="player-head">
-          <div class="player-name">${fmtName(p.name, idx)}</div>
+          <div class="player-name">${fmtName(p.name, idx)}${jacketDots(p.name)}</div>
           <div class="toolbar tight">
             ${showFlag ? `<button class="flag-btn ${flagOn ? 'on' : 'safe'}" onclick="setLastPenaltyFlag(${idx})">🚩 ${flagOn ? 'Last 3-putt+' : 'Mark last 3-putt+'}</button>` : ''}
             <div class="hcp-badge">HCP ${p.hcp}</div>
