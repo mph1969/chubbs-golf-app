@@ -1596,53 +1596,113 @@ function importEventBundleFile(input){
   reader.readAsText(file);
 }
 
-function loadEventFromCloud(){
-  const eidInput = document.getElementById('cloud-event-id');
-  const nameInput = document.getElementById('cloud-player-name');
-  const statusEl = document.getElementById('cloud-load-status');
-  const eid = (eidInput && eidInput.value || '').trim();
-  const playerName = (nameInput && nameInput.value || '').trim().toUpperCase();
+// ── Cloud event scanner + picker ──
+let _cloudEventsCache = []; // [{eid, bundle}]
 
-  if(!eid){
-    showToast('Enter an Event ID.', 'err');
-    if(eidInput) eidInput.focus();
-    return;
-  }
+function scanCloudEvents(){
+  const listEl = document.getElementById('cloud-event-list');
+  const pickEl = document.getElementById('cloud-player-pick');
+  if(!listEl) return;
+
   if(!SYNC.enabled || !SYNC.db){
-    showToast('Cloud sync not available. Check your connection.', 'err');
+    listEl.innerHTML = '<div class="status warn tight">Cloud sync not available. Check your connection and refresh.</div>';
     return;
   }
 
-  if(statusEl) statusEl.innerHTML = '<div class="status info tight" style="margin-top:10px">Loading from cloud…</div>';
+  SYNC.db.ref('/events').once('value').then(snap => {
+    if(!snap.exists()){
+      listEl.innerHTML = '<div class="empty-note tight">No events found in the cloud.</div>';
+      return;
+    }
+    const events = snap.val();
+    const found = [];
+    Object.entries(events).forEach(([eid, data]) => {
+      const bundle = data && data.bundle;
+      if(!bundle || !bundle.players || !bundle.event) return;
+      found.push({
+        eid,
+        bundle,
+        name: bundle.event.displayName || bundle.event.name || eid,
+        publishedAt: bundle._publishedAt || 0,
+        satDate: bundle.event.satDate || '',
+        sunDate: bundle.event.sunDate || '',
+        playerCount: (bundle.players || []).length
+      });
+    });
 
-  SYNC.db.ref(`/events/${eid}/bundle`).once('value').then(snap => {
-    const bundle = snap.val();
-    if(!bundle || !bundle.players || !bundle.event){
-      if(statusEl) statusEl.innerHTML = '<div class="status warn tight" style="margin-top:10px">Event not found. Check the Event ID and try again.</div>';
+    // Sort by most recently published, take last 3
+    found.sort((a, b) => b.publishedAt - a.publishedAt);
+    _cloudEventsCache = found.slice(0, 3);
+
+    if(!_cloudEventsCache.length){
+      listEl.innerHTML = '<div class="empty-note tight">No events found in the cloud.</div>';
       return;
     }
 
-    // If player name provided, try to match it
-    let requestedPlayerId = null;
-    if(playerName){
-      const match = bundle.players.find(p => {
-        const pid = String(p.playerId || '').toUpperCase();
-        const dname = String(p.displayName || '').toUpperCase();
-        const fname = String(p.fullName || '').toUpperCase();
-        const sname = String(p.shortName || '').toUpperCase();
-        return pid === playerName || dname === playerName || fname === playerName || sname === playerName
-          || pid.includes(playerName) || playerName.includes(pid)
-          || dname.includes(playerName) || playerName.includes(dname);
-      });
-      if(match) requestedPlayerId = String(match.playerId);
-    }
-
-    const { _publishedAt, _publishedBy, ...cleanBundle } = bundle;
-    applyImportedEventBundle(cleanBundle, requestedPlayerId);
-    showToast('Event loaded from cloud!' + (requestedPlayerId ? ' Playing as ' + requestedPlayerId : ''), 'ok', 4000);
+    listEl.innerHTML = '<label>Select event</label>' + _cloudEventsCache.map((ev, i) => {
+      const dates = [ev.satDate, ev.sunDate].filter(Boolean).join(' – ');
+      return `<button class="btn full" style="text-align:left;margin-bottom:6px;padding:12px" onclick="selectCloudEvent(${i})">
+        <strong>${escHtml(ev.name)}</strong><br/>
+        <span class="small" style="color:var(--muted)">${dates ? dates + ' · ' : ''}${ev.playerCount} players</span>
+      </button>`;
+    }).join('');
   }).catch(err => {
-    if(statusEl) statusEl.innerHTML = '<div class="status warn tight" style="margin-top:10px">Failed to load. Check your connection and try again.</div>';
+    listEl.innerHTML = '<div class="status warn tight">Failed to scan events. Check your connection.</div>';
   });
+}
+
+function selectCloudEvent(idx){
+  const ev = _cloudEventsCache[idx];
+  if(!ev) return;
+  const listEl = document.getElementById('cloud-event-list');
+  const pickEl = document.getElementById('cloud-player-pick');
+  const statusEl = document.getElementById('cloud-load-status');
+
+  // Highlight selected event
+  const dates = [ev.satDate, ev.sunDate].filter(Boolean).join(' – ');
+  listEl.innerHTML = `
+    <div class="status ok tight" style="margin-bottom:10px">
+      <strong>${escHtml(ev.name)}</strong><br/>
+      <span class="small">${dates ? dates + ' · ' : ''}${ev.playerCount} players</span>
+    </div>
+    <button class="btn ghost slim" onclick="scanCloudEvents()" style="margin-bottom:8px">← Pick a different event</button>`;
+
+  // Show player picker
+  const players = ev.bundle.players || [];
+  const options = players.map(p => {
+    const label = p.displayName || p.fullName || p.playerId;
+    const hcp = p.playingHandicap != null ? ' · HCP ' + p.playingHandicap : '';
+    return `<option value="${escHtml(String(p.playerId))}">${escHtml(label)}${hcp}</option>`;
+  }).join('');
+
+  pickEl.style.display = 'block';
+  pickEl.innerHTML = `
+    <div style="margin-top:10px">
+      <label>Who are you?</label>
+      <select id="cloud-player-select" style="font-size:15px;padding:14px">
+        <option value="">— Select your name —</option>
+        ${options}
+      </select>
+    </div>
+    <button class="btn gold full" style="margin-top:10px" onclick="confirmCloudLoad(${idx})">☁️ Load Event</button>`;
+  if(statusEl) statusEl.innerHTML = '';
+}
+
+function confirmCloudLoad(idx){
+  const ev = _cloudEventsCache[idx];
+  if(!ev) return;
+  const sel = document.getElementById('cloud-player-select');
+  const playerId = sel ? sel.value : '';
+  const statusEl = document.getElementById('cloud-load-status');
+
+  if(!playerId){
+    showToast('Select your name first.', 'err');
+    return;
+  }
+
+  const { _publishedAt, _publishedBy, ...cleanBundle } = ev.bundle;
+  applyImportedEventBundle(cleanBundle, playerId);
+  showToast('Event loaded! Playing as ' + playerId, 'ok', 4000);
 }
 
 function encodeJoinPayload(payload){
@@ -2754,20 +2814,12 @@ function renderSetup(){
       ${!imported ? `
       <div class="card">
         <div class="section-title">Load Event from Cloud</div>
-        <div class="small tight" style="margin-bottom:12px">Enter your event details to pull the weekend setup from the cloud. Your organiser can give you the Event ID, or check your WeChat link.</div>
-        <div class="stack">
-          <div>
-            <label>Event ID</label>
-            <input type="text" id="cloud-event-id" placeholder="e.g. 2026-BrainTrust-Demo" />
-          </div>
-          <div>
-            <label>Your name</label>
-            <input type="text" id="cloud-player-name" placeholder="e.g. HANSON" style="text-transform:uppercase" />
-          </div>
-          <button class="btn gold full" onclick="loadEventFromCloud()">☁️ Load Event</button>
-        </div>
+        <div class="small tight" style="margin-bottom:10px">Select your event and your name to pull the weekend setup.</div>
+        <div id="cloud-event-list"><div class="status info tight">Scanning for events…</div></div>
+        <div id="cloud-player-pick" style="display:none"></div>
         <div id="cloud-load-status"></div>
-      </div>` : ''}
+      </div>
+      <script>if(typeof scanCloudEvents==='function') scanCloudEvents();</script>` : ''}
       <div style="text-align:center;margin-top:8px;padding-bottom:4px">
         <button onclick="toggleMasterMode()" style="background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:8px 12px;">⚙️ Organiser / admin view</button>
       </div>
