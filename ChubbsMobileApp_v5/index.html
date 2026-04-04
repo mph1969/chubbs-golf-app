@@ -622,8 +622,8 @@ const DEFAULT_STATE = {
     penalty3:10,
     penalty4:20
   },
-  scramble:{teamName:'', hole:0, holes:blankScrambleHoles()},
-  stableford:{hole:0, holes:blankStablefordHoles()},
+  scramble:{teamName:'', hole:0, startingHole:0, holes:blankScrambleHoles()},
+  stableford:{hole:0, startingHole:0, holes:blankStablefordHoles()},
   poker:{
     stampCounter:0,
     digitalDeal:null
@@ -657,6 +657,7 @@ function loadState(){
 }
 let readOnlyMode = false;
 let masterMode = localStorage.getItem('cpi_master') === '1';
+let scoreLockOverride = false; // admin can override score lock
 let holeWarning      = null;  // {day, msg} — transient, not persisted
 let rosterEditId     = null;
 let rosterNewMode    = false;
@@ -871,12 +872,14 @@ function pushToFirebase(){
     players: state.day2Players,
     holes:   state.stableford.holes,
     hole:    state.stableford.hole,
+    startingHole: state.stableford.startingHole || 0,
     ts:      now
   }).catch(()=>{});
   if(tid) SYNC.db.ref(`/events/${eventId}/teams/${tid}`).set({
     players:  state.day1Players,
     holes:    state.scramble.holes,
     hole:     state.scramble.hole,
+    startingHole: state.scramble.startingHole || 0,
     teamName: state.scramble.teamName,
     ts:       now
   }).catch(()=>{});
@@ -1599,6 +1602,18 @@ function _doApplyBundle(bundle, requestedPlayerId){
   state.roundCourses.day2.courseId = day2CourseId;
   state.roundCourses.day2.palmIsland = safePalmCombo({front:ev.day2PalmIslandFront || ev.palmIslandFront || 'A', back:ev.day2PalmIslandBack || ev.palmIslandBack || 'B'});
 
+  // Apply starting holes from event bundle
+  if(day1Team && day1Team.startingHole){
+    const sh = Math.max(0, Math.min(17, (day1Team.startingHole || 1) - 1));
+    state.scramble.startingHole = sh;
+    if(!state.scramble.holes.some(h => typeof h.gross === 'number')) state.scramble.hole = sh;
+  }
+  if(day2Group && day2Group.startingHole){
+    const sh = Math.max(0, Math.min(17, (day2Group.startingHole || 1) - 1));
+    state.stableford.startingHole = sh;
+    if(!state.stableford.holes.some(h => h.gross.some(g => typeof g === 'number'))) state.stableford.hole = sh;
+  }
+
   if(Object.prototype.hasOwnProperty.call(normalized.options, 'threePuttPoker')) state.options.threePuttPoker = !!normalized.options.threePuttPoker;
   if(normalized.options.pokerMode) state.options.pokerMode = normalized.options.pokerMode;
   if(Number.isFinite(parseInt(normalized.options.ante, 10))) state.options.ante = Math.max(0, parseInt(normalized.options.ante, 10));
@@ -2020,6 +2035,31 @@ function handicapAdjustment(points){
 function holeMeta(holeIdx, day){
   return activeCourse(day).holes[holeIdx] || {par:null, si:null};
 }
+// ── Starting Hole helpers ──
+// Returns the actual course hole index (0-17) for a given play position (0-17)
+function playOrderToHoleIdx(playPos, startingHole){
+  return (playPos + (startingHole || 0)) % 18;
+}
+// Returns play position (0-17) for a given course hole index
+function holeIdxToPlayOrder(holeIdx, startingHole){
+  return (holeIdx - (startingHole || 0) + 18) % 18;
+}
+// Returns the rotated hole order array [startingHole, startingHole+1, ..., 17, 0, 1, ..., startingHole-1]
+function getHoleOrder(day){
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  const sh = state[key].startingHole || 0;
+  return Array.from({length:18}, (_, i) => (i + sh) % 18);
+}
+// Get starting hole for current day
+function getStartingHole(day){
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  return state[key].startingHole || 0;
+}
+// Display hole number (1-18 course hole) for current scoring position
+function displayHoleNum(day){
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  return state[key].hole + 1; // state.hole is always the actual course hole index
+}
 
 function scrambleTotals(){
   const scramblePlayers = currentPlayers('scramble');
@@ -2149,7 +2189,13 @@ function syncPenaltyStamp(holeIdx, playerIdx, newVal, oldVal){
   if(hole.lastPenaltyOverride !== null && !penaltyPlayers.includes(hole.lastPenaltyOverride)) hole.lastPenaltyOverride = null;
 }
 
+function isScoreLocked(day){
+  const lock = getScoreLockStatus(day);
+  if(lock.locked){ showToast(`🔒 ${lock.reason}`, 'info', 2500); return true; }
+  return false;
+}
 function stepScore(day, idx, delta, field='gross'){
+  if(isScoreLocked(day)) return;
   holeWarning = null;
   if(day === 'scramble'){
     const bucket = state.scramble.holes[state.scramble.hole];
@@ -2171,6 +2217,7 @@ function stepScore(day, idx, delta, field='gross'){
   renderAll();
 }
 function setExact(day, idx, value, field='gross'){
+  if(isScoreLocked(day)) return;
   holeWarning = null;
   if(day === 'scramble'){
     state.scramble.holes[state.scramble.hole].gross = value;
@@ -2185,6 +2232,7 @@ function setExact(day, idx, value, field='gross'){
   renderAll();
 }
 function clearScore(day, idx=null, field='gross'){
+  if(isScoreLocked(day)) return;
   if(day === 'scramble'){
     state.scramble.holes[state.scramble.hole].gross = null;
   }else{
@@ -2198,6 +2246,7 @@ function clearScore(day, idx=null, field='gross'){
   renderAll();
 }
 function setBlob(idx){
+  if(isScoreLocked('stableford')) return;
   const meta = holeMeta(state.stableford.hole);
   let gross = 8;
   if(meta.par === 3) gross = 7;
@@ -2212,6 +2261,7 @@ function setBlob(idx){
   fireSpennyAlert(pName, hole);
 }
 function setDriver(idx){
+  if(isScoreLocked('scramble')) return;
   holeWarning = null;
   const hole = state.scramble.holes[state.scramble.hole];
   hole.driver = hole.driver === idx ? null : idx;
@@ -2220,6 +2270,9 @@ function setDriver(idx){
 }
 function navHole(day, dir){
   holeWarning = null;
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  const order = getHoleOrder(day);
+  const playPos = holeIdxToPlayOrder(state[key].hole, state[key].startingHole || 0);
   if(dir > 0){
     if(day === 'scramble'){
       const hole = state.scramble.holes[state.scramble.hole];
@@ -2246,27 +2299,138 @@ function navHole(day, dir){
           renderAll(); return;
         }
       }
-      if(state.stableford.hole === 17){
-        showToast('Hole 18 complete! Scroll down to export the scorecard.', 'ok', 3500);
-        renderAll(); return;
-      }
     }
-    if(day === 'scramble' && state.scramble.hole === 17){
+    // Check if we're on the last hole in play order
+    if(playPos >= 17){
       showToast('Hole 18 complete! Scroll down to export the scorecard.', 'ok', 3500);
       renderAll(); return;
     }
   }
-  const key = day === 'scramble' ? 'scramble' : 'stableford';
-  state[key].hole = Math.max(0, Math.min(17, state[key].hole + dir));
+  // Navigate: clamp within play order, then map back to course hole index
+  const newPlayPos = Math.max(0, Math.min(17, playPos + dir));
+  state[key].hole = order[newPlayPos];
   saveState();
   renderAll();
 }
 function skipHoleWarning(day, dir){
   holeWarning = null;
   const key = day === 'scramble' ? 'scramble' : 'stableford';
-  state[key].hole = Math.max(0, Math.min(17, state[key].hole + dir));
+  const order = getHoleOrder(day);
+  const playPos = holeIdxToPlayOrder(state[key].hole, state[key].startingHole || 0);
+  const newPlayPos = Math.max(0, Math.min(17, playPos + dir));
+  state[key].hole = order[newPlayPos];
   saveState();
   renderAll();
+}
+function showStartingHoleModal(day){
+  const old = document.getElementById('sh-modal');
+  if(old) old.remove();
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  let val = (state[key].startingHole || 0) + 1; // 1-18
+  const modal = document.createElement('div');
+  modal.id = 'sh-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9700;display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn 0.18s ease';
+  function render(){
+    modal.innerHTML = `
+      <div style="background:var(--bg,#0d1f19);border:2px solid var(--gold2,#c9a84c);border-radius:20px;padding:28px 24px;max-width:320px;width:100%;text-align:center">
+        <div style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold2,#c9a84c);font-weight:800;margin-bottom:16px">⛳ Starting Hole</div>
+        <div style="font-size:10px;color:var(--muted,#7aaa8a);margin-bottom:16px">Which hole does your group tee off from?</div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:20px">
+          <button onclick="document.getElementById('sh-modal')._adj(-1)" style="width:48px;height:48px;border-radius:50%;border:2px solid var(--gold2,#c9a84c);background:rgba(201,168,76,0.1);color:var(--gold2,#c9a84c);font-size:24px;font-weight:900;cursor:pointer">−</button>
+          <div style="font-family:'DM Mono',monospace;font-size:56px;font-weight:900;color:var(--text,#f0ead8);min-width:80px">${val}</div>
+          <button onclick="document.getElementById('sh-modal')._adj(1)" style="width:48px;height:48px;border-radius:50%;border:2px solid var(--gold2,#c9a84c);background:rgba(201,168,76,0.1);color:var(--gold2,#c9a84c);font-size:24px;font-weight:900;cursor:pointer">+</button>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <button onclick="setStartingHole('${day}',document.getElementById('sh-modal')._val);document.getElementById('sh-modal').remove()" style="flex:1;padding:12px;border-radius:12px;background:var(--gold2,#c9a84c);border:none;color:#1a1000;font-size:14px;font-weight:900;cursor:pointer">Confirm</button>
+          <button onclick="document.getElementById('sh-modal').remove()" style="flex:1;padding:12px;border-radius:12px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--muted,#7aaa8a);font-size:13px;cursor:pointer">Cancel</button>
+        </div>
+      </div>`;
+  }
+  modal._val = val;
+  modal._adj = function(d){
+    val = val + d;
+    if(val < 1) val = 18;
+    if(val > 18) val = 1;
+    modal._val = val;
+    render();
+  };
+  render();
+  document.body.appendChild(modal);
+}
+// ── Score Lock system ──
+// Returns {locked, reason, countdown} — locked=true means scoring disabled
+function getScoreLockStatus(day){
+  if(scoreLockOverride) return {locked:false};
+  if(!hasImportedEvent()) return {locked:false}; // manual mode, no lock
+  const ev = state.eventBundle.event || {};
+  const now = new Date();
+
+  // Determine event date and tee time for this day
+  let dateStr, timeStr;
+  if(day === 'scramble'){
+    dateStr = ev.satDate;
+    timeStr = ev.satTime;
+  } else {
+    dateStr = ev.sunDate;
+    // Use group-specific tee time if available
+    const group = activeEventDay2Group();
+    timeStr = (group && group.teeTime) || ev.sunTime;
+  }
+
+  if(!dateStr) return {locked:false}; // no date set, don't lock
+
+  const eventDate = parseEventDate(dateStr);
+  if(!eventDate) return {locked:false};
+
+  // Build full tee datetime
+  let teeDateTime = new Date(eventDate);
+  if(timeStr){
+    const [h,m] = timeStr.split(':').map(Number);
+    if(Number.isFinite(h)) teeDateTime.setHours(h, m || 0, 0, 0);
+  }
+
+  // Unlock window: 2 hours before tee time
+  const unlockTime = new Date(teeDateTime.getTime() - 2 * 60 * 60 * 1000);
+
+  // Auto-reset: midnight after event day
+  const resetTime = new Date(eventDate);
+  resetTime.setDate(resetTime.getDate() + 1);
+  resetTime.setHours(0, 0, 0, 0);
+
+  if(now >= resetTime) return {locked:false}; // past event day, no lock
+  if(now >= unlockTime) return {locked:false}; // within unlock window
+
+  // Still locked — calculate countdown to unlock
+  const rem = unlockTime.getTime() - now.getTime();
+  const hrs = Math.floor(rem / 3600000);
+  const mins = Math.floor((rem % 3600000) / 60000);
+  const countdown = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+  const dayLabel = day === 'scramble' ? 'Scramble' : 'Stableford';
+  return {
+    locked: true,
+    reason: `${dayLabel} scoring opens ${hrs > 24 ? formatEventDate(dateStr, 'short') + ' · ' : ''}${countdown} before tee time`,
+    countdown
+  };
+}
+function toggleScoreLockOverride(){
+  scoreLockOverride = !scoreLockOverride;
+  showToast(scoreLockOverride ? 'Score lock overridden — scoring enabled' : 'Score lock re-enabled', 'ok');
+  renderAll();
+}
+function setStartingHole(day, holeNum){
+  // holeNum is 1-18 (user facing), convert to 0-17 index
+  const idx = Math.max(0, Math.min(17, (holeNum || 1) - 1));
+  const key = day === 'scramble' ? 'scramble' : 'stableford';
+  state[key].startingHole = idx;
+  // Set current hole to the starting hole if we haven't scored yet
+  const hasScores = day === 'scramble'
+    ? state.scramble.holes.some(h => typeof h.gross === 'number')
+    : state.stableford.holes.some(h => h.gross.some(g => typeof g === 'number'));
+  if(!hasScores) state[key].hole = idx;
+  saveState();
+  pushToFirebase();
+  renderAll();
+  if(idx > 0) showToast(`Starting on hole ${idx + 1}`, 'ok');
 }
 function setTab(tab){ state.ui.tab = tab; saveState(); renderAll(); }
 
@@ -3446,17 +3610,27 @@ function renderDay1(){
     return `<tr><td>${idx+1}</td><td>${m.par ?? '—'}</td><td>${m.si ?? '—'}</td><td>${typeof h.gross==='number'?h.gross:'—'}</td><td class="left">${driver}</td></tr>`;
   }).join('\n');
 
+  const scrambleLock = getScoreLockStatus('scramble');
+  const scrambleLockHtml = scrambleLock.locked ? `<div class="status info tight" style="text-align:center;padding:16px">
+    <div style="font-size:24px;margin-bottom:6px">🔒</div>
+    <div style="font-weight:700;margin-bottom:4px">Scoring locked</div>
+    <div style="font-size:11px;color:var(--muted)">${scrambleLock.reason}</div>
+    ${masterMode ? `<button class="btn slim gold" style="margin-top:8px;font-size:10px" onclick="toggleScoreLockOverride()">🔓 Admin: unlock early</button>` : ''}
+  </div>` : '';
+
   document.getElementById('day1').innerHTML = `
     <div class="card">
       <div class="section-title">Scramble</div>
       ${importedNote}
+      ${scrambleLockHtml}
       <input type="text" value="${(state.scramble.teamName || '').replace(/"/g,'&quot;')}" placeholder="Team name (required for export)" onchange="setScrambleTeamName(this.value)" />
       ${holeWarning && holeWarning.day==='scramble' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('scramble',1)">Skip anyway</button></div>` : ''}
       <div class="holebar tight">
         <button class="btn slim" onclick="navHole('scramble',-1)">← Prev</button>
-        <div class="hole-chip" style="flex:1;text-align:center">Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
+        <div class="hole-chip" style="flex:1;text-align:center">${state.scramble.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole)+1}/18</span> ` : ''}Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
         <button class="btn slim" onclick="navHole('scramble',1)">Next →</button>
       </div>
+      ${!state.scramble.holes.some(h=>typeof h.gross==='number') ? `<div style="text-align:center;margin:4px 0"><button class="btn slim ghost" style="font-size:10px" onclick="showStartingHoleModal('scramble')">⛳ Starting hole: ${(state.scramble.startingHole||0)+1}</button></div>` : (state.scramble.startingHole ? `<div style="text-align:center;font-size:9px;color:var(--muted);margin:2px 0">Started on hole ${state.scramble.startingHole+1}</div>` : '')}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:10px 0">
         <div class="meta"><div class="k">Total</div><div class="v">${totals.entered ? totals.total : '—'}</div></div>
         <div class="meta ${totals.entered ? toParClass(totals.toPar) : ''}"><div class="k">To par</div><div class="v">${totals.entered ? fmtToPar(totals.toPar) : '—'}</div></div>
@@ -3614,18 +3788,27 @@ function renderDay2(){
   }).join('\n');
 
   const pokerSetupCard = renderPokerSetupCard();
+  const stableLock = getScoreLockStatus('stableford');
+  const stableLockHtml = stableLock.locked ? `<div class="status info tight" style="text-align:center;padding:16px">
+    <div style="font-size:24px;margin-bottom:6px">🔒</div>
+    <div style="font-weight:700;margin-bottom:4px">Scoring locked</div>
+    <div style="font-size:11px;color:var(--muted)">${stableLock.reason}</div>
+    ${masterMode ? `<button class="btn slim gold" style="margin-top:8px;font-size:10px" onclick="toggleScoreLockOverride()">🔓 Admin: unlock early</button>` : ''}
+  </div>` : '';
   document.getElementById('day2').innerHTML = `
     ${!state.options.threePuttPoker ? pokerSetupCard : ''}
     <div class="card">
       <div class="section-title">Stableford</div>
       ${importedNote}
+      ${stableLockHtml}
       ${complete ? '' : `<div class="status warn tight">Complete the scorecard on Setup first. Stableford needs par and stroke index for all 18 holes.</div>`}
       ${holeWarning && holeWarning.day==='stableford' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('stableford',1)">Skip anyway</button></div>` : ''}
       <div class="holebar tight">
         <button class="btn slim" onclick="navHole('stableford',-1)">← Prev</button>
-        <div class="hole-chip" style="flex:1;text-align:center">Hole ${state.stableford.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
+        <div class="hole-chip" style="flex:1;text-align:center">${state.stableford.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.stableford.hole,state.stableford.startingHole)+1}/18</span> ` : ''}Hole ${state.stableford.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
         <button class="btn slim" onclick="navHole('stableford',1)">Next →</button>
       </div>
+      ${!state.stableford.holes.some(h=>h.gross.some(g=>typeof g==='number')) ? `<div style="text-align:center;margin:4px 0"><button class="btn slim ghost" style="font-size:10px" onclick="showStartingHoleModal('stableford')">⛳ Starting hole: ${(state.stableford.startingHole||0)+1}</button></div>` : (state.stableford.startingHole ? `<div style="text-align:center;font-size:9px;color:var(--muted);margin:2px 0">Started on hole ${state.stableford.startingHole+1}</div>` : '')}
       ${state.options.threePuttPoker && penaltyPlayers.length > 1 ? `<div class="status warn tight">More than one player 3-putted this hole. Flag the last one.</div>` : ''}
     </div>
 
@@ -4271,7 +4454,7 @@ function renderAbout(){
         <div style="display:flex;align-items:center;gap:12px">
           <div style="width:44px;height:44px;border-radius:50%;background:#5436DA;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">🤖</div>
           <div>
-            <a href="https://claude.ai" target="_blank" rel="noopener" style="font-weight:800;font-size:15px;color:var(--fg);text-decoration:none">Claude <span style="font-size:11px;color:var(--gold2);font-weight:400">↗ claude.ai</span></a>
+            <a href="https://claude.ai/referral/8MctuZWTWg" target="_blank" rel="noopener" style="font-weight:800;font-size:15px;color:var(--fg);text-decoration:none">Claude <span style="font-size:11px;color:var(--gold2);font-weight:400">↗ claude.ai</span></a>
             <div style="font-size:12px;color:var(--muted)">AI co-developer &amp; coding partner · Anthropic<br/>
               <span style="font-style:italic;opacity:.7">claude-sonnet-4-6 · Claude Code</span></div>
           </div>

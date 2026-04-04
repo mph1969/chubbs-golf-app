@@ -929,7 +929,7 @@ function generatePill(pid, context) {
 
 // SCRAMBLE
 function addScrambleTeam() {
-  state.scrambleTeams.push({ id: `sat-${Date.now()}`, name: `Team ${state.scrambleTeams.length + 1}`, scorerId: '', players: [] });
+  state.scrambleTeams.push({ id: `sat-${Date.now()}`, name: `Team ${state.scrambleTeams.length + 1}`, scorerId: '', startingHole: 1, players: [] });
   renderTeams();
 }
 function removeScrambleTeam(tIdx) { state.scrambleTeams.splice(tIdx, 1); renderTeams(); }
@@ -986,7 +986,7 @@ function addStablefordGroup() {
      const lastTime = state.stablefordGroups[state.stablefordGroups.length - 1].time;
      newTime = addMinutesToTime(lastTime, 8);
   }
-  state.stablefordGroups.push({ id: `sun-${Date.now()}`, name: `Group ${state.stablefordGroups.length + 1}`, time: newTime, scorerId: '', players: [] });
+  state.stablefordGroups.push({ id: `sun-${Date.now()}`, name: `Group ${state.stablefordGroups.length + 1}`, time: newTime, scorerId: '', startingHole: 1, players: [] });
   renderGroups();
 }
 function removeStablefordGroup(gIdx) { state.stablefordGroups.splice(gIdx, 1); renderGroups(); }
@@ -1017,6 +1017,9 @@ function renderGroups() {
         <div class="team-header">
           <input type="text" value="${grp.name}" onchange="updateStablefordField(${gIdx}, 'name', this.value)" style="flex:1; width:60%">
           <input type="time" value="${grp.time}" onchange="updateStablefordField(${gIdx}, 'time', this.value)" style="flex:0 0 100px; margin-left:8px;">
+          <select onchange="updateStablefordField(${gIdx}, 'startingHole', parseInt(this.value))" style="flex:0 0 65px; margin-left:8px;" title="Starting hole">
+            ${Array.from({length:18},(_,i)=>`<option value="${i+1}" ${(grp.startingHole||1)===(i+1)?'selected':''}>H${i+1}</option>`).join('')}
+          </select>
           <button class="remove-btn" onclick="removeStablefordGroup(${gIdx})">✕</button>
         </div>
         
@@ -1080,7 +1083,7 @@ function buildEventBundle() {
       players = players.filter(p => p !== scorer);
       players.push(scorer); 
     }
-    return { teamId: t.id, teamName: t.name, scorerPlayerId: scorer, playerIds: players };
+    return { teamId: t.id, teamName: t.name, startingHole: t.startingHole || 1, scorerPlayerId: scorer, playerIds: players };
   }).filter(t => t.playerIds.length > 0);
 
   const d2Groups = state.stablefordGroups.map(g => {
@@ -1090,7 +1093,7 @@ function buildEventBundle() {
       players = players.filter(p => p !== scorer);
       players.push(scorer); 
     }
-    return { groupId: g.id, groupName: g.name, teeTime: g.time, scorerPlayerId: scorer, playerIds: players };
+    return { groupId: g.id, groupName: g.name, teeTime: g.time, startingHole: g.startingHole || 1, scorerPlayerId: scorer, playerIds: players };
   }).filter(g => g.playerIds.length > 0);
 
   const fmtDate = (dString) => {
