@@ -348,19 +348,19 @@ const SYNC = {
 // Jacket history is seeded on first load; manual edits in admin roster form always win
 const ROSTER = [
   {name:'KASPER',  hcp:4,  gold:0, clown:0, scram:0, roles:['Golfing Advisor']},
-  {name:'DIEGO',   hcp:11, gold:2, clown:0, scram:3, roles:[]},   // S1:Nov,May; scram S3:Nov,Jan,S4:Feb
+  {name:'DIEGO',   hcp:18, gold:2, clown:0, scram:3, roles:[]},   // S1:Nov,May; scram S3:Nov,Jan,S4:Feb
   {name:'AARON',   hcp:14, gold:1, clown:0, scram:0, roles:[]},   // S2:Feb
   {name:'AKI',     hcp:15, gold:1, clown:0, scram:3, roles:[]},   // S2:Jan; scram S3:Dec,Jan,Feb
-  {name:'RYAN N',  hcp:15, gold:1, clown:0, scram:2, roles:['Sensibility Rep']}, // S2:May; scram S4:Oct,Jan
+  {name:'RYAN N',  hcp:13, gold:1, clown:0, scram:2, roles:['Sensibility Rep']}, // S2:May; scram S4:Oct,Jan
   {name:'LUKE',    hcp:16, gold:4, clown:0, scram:3, roles:['Chair']}, // S1:Sep,Jan; S3:Sep,May; scram S3:Oct,Apr,May
   {name:'JULIUS',  hcp:17, gold:0, clown:0, scram:1, roles:[]},   // scram S3:Sep
   {name:'JACK S',  hcp:19, gold:4, clown:1, scram:2, roles:['Quota Hire']}, // S1:Feb,Jun; S2:Nov,Dec; clown S2:Jan; scram S3:Sep,Nov
   {name:'MIKE W',  hcp:19, gold:2, clown:1, scram:2, roles:[]},   // S2:Oct; S3:Nov; clown S1:Jan; scram S3:Dec,S4:Nov
   {name:'KEVIN A', hcp:20, gold:2, clown:1, scram:0, roles:[]},   // S3:Jan; S4:Dec; clown S2:Apr
   {name:'POS',     hcp:20, gold:1, clown:2, scram:1, roles:[]},   // S1:Mar; clown S1:Sep(shared),S3:May; scram S3:Feb
-  {name:'JAMIE',   hcp:22, gold:3, clown:0, scram:2, roles:[]},   // S2:Jun; S3:Mar; S4:Oct; scram S4:Dec,Jan
-  {name:'HANSON',  hcp:22, gold:1, clown:0, scram:1, roles:[]},   // S4:Sep; scram S3:Sep
-  {name:'DARYL',   hcp:24, gold:0, clown:1, scram:0, roles:[]},   // clown S1:Sep(shared)
+  {name:'JAMIE',   hcp:21, gold:3, clown:0, scram:2, roles:[]},   // S2:Jun; S3:Mar; S4:Oct; scram S4:Dec,Jan
+  {name:'HANSON',  hcp:15, gold:1, clown:0, scram:1, roles:[]},   // S4:Sep; scram S3:Sep
+  {name:'DARYL',   hcp:23, gold:0, clown:1, scram:0, roles:[]},   // clown S1:Sep(shared)
   {name:'MARK',    hcp:25, gold:1, clown:0, scram:0, roles:['Co-chair']}, // S1:Dec
   {name:'ADAM',    hcp:25, gold:0, clown:0, scram:0, roles:[]},
   {name:'ANTHONY', hcp:25, gold:0, clown:1, scram:2, roles:[]},   // clown S2:May; scram S3:Oct,Jun
@@ -368,10 +368,10 @@ const ROSTER = [
   {name:'STUART',  hcp:25, gold:0, clown:1, scram:1, roles:[]},   // clown S1:May; scram S3:Apr
   {name:'JACK M',  hcp:26, gold:1, clown:0, scram:0, roles:[]},   // S2:Mar
   {name:'SPENNY',  hcp:27, gold:0, clown:0, scram:0, roles:['Co-chair']},
-  {name:'JORDAN',  hcp:28, gold:1, clown:0, scram:3, roles:[]},   // S3:Oct; scram S3:Jun,S4:Oct,Dec
+  {name:'JORDAN',  hcp:22, gold:1, clown:0, scram:3, roles:[]},   // S3:Oct; scram S3:Jun,S4:Oct,Dec
   {name:'STEVE',   hcp:28, gold:0, clown:1, scram:3, roles:[]},   // clown S3:Oct; scram S3:Nov,Mar,S4:Nov
   {name:'TAPAS',   hcp:28, gold:0, clown:1, scram:1, roles:[]},   // clown S2:Dec; scram S3:Dec
-  {name:'TERRY',   hcp:28, gold:1, clown:1, scram:2, roles:['Scramble Chair']}, // S2:Apr; clown S4:Dec; scram S4:Sep,Jan
+  {name:'TERRY',   hcp:28, gold:1, clown:1, scram:2, roles:['Scramble Chair']}, // S2:Apr; clown S4:Dec; scram S4:Sep,Jan — HCP confirmed Apr 2026
   {name:'MATTY B', hcp:29, gold:0, clown:0, scram:0, roles:[]},
   {name:'ROSS',    hcp:29, gold:1, clown:0, scram:1, roles:[]},   // S3:Jun; scram S3:Dec
   {name:'ANDY',    hcp:30, gold:1, clown:0, scram:1, roles:[]},   // S1:Apr; scram S3:Jan
@@ -388,6 +388,7 @@ const JACKET_SEEDS = [
   {match:'nick',   gold:1, clown:1, scram:1, roles:[]},   // gold S4:Feb; clown S3:Mar; scram S4:Dec,Jan
   {match:'matt',   gold:1, clown:0, scram:2, roles:[]},   // gold S4:Nov; scram S4:Sep,Oct
   {match:'graeme', gold:0, clown:1, scram:0, roles:[]},   // clown S4:Jan
+  {match:'george', gold:1, clown:0, scram:0, roles:[]},   // gold S5:recent
 ];
 
 
@@ -622,7 +623,7 @@ const DEFAULT_STATE = {
     penalty3:10,
     penalty4:20
   },
-  scramble:{teamName:'', hole:0, startingHole:0, holes:blankScrambleHoles()},
+  scramble:{teamName:'', hole:0, startingHole:0, minDrives:4, holes:blankScrambleHoles()},
   stableford:{hole:0, startingHole:0, holes:blankStablefordHoles()},
   poker:{
     stampCounter:0,
@@ -880,6 +881,7 @@ function pushToFirebase(){
     holes:    state.scramble.holes,
     hole:     state.scramble.hole,
     startingHole: state.scramble.startingHole || 0,
+    minDrives: state.scramble.minDrives || 4,
     teamName: state.scramble.teamName,
     ts:       now
   }).catch(()=>{});
@@ -1620,6 +1622,7 @@ function _doApplyBundle(bundle, requestedPlayerId){
   if(Number.isFinite(parseInt(normalized.options.penalty3, 10))) state.options.penalty3 = Math.max(0, parseInt(normalized.options.penalty3, 10));
   if(Number.isFinite(parseInt(normalized.options.penalty4plus, 10))) state.options.penalty4 = Math.max(0, parseInt(normalized.options.penalty4plus, 10));
   if(Number.isFinite(parseInt(normalized.options.penalty4, 10))) state.options.penalty4 = Math.max(0, parseInt(normalized.options.penalty4, 10));
+  if(Number.isFinite(parseInt(normalized.options.minDrives, 10))) state.scramble.minDrives = Math.max(1, Math.min(9, parseInt(normalized.options.minDrives, 10)));
 
   // Start Firebase sync for this event
   const evId = normalized.event && normalized.event.eventId;
@@ -2061,6 +2064,7 @@ function displayHoleNum(day){
   return state[key].hole + 1; // state.hole is always the actual course hole index
 }
 
+function getMinDrives(){ return state.scramble.minDrives || 4; }
 function scrambleTotals(){
   const scramblePlayers = currentPlayers('scramble');
   const course = activeCourse('day1');
@@ -3579,25 +3583,26 @@ function renderDay1(){
   const meta = holeMeta(state.scramble.hole, 'day1');
   const hole = state.scramble.holes[state.scramble.hole];
   const totals = scrambleTotals();
-  const impossible = totals.drives.map(c => Math.max(0, 4 - c) > (18 - state.scramble.hole));
+  const minD = getMinDrives();
+  const impossible = totals.drives.map(c => Math.max(0, minD - c) > (18 - state.scramble.hole));
   const importedTeam = activeEventDay1Team();
   const drivePills = scramblePlayers.map((p, idx) => {
     const count = totals.drives[idx];
-    const needed = Math.max(0, 4 - count);
+    const needed = Math.max(0, minD - count);
     const holesLeft = 18 - state.scramble.hole;
     const pillColor = needed === 0
       ? 'background:#1a3d2b;color:#5cf5a0;border:1px solid #2a6b44'
       : (count > 0 && needed <= holesLeft)
         ? 'background:#2d2a0a;color:#f5d85c;border:1px solid #6b5a18'
         : 'background:#3d1a1a;color:#f55c5c;border:1px solid #6b2020';
-    return `<span style="display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;${pillColor}">${fmtName(p.name, idx)} ${count}/4</span>`;
+    return `<span style="display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;${pillColor}">${fmtName(p.name, idx)} ${count}/${minD}</span>`;
   }).join(' ');
   const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedTeam ? (importedTeam.teamName || importedTeam.teamId || 'Team') : 'Not assigned'} · ${scramblePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedTeam, state.eventBundle)}</span><span class="small"> · Course · ${course.name}${course.detail ? ' · ' + course.detail : ''}</span><br/><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${drivePills}</div></div>` : '';
   const summary = scramblePlayers.map((p, idx) => {
     const count = totals.drives[idx];
-    const needed = Math.max(0, 4 - count);
+    const needed = Math.max(0, minD - count);
     const cls = needed === 0 ? 'ok' : (impossible[idx] ? 'warn' : 'info');
-    return `<div class="status ${cls}"><strong>${fmtName(p.name, idx)}</strong><br>${count} drives used · ${needed} still needed</div>`;
+    return `<div class="status ${cls}"><strong>${fmtName(p.name, idx)}</strong><br>${count}/${minD} drives used · ${needed} still needed</div>`;
   }).join('\n');
 
   const driverButtons = scramblePlayers.map((p, idx) =>
@@ -3654,7 +3659,14 @@ function renderDay1(){
 
     <div class="card">
       <div class="section-title">Drive requirement tracker</div>
-      <div class="small">A red warning means a player is running out of holes to reach the required four drives.</div>
+      <div class="small" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+        <span>Each player must use at least <strong>${minD}</strong> drives.</span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px">
+          Min: <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.max(1,getMinDrives()-1);saveState();renderAll()">−</button>
+          <strong>${minD}</strong>
+          <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.min(9,getMinDrives()+1);saveState();renderAll()">+</button>
+        </span>
+      </div>
       ${summary}
     </div>
 

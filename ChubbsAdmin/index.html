@@ -252,6 +252,10 @@
           <div><label>Front 9</label><select id="scramble-front"><option value="A">A - Lychee</option><option value="B">B - Lake</option><option value="C">C - River</option></select></div>
           <div><label>Back 9</label><select id="scramble-back"><option value="B">B - Lake</option><option value="C">C - River</option><option value="A">A - Lychee</option></select></div>
         </div>
+        <div class="grid-3" style="margin-top:8px;">
+          <div><label>Min drives per player</label><input type="number" id="scramble-min-drives" value="4" min="1" max="9" style="width:60px"></div>
+          <div style="grid-column:span 2;font-size:11px;color:var(--muted);align-self:end;padding-bottom:8px">Standard: 4-person = 4 drives, 3-person = 6 drives. Organiser can override.</div>
+        </div>
 
         <div class="section-divider"></div>
         
@@ -1067,6 +1071,7 @@ function buildEventBundle() {
   const lbAccess = lbRadio ? lbRadio.value : 'open';
   const opts = {
     threePuttPoker: true, pokerMode: "digital",
+    minDrives: parseInt(document.getElementById('scramble-min-drives').value) || 4,
     ante: parseInt(document.getElementById('ev-ante').value) || 50,
     penalty3: parseInt(document.getElementById('ev-pen3').value) || 10,
     penalty4plus: parseInt(document.getElementById('ev-pen4').value) || 20,
