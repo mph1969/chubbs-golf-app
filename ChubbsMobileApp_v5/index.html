@@ -90,8 +90,11 @@
     .hcp-badge{padding:4px 8px;border-radius:999px;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.28);color:var(--gold2);font-size:11px;font-weight:800}
     .stepper{display:grid;grid-template-columns:42px 1fr 42px;gap:8px;align-items:center}
     .stepper button{height:42px;border:none;border-radius:12px;background:#173224;color:var(--gold2);font-size:22px;cursor:pointer}
-    .stepper .val{height:42px;border-radius:12px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;background:#0b1b14}
+    .stepper .val{height:42px;border-radius:12px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;background:#0b1b14;transition:border-color 0.15s,background 0.15s}
     .stepper .val.empty{color:#5f7268}
+    .stepper .val.entered{border-color:rgba(42,163,106,0.4);background:rgba(42,163,106,0.06)}
+    .player-card.scored{background:rgba(42,163,106,0.03);border-color:rgba(42,163,106,0.2)}
+    .player-card.partial{background:rgba(214,176,90,0.03);border-color:rgba(214,176,90,0.2)}
     .holebar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
     .hole-chip{padding:7px 10px;border-radius:999px;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.25);font-size:12px;color:var(--gold2);font-weight:800}
     .hole-nav{display:flex;gap:8px;flex-wrap:wrap}
@@ -2736,7 +2739,9 @@ function exportScrambleCsv(){
 function exportStablefordCsv(){
   const stablePlayers = currentPlayers('stableford');
   const course = activeCourse('day2');
-  const rows = [['event','course','player','hcp','hole','par','si','shots_received','gross','net','stableford_points','putts','poker_cards_awarded','poker_penalty_rmb']];
+  const group = activeEventDay2Group();
+  const groupName = group ? (group.groupName || group.groupId || 'Group') : '';
+  const rows = [['event','course','group','player','hcp','hole','par','si','shots_received','gross','net','stableford_points','putts','poker_cards_awarded','poker_penalty_rmb']];
   stablePlayers.forEach((player, idx) => {
     state.stableford.holes.forEach((hole, hIdx) => {
       const meta = course.holes[hIdx] || {};
@@ -2749,6 +2754,7 @@ function exportStablefordCsv(){
       rows.push([
         state.event.name,
         course.name,
+        groupName,
         fmtName(player.name, idx),
         player.hcp,
         hIdx + 1,
@@ -2767,6 +2773,7 @@ function exportStablefordCsv(){
     rows.push([
       state.event.name,
       course.name,
+      groupName,
       fmtName(player.name, idx),
       player.hcp,
       'TOTAL',
@@ -2820,6 +2827,148 @@ function exportSummary(){
     });
   }
   navigator.clipboard.writeText(lines.join('\n')).then(() => showToast('Summary copied to clipboard.', 'ok'));
+}
+// ── Full Event Export (admin) — all groups combined ──
+function exportFullEvent(){
+  const ranking = leaderboardPlayers().sort((a,b) => b.points - a.points || b.back9 - a.back9 || a.hcp - b.hcp);
+  const scramblePlayers = currentPlayers('scramble');
+  const scramble = scrambleTotals();
+  const poker = pokerSummary();
+  const day1Course = activeCourse('day1');
+  const day2Course = activeCourse('day2');
+  const ev = state.eventBundle && state.eventBundle.event || {};
+  const currency = ev.currency || 'RMB';
+  const day1Team = activeEventDay1Team();
+
+  // ── SHEET 1: Stableford Results (all players, all groups) ──
+  const stableRows = [['rank','player','hcp','group','points','gross','back9','holes_scored','poker_cards','poker_penalty','source']];
+  ranking.filter(r => r.entered > 0).forEach((r, i) => {
+    // Find which group this player is in
+    let grpName = '';
+    if(hasImportedEvent()){
+      const grp = (state.eventBundle.day2Groups || []).find(g => (g.playerIds || []).includes(
+        (state.eventBundle.players.find(p => (p.displayName||p.playerId) === r.name) || {}).playerId
+      ));
+      grpName = grp ? (grp.groupName || '') : '';
+    }
+    stableRows.push([i+1, r.name, r.hcp, grpName, r.points, r.gross, r.back9, r.entered, r.pokerCards, r.pokerPenalty, r.source]);
+  });
+
+  // ── SHEET 2: Scramble Results ──
+  const scramRows = [['team','course','total_gross','to_par','holes_scored']];
+  scramRows.push([
+    state.scramble.teamName || (day1Team && day1Team.teamName) || 'Team',
+    day1Course.name,
+    scramble.entered ? scramble.total : '',
+    scramble.entered ? scramble.toPar : '',
+    scramble.entered
+  ]);
+  // Add remote teams if available
+  Object.values(SYNC.remoteTeams || {}).forEach(td => {
+    if(!td || !td.holes) return;
+    let total = 0, entered = 0, parTotal = 0;
+    td.holes.forEach((h, i) => {
+      if(typeof h.gross === 'number'){ total += h.gross; entered++; }
+      const cp = day1Course.holes[i];
+      if(cp && cp.par) parTotal += cp.par;
+    });
+    scramRows.push([td.teamName || '?', day1Course.name, entered ? total : '', entered ? total - parTotal : '', entered]);
+  });
+
+  // ── SHEET 3: Awards Summary ──
+  const gold = ranking.find(r => r.entered > 0) || null;
+  const clown = [...ranking].filter(r => r.entered > 0).sort((a,b) => a.points - b.points || a.back9 - b.back9)[0] || null;
+  const awardsRows = [['award','player','detail']];
+  if(gold) awardsRows.push(['Gold Jacket', gold.name, `${gold.points} pts · ${gold.gross} gross · HCP ${gold.hcp}`]);
+  if(clown && clown !== gold) awardsRows.push(['Clown Jacket', clown.name, `${clown.points} pts · ${clown.gross} gross · HCP ${clown.hcp}`]);
+  const lgCSV = [...ranking].filter(r => r.entered >= 18).sort((a,b) => a.gross - b.gross)[0] || null;
+  if(lgCSV) awardsRows.push(['Low Gross', lgCSV.name, `${lgCSV.gross} gross · HCP ${lgCSV.hcp}`]);
+  if(state.options.threePuttPoker && poker.pot > 0){
+    const winner = poker.players.reduce((a,b) => a.cards > b.cards ? a : b, poker.players[0]);
+    awardsRows.push(['Poker Winner', winner ? winner.name : '?', `${winner ? winner.cards : 0} cards · Pot ${poker.pot} ${currency}`]);
+  }
+  // Best scramble team
+  const allScrambles = [{name: state.scramble.teamName || 'My Team', total: scramble.total, entered: scramble.entered}];
+  Object.values(SYNC.remoteTeams || {}).forEach(td => {
+    if(!td || !td.holes) return;
+    let t=0, e=0;
+    td.holes.forEach(h => { if(typeof h.gross === 'number'){ t += h.gross; e++; } });
+    allScrambles.push({name: td.teamName || '?', total: t, entered: e});
+  });
+  const bestScram = allScrambles.filter(s => s.entered >= 18).sort((a,b) => a.total - b.total)[0];
+  if(bestScram) awardsRows.push(['Scramble Winner', bestScram.name, `${bestScram.total} gross`]);
+
+  // ── Combine into one CSV with section headers ──
+  const lines = [];
+  lines.push(`# ${ev.displayName || ev.name || 'Chubbs Event'}`);
+  lines.push(`# ${ev.satDate || ''} / ${ev.sunDate || ''}`);
+  lines.push('');
+  lines.push('## AWARDS');
+  awardsRows.forEach(r => lines.push(r.map(csvCell).join(',')));
+  lines.push('');
+  lines.push('## STABLEFORD RESULTS (all groups)');
+  stableRows.forEach(r => lines.push(r.map(csvCell).join(',')));
+  lines.push('');
+  lines.push('## SCRAMBLE RESULTS (all teams)');
+  scramRows.forEach(r => lines.push(r.map(csvCell).join(',')));
+  lines.push('');
+  lines.push('## POKER SUMMARY');
+  lines.push(['player','cards','penalties','total_in','ante_doubled'].join(','));
+  poker.players.forEach(p => lines.push([p.name, p.cards, p.penalty, p.totalContribution, p.doubleAnte ? 'yes' : ''].map(csvCell).join(',')));
+  lines.push(['POT','','',poker.pot,''].join(','));
+
+  const filename = `${slugify(ev.name || 'chubbs')}-full-results.csv`;
+  downloadText(filename, lines.join('\n'), 'text/csv;charset=utf-8');
+  showToast('Full event export downloaded!', 'ok');
+}
+
+// ── Awards card export (formatted for WeChat/sharing) ──
+function exportAwardsCard(){
+  const ranking = leaderboardPlayers().sort((a,b) => b.points - a.points || b.back9 - a.back9 || a.hcp - b.hcp);
+  const scramble = scrambleTotals();
+  const poker = pokerSummary();
+  const ev = state.eventBundle && state.eventBundle.event || {};
+  const currency = ev.currency || 'RMB';
+  const gold = ranking.find(r => r.entered > 0) || null;
+  const clown = [...ranking].filter(r => r.entered > 0).sort((a,b) => a.points - b.points || a.back9 - b.back9)[0] || null;
+  const spennyPlaying = ranking.some(r => r.name && r.name.toUpperCase().includes('SPENNY'));
+
+  const lines = [];
+  lines.push(`⛳ ${ev.displayName || ev.name || 'CHUBBS PETERSON INVITATIONAL'}`);
+  lines.push(`📅 ${ev.satDate ? formatEventDate(ev.satDate,'long') : ''} — ${ev.sunDate ? formatEventDate(ev.sunDate,'long') : ''}`);
+  lines.push('');
+  lines.push('━━━ 🏆 AWARDS ━━━');
+  if(gold && gold.entered > 0) lines.push(`🥇 Gold Jacket: ${gold.name} — ${gold.points} pts (${gold.gross} gross)`);
+  if(clown && clown.entered > 0 && clown !== gold) lines.push(`🤡 Clown Jacket: ${clown.name} — ${clown.points} pts`);
+  const lgAward = [...ranking].filter(r => r.entered >= 18).sort((a,b) => a.gross - b.gross)[0] || null;
+  if(lgAward) lines.push(`🔥 Low Gross: ${lgAward.name} — ${lgAward.gross}`);
+  if(scramble.entered >= 18) lines.push(`🏆 Scramble: ${state.scramble.teamName || 'Team'} — ${scramble.total} gross (${fmtToPar(scramble.toPar)})`);
+  if(state.options.threePuttPoker && poker.pot > 0){
+    const winner = poker.players.reduce((a,b) => a.cards > b.cards ? a : b, poker.players[0]);
+    lines.push(`🃏 Poker: ${winner ? winner.name : '?'} wins ${poker.pot} ${currency} (${winner ? winner.cards : 0} cards)`);
+  }
+  lines.push('');
+  lines.push('━━━ 📊 STABLEFORD ━━━');
+  ranking.filter(r => r.entered > 0).forEach((r, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : '  ';
+    lines.push(`${medal} ${i+1}. ${r.name} — ${r.points} pts · ${r.gross} gross · HCP ${r.hcp}`);
+  });
+  if(!spennyPlaying) lines.push(`💀 DNF. SPENNY — He went home.`);
+  if(state.options.threePuttPoker && poker.pot > 0){
+    lines.push('');
+    lines.push('━━━ 🃏 PUTT POKER ━━━');
+    lines.push(`Pot: ${poker.pot} ${currency}`);
+    poker.players.forEach(p => {
+      lines.push(`${p.name}: ${p.cards} cards · -${p.totalContribution} ${currency}${p.doubleAnte ? ' (doubled)' : ''}`);
+    });
+  }
+  lines.push('');
+  lines.push('— Chubbs Peterson Invitational 🐊');
+
+  const text = lines.join('\n');
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(() => showToast('📋 Awards card copied — paste into WeChat!', 'ok'));
+  }
 }
 function scrambleBeforeStableford(){
   const ev = state.eventBundle && state.eventBundle.event;
@@ -3573,8 +3722,10 @@ function renderResultsSummary(){
   const spennyPlaying = ranking.some(r => r.name && r.name.toUpperCase().includes('SPENNY'));
 
   const items = [];
+  const lowGross = [...ranking].filter(r => r.entered >= 18).sort((a,b) => a.gross - b.gross)[0] || null;
   if(gold && gold.entered > 0) items.push(`<div class="results-item"><div>🥇 <strong>Gold Jacket</strong></div><div style="text-align:right"><strong>${gold.name}</strong> · ${gold.points} pts</div></div>`);
   if(clown && clown.entered > 0 && clown !== gold) items.push(`<div class="results-item"><div>🤡 <strong>Clown Jacket</strong></div><div style="text-align:right"><strong>${clown.name}</strong> · ${clown.points} pts</div></div>`);
+  if(lowGross) items.push(`<div class="results-item"><div>🔥 <strong>Low Gross</strong></div><div style="text-align:right"><strong>${lowGross.name}</strong> · ${lowGross.gross}</div></div>`);
   if(scrambleResult) items.push(`<div class="results-item"><div>🏆 <strong>Scramble</strong></div><div style="text-align:right">${scrambleResult}</div></div>`);
   if(state.options.threePuttPoker && poker.pot > 0){
     const winner = poker.players.reduce((a,b) => a.cards > b.cards ? a : b, poker.players[0]);
@@ -3595,12 +3746,13 @@ function renderResultsSummary(){
   return `<div class="card results-card">
     <div class="section-title" style="margin-bottom:10px">🏆 Weekend Results</div>
     ${items.join('')}
-    <div style="margin-top:12px">
-      <button class="btn gold full" onclick="copyText(${JSON.stringify(copyLines.join('\n')).replace(/'/g,'\\\'')}).then(()=>showToast('Results copied — paste into WeChat!','ok'))">📋 Copy results to WeChat</button>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:6px">
+      <button class="btn gold full" onclick="exportAwardsCard()">📋 Copy awards to WeChat</button>
+      ${masterMode ? `<div style="display:flex;gap:6px">
+        <button class="btn blue full" onclick="exportFullEvent()">📊 Full event CSV</button>
+        <button class="btn full" onclick="showConfirm('Award Gold Jacket to ${gold?gold.name:'?'} and Clown Jacket to ${clown&&clown!==gold?clown.name:'?'}?',awardJackets)">🧥 Award Jackets</button>
+      </div>` : ''}
     </div>
-    ${masterMode ? `<div style="margin-top:8px">
-      <button class="btn blue full" onclick="showConfirm('Award Gold Jacket to ${gold?gold.name:'?'} and Clown Jacket to ${clown&&clown!==gold?clown.name:'?'}?',awardJackets)">🧥 Award Jackets</button>
-    </div>` : ''}
   </div>`;
 }
 function awardJackets(){
@@ -3826,7 +3978,7 @@ function renderDay2(){
       ? `<div style="display:flex;gap:8px;align-items:center">
            <div class="stepper" style="flex:1">
              <button onclick="stepScore('stableford',${idx},-1,'putts')">−</button>
-             <div class="val ${typeof putts==='number' ? '' : 'empty'}">${typeof putts==='number' ? (putts >= 4 ? '4+' : putts) : '—'}</div>
+             <div class="val ${hasPutts ? 'entered' : 'empty'}">${hasPutts ? (putts >= 4 ? '4+' : putts) : '—'}</div>
              <button onclick="stepScore('stableford',${idx},1,'putts')">+</button>
            </div>
            ${typeof putts==='number' ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
@@ -3834,10 +3986,17 @@ function renderDay2(){
          ${quickPuttButtons(idx)}`
       : '';
 
+    const hasGross = typeof gross === 'number';
+    const hasPutts = typeof putts === 'number';
+    const needsPutts = state.options.threePuttPoker;
+    const fullyScored = hasGross && (!needsPutts || hasPutts);
+    const partialScored = hasGross && needsPutts && !hasPutts;
+    const cardState = fullyScored ? ' scored' : (partialScored ? ' partial' : '');
+
     return `
-      <div class="player-card p${idx}">
+      <div class="player-card p${idx}${cardState}">
         <div class="player-head">
-          <div class="player-name">${fmtName(p.name, idx)}${jacketDots(p.name)}</div>
+          <div class="player-name">${fmtName(p.name, idx)}${jacketDots(p.name)}${fullyScored ? ' <span style="color:#2aa36a;font-size:11px">✓</span>' : ''}</div>
           <div class="toolbar tight">
             ${showFlag ? `<button class="flag-btn ${flagOn ? 'on' : 'safe'}" onclick="setLastPenaltyFlag(${idx})">🚩 ${flagOn ? 'Last 3-putt+' : 'Mark last 3-putt+'}</button>` : ''}
             <div class="hcp-badge">HCP ${p.hcp}</div>
@@ -3849,13 +4008,13 @@ function renderDay2(){
             <div style="display:flex;gap:8px;align-items:center">
               <div class="stepper" style="flex:1">
                 <button onclick="stepScore('stableford',${idx},-1,'gross')">−</button>
-                ${typeof gross==='number'
-                  ? `<div class="val">${gross}</div>`
+                ${hasGross
+                  ? `<div class="val entered">${gross}</div>`
                   : (meta.par ? `<button class="val" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
                               : `<div class="val empty">—</div>`)}
                 <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
               </div>
-              ${typeof gross==='number' ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear">✕</button>` : ''}
+              ${hasGross ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear">✕</button>` : ''}
             </div>
             ${typeof gross==='number' && typeof meta.par==='number' ? `<div class="small tight" style="color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'}">vs par: ${fmtToPar(gross - meta.par)}</div>` : ''}
             <div class="toolbar tight" style="margin-top:6px">
