@@ -3700,27 +3700,53 @@ function renderDay1(){
         ${typeof hole.gross==='number' && typeof meta.par==='number' ? `<div style="text-align:center;margin-top:6px;font-size:13px;font-weight:700;color:${hole.gross-meta.par<0?'#a5f0c5':hole.gross-meta.par>0?'#ffb5ae':'var(--gold2)'}">vs par: ${fmtToPar(hole.gross - meta.par)}</div>` : `<div style="text-align:center;margin-top:6px;font-size:11px;color:var(--muted)">Tap the number to enter par</div>`}
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 10px">
-        <div class="meta"><div class="k">Round Total</div><div class="v">${totals.entered ? totals.total : '—'}</div></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:4px 0 10px">
+        <div class="meta"><div class="k">Total</div><div class="v">${totals.entered ? totals.total : '—'}</div></div>
         <div class="meta ${totals.entered ? toParClass(totals.toPar) : ''}"><div class="k">To par</div><div class="v">${totals.entered ? fmtToPar(totals.toPar) : '—'}</div></div>
+        <div class="meta"><div class="k">Progress</div><div class="v">${totals.entered}/18</div></div>
       </div>
 
       <label class="tight">Drive used on this hole</label>
       <div class="driver-grid">${driverButtons}</div>
+
+      ${(()=>{
+        // Drive urgency alerts — warn when a player is running out of holes
+        const playPos = holeIdxToPlayOrder(state.scramble.hole, state.scramble.startingHole || 0);
+        const holesLeft = 17 - playPos; // holes remaining after current
+        const urgent = scramblePlayers.map((p, idx) => {
+          const needed = Math.max(0, minD - totals.drives[idx]);
+          if(needed > 0 && holesLeft <= needed + 1 && holesLeft > 0)
+            return {name: fmtName(p.name, idx), needed, holesLeft};
+          return null;
+        }).filter(Boolean);
+        return urgent.length ? `<div style="margin-top:8px;padding:8px 10px;border-radius:8px;background:rgba(245,92,92,0.08);border:1px solid rgba(245,92,92,0.3)">
+          ${urgent.map(u => `<div style="font-size:11px;color:#f55c5c;font-weight:700;padding:2px 0">⚠️ ${u.name} needs ${u.needed} more drive${u.needed>1?'s':''} — only ${u.holesLeft} hole${u.holesLeft>1?'s':''} left!</div>`).join('')}
+        </div>` : '';
+      })()}
     </div>
 
-    <div class="card">
-      <div class="section-title">Drive requirement tracker</div>
-      <div class="small" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-        <span>Each player must use at least <strong>${minD}</strong> drives.</span>
-        <span style="display:flex;align-items:center;gap:4px;font-size:11px">
-          Min: <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.max(1,getMinDrives()-1);saveState();renderAll()">−</button>
-          <strong>${minD}</strong>
-          <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.min(9,getMinDrives()+1);saveState();renderAll()">+</button>
-        </span>
+    <details style="margin-bottom:0">
+      <summary style="list-style:none;cursor:pointer">
+        <div class="card" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between">
+          <div class="section-title" style="margin:0">Drive tracker</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="display:flex;flex-wrap:wrap;gap:4px">${drivePills}</div>
+            <span class="small" style="color:var(--muted)">▸</span>
+          </div>
+        </div>
+      </summary>
+      <div class="card" style="border-top:none;border-radius:0 0 22px 22px;margin-top:-1px">
+        <div class="small" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
+          <span>Min <strong>${minD}</strong> drives each</span>
+          <span style="display:flex;align-items:center;gap:4px;font-size:11px">
+            <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.max(1,getMinDrives()-1);saveState();renderAll()">−</button>
+            <strong>${minD}</strong>
+            <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.min(9,getMinDrives()+1);saveState();renderAll()">+</button>
+          </span>
+        </div>
+        ${summary}
       </div>
-      ${summary}
-    </div>
+    </details>
 
     ${renderScrambleScorecard()}
 
@@ -3877,6 +3903,41 @@ function renderDay2(){
     </div>
 
     <div class="stack">${playerCards}</div>
+
+    <!-- NEXT HOLE — bottom of player cards for natural flow -->
+    <div style="display:flex;gap:8px;margin:4px 0 8px">
+      <button class="btn slim" onclick="navHole('stableford',-1)" style="flex:1;padding:12px;font-size:13px">← Prev</button>
+      <button class="btn gold slim" onclick="navHole('stableford',1)" style="flex:2;padding:12px;font-size:13px;font-weight:800">Next → Hole ${(() => {
+        const order = getHoleOrder('stableford');
+        const playPos = holeIdxToPlayOrder(state.stableford.hole, state.stableford.startingHole || 0);
+        return playPos < 17 ? order[playPos + 1] + 1 : '✓';
+      })()}</button>
+    </div>
+
+    ${state.options.threePuttPoker ? `
+    <details${poker.pot > (poker.players.length * state.options.ante) ? ' open' : ''}>
+      <summary style="list-style:none;cursor:pointer">
+        <div class="card" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between">
+          <div class="section-title" style="margin:0">🃏 Putt Poker</div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="font-size:12px;font-weight:700;color:var(--gold2)">Pot: ${state.options.ante > 0 ? (poker.pot + ' ' + (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency || 'RMB')) : '—'}</span>
+            <span class="small" style="color:var(--muted)">▸</span>
+          </div>
+        </div>
+      </summary>
+      <div class="card" style="border-top:none;border-radius:0 0 22px 22px;margin-top:-1px">
+        ${poker.players.map(p => {
+          const isLast = p.idx === poker.lastPenaltyPlayer;
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line);font-size:12px">
+            <div><strong style="color:${['#2aa36a','#79b0e3','#d6b05a','#e07060'][p.idx]||'var(--text)'}">${p.name}</strong>${isLast ? ' <span style="color:#f55c5c;font-size:10px">· last 3-putt</span>' : ''}</div>
+            <div style="display:flex;gap:12px;color:var(--muted)">
+              <span>🃏 ${p.cards}</span>
+              <span style="color:${p.totalContribution > p.ante ? '#ffb5ae' : 'var(--muted)'}">${p.totalContribution > 0 ? '-' + p.totalContribution : '0'}</span>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </details>` : ''}
 
     ${renderStablefordScorecard()}
 
