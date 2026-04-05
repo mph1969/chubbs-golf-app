@@ -3980,6 +3980,10 @@ function renderDay2(){
     const showFlag = state.options.threePuttPoker && penaltyPlayers.length > 1 && typeof putts === 'number' && putts >= 3;
     const flagOn = showFlag && flaggedPlayer === idx;
 
+    const hasGross = typeof gross === 'number';
+    const hasPutts = typeof putts === 'number';
+    const needsPutts = state.options.threePuttPoker;
+
     const puttBlock = state.options.threePuttPoker
       ? `<div style="display:flex;gap:8px;align-items:center">
            <div class="stepper" style="flex:1">
@@ -3987,14 +3991,10 @@ function renderDay2(){
              <div class="val ${hasPutts ? 'entered' : 'empty'}">${hasPutts ? (putts >= 4 ? '4+' : putts) : '—'}</div>
              <button onclick="stepScore('stableford',${idx},1,'putts')">+</button>
            </div>
-           ${typeof putts==='number' ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
+           ${hasPutts ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
          </div>
          ${quickPuttButtons(idx)}`
       : '';
-
-    const hasGross = typeof gross === 'number';
-    const hasPutts = typeof putts === 'number';
-    const needsPutts = state.options.threePuttPoker;
     const fullyScored = hasGross && (!needsPutts || hasPutts);
     const partialScored = hasGross && needsPutts && !hasPutts;
     const cardState = fullyScored ? ' scored' : (partialScored ? ' partial' : '');
