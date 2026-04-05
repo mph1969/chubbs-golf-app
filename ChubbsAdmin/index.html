@@ -362,19 +362,41 @@ const baseRosterData = [
   {name:'GEORGE', hcp:24, gold:0, clown:0, scram:0}, {name:'RYAN', hcp:12, gold:0, clown:0, scram:0}
 ];
 
-let masterRoster = baseRosterData.map(r => ({
-  playerId: r.name.replace(/\s+/g,'').slice(0,12),
-  displayName: r.name, fullName: r.name, playingHandicap: r.hcp,
-  goldJackets: r.gold || 0, clownJackets: r.clown || 0, scrambleWins: r.scram || 0
-}));
+const ADMIN_STORAGE_KEY = 'chubbsAdmin_state';
+const ADMIN_ROSTER_KEY = 'chubbsAdmin_roster';
+
+function defaultRoster(){
+  return baseRosterData.map(r => ({
+    playerId: r.name.replace(/\s+/g,'').slice(0,12),
+    displayName: r.name, fullName: r.name, playingHandicap: r.hcp,
+    goldJackets: r.gold || 0, clownJackets: r.clown || 0, scrambleWins: r.scram || 0
+  }));
+}
+function loadAdminRoster(){
+  try{
+    const raw = localStorage.getItem(ADMIN_ROSTER_KEY);
+    if(raw){ const arr = JSON.parse(raw); if(Array.isArray(arr) && arr.length) return arr; }
+  }catch(e){}
+  return defaultRoster();
+}
+function saveAdminRoster(){
+  try{ localStorage.setItem(ADMIN_ROSTER_KEY, JSON.stringify(masterRoster)); }catch(e){}
+}
+function loadAdminState(){
+  try{
+    const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  return { attendance:{}, captains:[], scrambleTeams:[], stablefordGroups:[] };
+}
+function saveAdminState(){
+  try{ localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+}
+
+let masterRoster = loadAdminRoster();
 
 // --- APP STATE ---
-let state = {
-  attendance: {},       
-  captains: [],         
-  scrambleTeams: [],    
-  stablefordGroups: []  
-};
+let state = loadAdminState();
 
 // --- INITIALIZATION ---
 function init() {
@@ -403,16 +425,22 @@ function init() {
     });
   });
 
-  masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
+  // Only set attendance for players not already in saved state
+  masterRoster.forEach(p => {
+    if(!state.attendance[p.playerId]) state.attendance[p.playerId] = 'none';
+  });
   renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
 }
 
 function confirmReset() {
   if(confirm("Are you sure you want to clear all data and start from scratch?")) {
-    state.scrambleTeams = []; state.stablefordGroups = []; state.captains = [];
+    masterRoster = defaultRoster();
+    state = { attendance:{}, captains:[], scrambleTeams:[], stablefordGroups:[] };
+    saveAdminRoster();
+    saveAdminState();
     document.getElementById('ev-name').value = "Chubbs Peterson Invitational";
     document.getElementById('ev-display').value = "Weekend Golf";
-    init(); 
+    init();
   }
 }
 
@@ -648,6 +676,8 @@ function setAttendance(pid, status) {
 }
 
 function renderRoster() {
+  saveAdminRoster();
+  saveAdminState();
   const rc = document.getElementById('roster-container');
   
   // Sort: Attending first -> then Alphabetical -> then Handicap
@@ -940,6 +970,7 @@ function removeScrambleTeam(tIdx) { state.scrambleTeams.splice(tIdx, 1); renderT
 function updateScrambleField(tIdx, field, val) { state.scrambleTeams[tIdx][field] = val; renderTeams(); }
 
 function renderTeams() {
+  saveAdminState();
   const container = document.getElementById('scramble-teams-container');
   const available = getAvailablePlayers('scramble');
   
@@ -1000,6 +1031,7 @@ function removeStablefordGroup(gIdx) { state.stablefordGroups.splice(gIdx, 1); r
 function updateStablefordField(gIdx, field, val) { state.stablefordGroups[gIdx][field] = val; renderGroups(); }
 
 function renderGroups() {
+  saveAdminState();
   const container = document.getElementById('stableford-groups-container');
   const available = getAvailablePlayers('stableford');
   
