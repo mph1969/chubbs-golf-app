@@ -732,8 +732,9 @@ function renderMasterBtn(){
   const btn = document.getElementById('master-btn');
   const chip = document.getElementById('hole-chip-hero');
   const tab = state.ui.tab;
-  const showChip = (tab === 'day1' || tab === 'day2') && !masterMode;
-  const showGear = !showChip && (tab === 'setup' || masterMode);
+  const onScoringTab = (tab === 'day1' || tab === 'day2');
+  const showChip = onScoringTab; // always show hole chip on scoring tabs, even in admin mode
+  const showGear = !onScoringTab && (tab === 'setup' || masterMode);
   if(btn){
     btn.style.display = showGear ? '' : 'none';
     btn.style.opacity = masterMode ? '1' : '0.55';
@@ -4263,7 +4264,7 @@ function renderLeaderboard(){
             <span class="small" style="color:var(--muted)">No scores yet ▸</span>
           </div>
           <div class="small" style="color:var(--muted);margin-top:4px">${day2Course.name} · ${ranking.length} players · Sorted by pts, back-9 countback</div>
-          ${ranking.length ? `<div style="margin-top:6px">${ranking.map(r=>`<span class="small" style="color:var(--muted);margin-right:8px">${r.name}</span>`).join('')}</div>` : ''}
+          ${ranking.length ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px 8px">${ranking.map(r=>`<span class="small" style="color:var(--muted)">${r.name}</span>`).join('')}</div>` : ''}
         </div>
       </summary>
     </details>`;
