@@ -880,6 +880,11 @@ function initSync(eventId){
     SYNC._leaderboardRevealed = !!data;
     renderLeaderboard();
   });
+  // Listen for score lock override (admin unlocks scoring for all)
+  listen(`/events/${eventId}/scoreLockOverride`, data => {
+    scoreLockOverride = !!data;
+    renderAll();
+  });
 }
 function pushToFirebase(){
   if(!SYNC.enabled || !SYNC.db || readOnlyMode || !hasImportedEvent()) return;
@@ -2363,6 +2368,9 @@ function navHole(day, dir){
   state[key].hole = order[newPlayPos];
   saveState();
   renderAll();
+  // Scroll to top of scoring section so hole header is visible
+  const section = document.getElementById(day === 'scramble' ? 'day1' : 'day2');
+  if(section) section.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function skipHoleWarning(day, dir){
   holeWarning = null;
@@ -2466,7 +2474,11 @@ function getScoreLockStatus(day){
 }
 function toggleScoreLockOverride(){
   scoreLockOverride = !scoreLockOverride;
-  showToast(scoreLockOverride ? 'Score lock overridden — scoring enabled' : 'Score lock re-enabled', 'ok');
+  showToast(scoreLockOverride ? 'Score lock overridden — scoring enabled for all' : 'Score lock re-enabled', 'ok');
+  // Broadcast to all devices via Firebase
+  if(SYNC.enabled && SYNC.db && SYNC.eventId){
+    SYNC.db.ref(`/events/${SYNC.eventId}/scoreLockOverride`).set(scoreLockOverride).catch(()=>{});
+  }
   renderAll();
 }
 function setStartingHole(day, holeNum){
@@ -4032,12 +4044,18 @@ function renderDay2(){
             ${puttBlock}
           </div>
         </div>
-        <div class="meta-grid-4 tight">
-          <div class="meta"><div class="k">Shots</div><div class="v">${shots ?? '—'}</div></div>
-          <div class="meta"><div class="k">Net</div><div class="v">${net ?? '—'}</div></div>
-          <div class="meta"><div class="k">Pts</div><div class="v">${points ?? '—'}</div></div>
-          <div class="meta"><div class="k">Cards</div><div class="v">${total.pokerCards}</div></div>
-        </div>
+        <details class="tight">
+          <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:10px;color:var(--muted)">
+            <span>${hasGross ? `Net ${net ?? '—'} · ${points ?? 0} pts` : 'Tap for details'}</span>
+            <span>▸</span>
+          </summary>
+          <div class="meta-grid-4 tight">
+            <div class="meta"><div class="k">Shots</div><div class="v">${shots ?? '—'}</div></div>
+            <div class="meta"><div class="k">Net</div><div class="v">${net ?? '—'}</div></div>
+            <div class="meta"><div class="k">Pts</div><div class="v">${points ?? '—'}</div></div>
+            <div class="meta"><div class="k">Cards</div><div class="v">${total.pokerCards}</div></div>
+          </div>
+        </details>
       </div>
     `;
   }).join('\n');
@@ -5083,14 +5101,15 @@ checkPendingEvent(); // show import notification if admin sent an event from Chu
     overlay.id = 'spenny-overlay';
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9800;display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn 0.22s ease';
     overlay.innerHTML = `
-      <div style="background:linear-gradient(180deg,#1a3c34,#0d1f19);border:2px solid #c9a84c;border-radius:20px;padding:28px 24px;max-width:360px;width:100%;text-align:center">
-        <div style="font-size:52px;margin-bottom:8px">🍺</div>
-        <div style="font-family:'Playfair Display',serif;font-size:24px;font-weight:900;color:#c9a84c;letter-spacing:0.02em;margin-bottom:4px">DRINK FOR SPENNY!</div>
-        <div style="font-size:13px;color:#f0ead8;margin-bottom:12px;font-weight:700">Courtesy of <span style="color:#c9a84c">${player}</span> on hole ${hole}</div>
-        <div style="font-size:12px;color:#7aaa8a;font-style:italic;line-height:1.5;margin-bottom:16px">"${quote.text}"<br/>— ${quote.who}</div>
+      <div style="background:linear-gradient(180deg,#1a3c34,#0d1f19);border:3px solid #c9a84c;border-radius:24px;padding:32px 24px;max-width:380px;width:100%;text-align:center;box-shadow:0 0 60px rgba(201,168,76,0.3)">
+        <div style="font-size:72px;margin-bottom:4px;line-height:1">🍻</div>
+        <div style="font-family:'Playfair Display',serif;font-size:28px;font-weight:900;color:#c9a84c;letter-spacing:0.03em;margin-bottom:2px;text-shadow:0 2px 12px rgba(201,168,76,0.4)">DRINK FOR SPENNY!</div>
+        <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:#7aaa8a;margin-bottom:14px">Everyone raise your glass</div>
+        <div style="font-size:15px;color:#f0ead8;margin-bottom:14px;font-weight:700">Courtesy of <span style="color:#c9a84c;font-size:17px">${player}</span> on hole ${hole}</div>
+        <div style="font-size:13px;color:#a8c4ad;font-style:italic;line-height:1.6;margin-bottom:20px;padding:12px 14px;border-radius:12px;background:rgba(201,168,76,0.06);border:1px solid rgba(201,168,76,0.15)">"${quote.text}"<br/><span style="color:#c9a84c">— ${quote.who}</span></div>
         <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button onclick="spennyTellSpenny('${msg.replace(/'/g,"\\'").replace(/\n/g,"\\n")}')" style="padding:10px 16px;border-radius:10px;background:rgba(74,176,224,0.15);border:1px solid rgba(74,176,224,0.4);color:#79b0e3;font-size:12px;font-weight:700;cursor:pointer">📱 Tell Spenny</button>
-          <button onclick="document.getElementById('spenny-overlay').remove()" style="padding:10px 16px;border-radius:10px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.3);color:#c9a84c;font-size:12px;font-weight:700;cursor:pointer">🍻 Cheers!</button>
+          <button onclick="spennyTellSpenny('${msg.replace(/'/g,"\\'").replace(/\n/g,"\\n")}')" style="padding:12px 20px;border-radius:12px;background:rgba(74,176,224,0.15);border:1px solid rgba(74,176,224,0.4);color:#79b0e3;font-size:13px;font-weight:700;cursor:pointer">📱 Tell Spenny</button>
+          <button onclick="document.getElementById('spenny-overlay').remove()" style="padding:12px 20px;border-radius:12px;background:rgba(201,168,76,0.15);border:2px solid rgba(201,168,76,0.4);color:#c9a84c;font-size:13px;font-weight:900;cursor:pointer">🍻 Cheers!</button>
         </div>
       </div>`;
     document.body.appendChild(overlay);
