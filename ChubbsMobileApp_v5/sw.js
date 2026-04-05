@@ -1,6 +1,6 @@
 // Chubbs Golf — Service Worker
 // Bump CACHE_VERSION on every deploy to trigger update prompt
-const CACHE_VERSION = 'chubbs-v5.12';
+const CACHE_VERSION = 'chubbs-v5.13';
 const ASSETS = [
   './',
   './index.html',

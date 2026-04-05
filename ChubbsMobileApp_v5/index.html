@@ -258,6 +258,10 @@
       <div id="sync-badge" class="sync-badge" style="display:none"></div>
     </header>
 
+    <div id="event-banner" style="display:none;background:linear-gradient(135deg,rgba(201,168,76,0.08),rgba(29,56,40,0.4));border-bottom:1px solid rgba(201,168,76,0.2);padding:8px 16px;text-align:center">
+      <div id="event-banner-name" style="font-family:'Playfair Display',serif;font-size:14px;font-weight:800;color:var(--gold2);letter-spacing:0.02em"></div>
+      <div id="event-banner-player" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+    </div>
     <div id="pendingEventBanner" style="display:none"></div>
     <div id="modeBanner" class="mode-banner"></div>
     <nav class="tabs" id="tabs"></nav>
@@ -693,11 +697,20 @@ function showConfirm(msg, onConfirm){
   document.getElementById('confirm-no').onclick = () => overlay.remove();
   overlay.addEventListener('click', e => { if(e.target === overlay) overlay.remove(); });
 }
+const ADMIN_PLAYERS = ['HANSON', 'TERRY']; // only these players get full admin access
+function isAdminPlayer(){
+  if(!hasImportedEvent()) return true; // manual mode — no restriction
+  return ADMIN_PLAYERS.includes(String(state.eventPlayerId).toUpperCase());
+}
 function toggleMasterMode(){
   if(masterMode){
     masterMode = false;
     localStorage.setItem('cpi_master', '0');
     renderAll();
+    return;
+  }
+  if(!isAdminPlayer()){
+    showToast('Admin access is restricted to organisers.', 'info', 2500);
     return;
   }
   const pin = loadAdminPin();
@@ -1656,6 +1669,27 @@ function _doApplyBundle(bundle, requestedPlayerId){
   saveState();
   renderAll();
 }
+function refreshEventData(){
+  if(!SYNC.enabled || !SYNC.db){
+    showToast('Cannot refresh — no connection to cloud.', 'err');
+    return;
+  }
+  const evId = state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId;
+  if(!evId){
+    showToast('No event loaded to refresh.', 'err');
+    return;
+  }
+  showToast('🔄 Refreshing event data…', 'info', 2000);
+  SYNC.db.ref(`/events/${evId}/bundle`).once('value').then(snap => {
+    const bundle = snap.val();
+    if(bundle && bundle.players && bundle.event){
+      applyImportedEventBundle(bundle, state.eventPlayerId);
+      showToast('✅ Event data refreshed!', 'ok', 3000);
+    } else {
+      showToast('No updated data found in cloud.', 'info');
+    }
+  }).catch(() => showToast('Refresh failed — check connection.', 'err'));
+}
 function setImportedEventPlayer(playerId){
   if(!hasImportedEvent()) return;
   applyImportedEventBundle(state.eventBundle, playerId);
@@ -1852,10 +1886,14 @@ applyJoinHash();
   if(readOnlyMode) return; // join hash takes priority
   const m = location.search.match(/[?&]player=([^&]+)/);
   if(!m) return;
-  // Always force non-admin view when opening a player link
-  masterMode = false;
-  localStorage.setItem('cpi_master', '0');
   const pid = decodeURIComponent(m[1]);
+  // Allow admin mode for Hanson and Terry, force non-admin for everyone else
+  const adminPlayers = ['HANSON', 'TERRY'];
+  if(!adminPlayers.includes(pid.toUpperCase())){
+    masterMode = false;
+    localStorage.setItem('cpi_master', '0');
+  }
+  window._cpiRequestedPlayer = pid; // stash for cloud load to pick up
   if(hasImportedEvent() && state.eventBundle.players.some(p => String(p.playerId) === pid)){
     if(String(state.eventPlayerId) !== pid) applyImportedEventBundle(state.eventBundle, pid);
   }
@@ -3076,7 +3114,8 @@ function renderSetup(){
         <div class="small" style="color:var(--muted)">Scorer · ${day2Scorer}</div>
       </div>
       <div class="card">
-        <div class="toolbar tight">
+        <div class="toolbar tight" style="flex-wrap:wrap">
+          <button class="btn slim" onclick="refreshEventData()" style="font-size:11px">🔄 Refresh event data</button>
           <a class="btn gold slim" href="./CPI%20Handbook.pdf" target="_blank" rel="noopener">📖 Handbook</a>
           <button class="btn blue slim" id="plink-${eventPlayer.playerId}" onclick="copyPlayerLink('${eventPlayer.playerId}')">Copy my link</button>
         </div>
@@ -4531,6 +4570,21 @@ function renderAll(){
       heroSub.textContent = 'Golf scorer';
     }
   }
+  // Update event banner
+  const eBanner = document.getElementById('event-banner');
+  if(eBanner){
+    const ev = state.eventBundle && state.eventBundle.event;
+    if(ev && (ev.displayName || ev.name)){
+      eBanner.style.display = '';
+      document.getElementById('event-banner-name').textContent = ev.displayName || ev.name;
+      const ep = state.eventBundle.players.find(p => String(p.playerId) === String(state.eventPlayerId));
+      const playerName = ep ? (ep.displayName || ep.fullName || ep.playerId) : '';
+      const courseName = ev.day1CourseLabel || '';
+      document.getElementById('event-banner-player').textContent = playerName ? `Playing as ${playerName}${courseName ? ' · ' + courseName : ''}` : '';
+    } else {
+      eBanner.style.display = 'none';
+    }
+  }
 }
 // ── Startup: Firebase init + jacket seed + watch mode bootstrap ──
 initFirebase();
@@ -4546,12 +4600,15 @@ seedJacketHistory();     // apply badge data to event.json-imported players (Nic
   }
   
   // NEW: Cloud Load mode via ?loadEvent=
+  // Also check ?player= param so cloud-loaded events assign the correct player
+  const requestedPlayer = window._cpiRequestedPlayer || ((location.search.match(/[?&]player=([^&]+)/) || [])[1] ? decodeURIComponent((location.search.match(/[?&]player=([^&]+)/) || [])[1]) : null);
+
   if(window._cpiLoadEventId && SYNC.enabled && SYNC.db){
     const eid = window._cpiLoadEventId;
     SYNC.db.ref(`/events/${eid}/bundle`).once('value').then(snap => {
       const bundle = snap.val();
       if(bundle && bundle.players && bundle.event){
-        applyImportedEventBundle(bundle);
+        applyImportedEventBundle(bundle, requestedPlayer || undefined);
         showToast('Event setup loaded securely from cloud!', 'ok', 4000);
         // Clean URL so refreshing doesn't cause a re-load loop
         const newUrl = window.location.pathname + window.location.search.replace(new RegExp('[?&]loadEvent=' + eid), '').replace(/^&/, '?');
