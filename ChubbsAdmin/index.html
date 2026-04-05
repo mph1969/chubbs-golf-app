@@ -253,8 +253,19 @@
           <div><label>Back 9</label><select id="scramble-back"><option value="B">B - Lake</option><option value="C">C - River</option><option value="A">A - Lychee</option></select></div>
         </div>
         <div class="grid-3" style="margin-top:8px;">
-          <div><label>Min drives per player</label><input type="number" id="scramble-min-drives" value="4" min="1" max="9" style="width:60px"></div>
-          <div style="grid-column:span 2;font-size:11px;color:var(--muted);align-self:end;padding-bottom:8px">Standard: 4-person = 4 drives, 3-person = 6 drives. Organiser can override.</div>
+          <div>
+            <label>Team size</label>
+            <select id="scramble-team-size" onchange="onTeamSizeChange()" style="width:70px">
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4" selected>4</option>
+            </select>
+          </div>
+          <div>
+            <label>Min drives per player</label>
+            <input type="number" id="scramble-min-drives" value="4" min="1" max="9" style="width:60px" oninput="updateDrivesHint()">
+          </div>
+          <div style="font-size:11px;color:var(--muted);align-self:end;padding-bottom:8px" id="drives-hint">4 players × 4 drives = 16 of 18 holes · 2 flex</div>
         </div>
 
         <div class="section-divider"></div>
@@ -771,13 +782,77 @@ function renderCaptainSelection() {
   }).join('');
 }
 
+function getScrambleTeamSize(){ return parseInt(document.getElementById('scramble-team-size').value) || 4; }
+function defaultDrivesForSize(sz){ return {2:8, 3:5, 4:4}[sz] || 4; }
+
+function onTeamSizeChange(){
+  const sz = getScrambleTeamSize();
+  const drivesEl = document.getElementById('scramble-min-drives');
+  drivesEl.value = defaultDrivesForSize(sz);
+  updateDrivesHint();
+}
+function updateDrivesHint(){
+  const sz = getScrambleTeamSize();
+  const drives = parseInt(document.getElementById('scramble-min-drives').value) || 4;
+  const used = sz * drives;
+  const flex = 18 - used;
+  const hint = document.getElementById('drives-hint');
+  if(!hint) return;
+  if(used > 18){
+    hint.style.color = '#f55c5c';
+    hint.textContent = `⚠️ ${sz} × ${drives} = ${used} — exceeds 18 holes!`;
+  } else {
+    hint.style.color = 'var(--muted)';
+    hint.textContent = `${sz} players × ${drives} drives = ${used} of 18 holes · ${flex} flex`;
+  }
+}
+
 function generateTeamsFromCaptains() {
   if(state.captains.length === 0) { alert("Select at least one captain first."); return; }
+
+  const teamSize = getScrambleTeamSize();
+  const scramblePlayers = masterRoster.filter(p => state.attendance[p.playerId] === 'scramble' || state.attendance[p.playerId] === 'both').map(p => p.playerId);
+  const idealTeams = Math.floor(scramblePlayers.length / teamSize);
+  const remainder = scramblePlayers.length % teamSize;
+
+  // Warn if captain count doesn't match the math
+  if(state.captains.length !== idealTeams){
+    const msg = `You selected ${state.captains.length} captains, but ${scramblePlayers.length} players ÷ ${teamSize} per team = ${idealTeams} teams${remainder ? ` (${remainder} player${remainder>1?'s':''} left over)` : ''}.\n\nContinue with ${state.captains.length} teams anyway?`;
+    if(!confirm(msg)) return;
+  }
+
   if(state.scrambleTeams.length > 0 && !confirm("This will overwrite your current Scramble teams. Continue?")) return;
 
   state.scrambleTeams = state.captains.map((capId, idx) => ({
-    id: `sat-${Date.now()}-${idx}`, name: `Team ${idx + 1}`, scorerId: capId, players: [capId]
+    id: `sat-${Date.now()}-${idx}`, name: `Team ${getPlayerInfo(capId).displayName}`, startingHole: 1, scorerId: capId, players: [capId]
   }));
+
+  // Auto-distribute remaining players across teams (round-robin by handicap)
+  const assigned = new Set(state.captains);
+  const remaining = scramblePlayers.filter(pid => !assigned.has(pid));
+  // Sort by handicap for balanced distribution
+  remaining.sort((a,b) => {
+    const pa = masterRoster.find(x => x.playerId === a);
+    const pb = masterRoster.find(x => x.playerId === b);
+    return (pa ? pa.playingHandicap : 99) - (pb ? pb.playingHandicap : 99);
+  });
+  // Snake draft: 0,1,2,...,n-1,n-1,...,1,0,0,1,...
+  let teamIdx = 0, dir = 1;
+  remaining.forEach(pid => {
+    if(state.scrambleTeams[teamIdx].players.length >= teamSize){
+      // Skip full teams
+      while(teamIdx >= 0 && teamIdx < state.scrambleTeams.length && state.scrambleTeams[teamIdx].players.length >= teamSize){
+        teamIdx += dir;
+      }
+    }
+    if(teamIdx >= 0 && teamIdx < state.scrambleTeams.length){
+      state.scrambleTeams[teamIdx].players.push(pid);
+    }
+    teamIdx += dir;
+    if(teamIdx >= state.scrambleTeams.length){ dir = -1; teamIdx = state.scrambleTeams.length - 1; }
+    if(teamIdx < 0){ dir = 1; teamIdx = 0; }
+  });
+
   renderTeams();
 }
 
@@ -989,7 +1064,7 @@ function renderTeams() {
       scorerOpts += `<option value="${pid}" ${team.scorerId===pid?'selected':''}>${getPlayerInfo(pid).displayName}</option>`;
     });
 
-    const isFull = team.players.length >= 4;
+    const isFull = team.players.length >= getScrambleTeamSize();
     return `
       <div class="team-card">
         <div class="team-header">
@@ -1106,6 +1181,7 @@ function buildEventBundle() {
   const lbAccess = lbRadio ? lbRadio.value : 'open';
   const opts = {
     threePuttPoker: true, pokerMode: "digital",
+    scrambleTeamSize: getScrambleTeamSize(),
     minDrives: parseInt(document.getElementById('scramble-min-drives').value) || 4,
     ante: parseInt(document.getElementById('ev-ante').value) || 50,
     penalty3: parseInt(document.getElementById('ev-pen3').value) || 10,
@@ -1254,7 +1330,7 @@ function showExportConfirmation(action) {
         <div>📅 Scramble: ${ev.satDate || '—'} · ${ev.satTime || '—'}</div>
         <div>📅 Stableford: ${ev.sunDate || '—'} · ${ev.sunTime || '—'}</div>
         <div>👥 ${players.length} players</div>
-        <div>🏌️ Min drives: <strong style="color:#f4efe2">${minDrives}</strong></div>
+        <div>👥 Team size: <strong style="color:#f4efe2">${opts.scrambleTeamSize || 4}</strong> · Min drives: <strong style="color:#f4efe2">${minDrives}</strong></div>
         <div>🃏 Putt Poker: ${opts.threePuttPoker ? 'ON · ¥'+opts.ante : 'OFF'}</div>
         <div>📊 Leaderboard: ${opts.leaderboardAccess || 'open'}</div>
       </div>
