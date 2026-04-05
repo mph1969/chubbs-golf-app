@@ -83,7 +83,9 @@
     .status.warn{background:rgba(209,107,93,0.10);border:1px solid rgba(209,107,93,0.32);color:#ffe3de}
     .status.info{background:rgba(121,176,227,0.10);border:1px solid rgba(121,176,227,0.32);color:#dcecff}
     .player-card{padding:12px;border-radius:18px;background:rgba(255,255,255,0.03);border:1px solid var(--line)}
-    .player-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px}
+    .player-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:10px;min-width:0}
+    .player-head>div:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .player-head .hcp-badge{flex-shrink:0}
     .player-name{font-weight:800;font-size:14px}
     .hcp-badge{padding:4px 8px;border-radius:999px;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.28);color:var(--gold2);font-size:11px;font-weight:800}
     .stepper{display:grid;grid-template-columns:42px 1fr 42px;gap:8px;align-items:center}
@@ -1040,7 +1042,8 @@ function hasImportedEvent(){
 }
 function currentPlayers(day){
   const source = day === 'scramble' ? state.day1Players : state.day2Players;
-  return padPlayers(source && source.length ? source : state.players);
+  const arr = source && source.length ? source : state.players;
+  return padPlayers(arr, arr.length || 4);
 }
 function syncManualLineups(){
   if(hasImportedEvent()) return;

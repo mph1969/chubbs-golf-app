@@ -963,6 +963,9 @@ function renderTeams() {
       <div class="team-card">
         <div class="team-header">
           <input type="text" value="${team.name}" onchange="updateScrambleField(${tIdx}, 'name', this.value)" style="flex:1">
+          <select onchange="updateScrambleField(${tIdx}, 'startingHole', parseInt(this.value))" style="flex:0 0 65px; margin-left:8px;" title="Starting hole">
+            ${Array.from({length:18},(_,i)=>`<option value="${i+1}" ${(team.startingHole||1)===(i+1)?'selected':''}>H${i+1}</option>`).join('')}
+          </select>
           <button class="remove-btn" onclick="removeScrambleTeam(${tIdx})">✕</button>
         </div>
         
@@ -1127,6 +1130,119 @@ function buildEventBundle() {
 }
 
 function generateAndDownloadJson() {
+  showExportConfirmation('download');
+}
+function showExportConfirmation(action) {
+  const bundle = buildEventBundle();
+  const ev = bundle.event || {};
+  const opts = bundle.options || {};
+  const teams = bundle.day1ScrambleTeams || [];
+  const groups = bundle.day2Groups || [];
+  const players = bundle.players || [];
+  const minDrives = opts.minDrives || 4;
+
+  // Build validation warnings
+  const warnings = [];
+
+  // Check scramble teams
+  teams.forEach(t => {
+    const pc = t.playerIds.length;
+    if(pc === 0) warnings.push(`⚠️ ${t.teamName} has no players`);
+    if(pc > 0 && pc < 2) warnings.push(`⚠️ ${t.teamName} has only ${pc} player — need at least 2`);
+    if(minDrives * pc > 18) warnings.push(`🔴 ${t.teamName}: ${pc} players × ${minDrives} min drives = ${minDrives*pc} — exceeds 18 holes!`);
+    if(minDrives * pc < 18 && pc > 0) {
+      const flex = 18 - (minDrives * pc);
+      if(flex > 6) warnings.push(`⚠️ ${t.teamName}: ${flex} flex holes — min drives might be too low for ${pc} players`);
+    }
+    if(t.startingHole && t.startingHole > 1) {} // just info, not a warning
+  });
+
+  // Check stableford groups
+  groups.forEach(g => {
+    const pc = g.playerIds.length;
+    if(pc === 0) warnings.push(`⚠️ ${g.groupName} has no players`);
+    if(pc > 4) warnings.push(`⚠️ ${g.groupName} has ${pc} players — max 4 recommended`);
+  });
+
+  // Check for unassigned players
+  const assignedScramble = new Set(teams.flatMap(t => t.playerIds));
+  const assignedStableford = new Set(groups.flatMap(g => g.playerIds));
+  const unassignedScram = players.filter(p => !assignedScramble.has(p.playerId));
+  const unassignedStable = players.filter(p => !assignedStableford.has(p.playerId));
+  if(unassignedScram.length) {
+    const names = unassignedScram.map(p => p.displayName || p.playerId).join(', ');
+    warnings.push(`⚠️ Not in any scramble team (Sunday only?): <strong>${names}</strong>`);
+  }
+  if(unassignedStable.length) {
+    const names = unassignedStable.map(p => p.displayName || p.playerId).join(', ');
+    warnings.push(`⚠️ Not in any stableford group (Saturday only?): <strong>${names}</strong>`);
+  }
+
+  const hasErrors = warnings.some(w => w.startsWith('🔴'));
+
+  // Build team/group summary
+  const teamRows = teams.map(t => {
+    const sh = t.startingHole && t.startingHole > 1 ? ` · Start H${t.startingHole}` : '';
+    return `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px">
+      <strong>${t.teamName}</strong>${sh} · ${t.playerIds.length} players<br/>
+      <span style="color:#a8b8ad">${t.playerIds.join(', ') || 'empty'}</span>
+    </div>`;
+  }).join('');
+
+  const groupRows = groups.map(g => {
+    const sh = g.startingHole && g.startingHole > 1 ? ` · Start H${g.startingHole}` : '';
+    return `<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px">
+      <strong>${g.groupName}</strong> · ${g.teeTime}${sh} · ${g.playerIds.length} players<br/>
+      <span style="color:#a8b8ad">${g.playerIds.join(', ') || 'empty'}</span>
+    </div>`;
+  }).join('');
+
+  const warningHtml = warnings.length
+    ? `<div style="background:rgba(255,180,60,0.08);border:1px solid rgba(255,180,60,0.3);border-radius:8px;padding:10px;margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:#f5a623;margin-bottom:6px">${hasErrors ? '🚨 Errors found' : '⚠️ Warnings'}</div>
+        ${warnings.map(w => `<div style="font-size:11px;color:#ddd;padding:2px 0">${w}</div>`).join('')}
+       </div>`
+    : `<div style="background:rgba(42,163,106,0.08);border:1px solid rgba(42,163,106,0.3);border-radius:8px;padding:10px;margin-top:10px;font-size:12px;color:#5cf5a0">✅ All checks passed — looking good!</div>`;
+
+  const actionLabel = action === 'push' ? '🚀 Send to App' : '📥 Download JSON';
+  const actionFn = action === 'push' ? 'doPushToLiveApp()' : 'doDownloadJson()';
+
+  const old = document.getElementById('export-confirm');
+  if(old) old.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'export-confirm';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  overlay.innerHTML = `
+    <div style="background:#12251b;border:2px solid var(--gold2,#c9a84c);border-radius:16px;padding:24px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto">
+      <div style="font-family:'Playfair Display',serif;font-size:18px;font-weight:900;color:var(--gold2,#c9a84c);margin-bottom:4px">Confirm Export</div>
+      <div style="font-size:13px;color:#f4efe2;margin-bottom:16px">${ev.displayName || ev.name || 'Event'}</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:11px;color:#a8b8ad;margin-bottom:12px">
+        <div>📅 Scramble: ${ev.satDate || '—'} · ${ev.satTime || '—'}</div>
+        <div>📅 Stableford: ${ev.sunDate || '—'} · ${ev.sunTime || '—'}</div>
+        <div>👥 ${players.length} players</div>
+        <div>🏌️ Min drives: <strong style="color:#f4efe2">${minDrives}</strong></div>
+        <div>🃏 Putt Poker: ${opts.threePuttPoker ? 'ON · ¥'+opts.ante : 'OFF'}</div>
+        <div>📊 Leaderboard: ${opts.leaderboardAccess || 'open'}</div>
+      </div>
+
+      <div style="font-size:11px;font-weight:700;color:var(--gold2,#c9a84c);margin-bottom:6px">Scramble Teams (${teams.length})</div>
+      ${teamRows || '<div style="font-size:11px;color:#a8b8ad">None</div>'}
+
+      <div style="font-size:11px;font-weight:700;color:var(--gold2,#c9a84c);margin:10px 0 6px">Stableford Groups (${groups.length})</div>
+      ${groupRows || '<div style="font-size:11px;color:#a8b8ad">None</div>'}
+
+      ${warningHtml}
+
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button onclick="document.getElementById('export-confirm').remove()" style="flex:1;padding:12px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#a8b8ad;font-size:13px;cursor:pointer">← Back to Setup</button>
+        <button onclick="document.getElementById('export-confirm').remove();${actionFn}" style="flex:1;padding:12px;border-radius:10px;background:${hasErrors?'#5c2020':'var(--gold2,#c9a84c)'};border:none;color:${hasErrors?'#ffb5ae':'#1a1000'};font-size:13px;font-weight:900;cursor:pointer">${hasErrors ? '⚠️ Export anyway' : actionLabel}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+function doDownloadJson() {
   const eventJson = buildEventBundle();
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(eventJson, null, 2));
   const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "event.json");
@@ -1136,6 +1252,9 @@ function generateAndDownloadJson() {
 const APP_BASE_URL = 'https://chubbs-golf.netlify.app';
 
 function pushToLiveApp() {
+  showExportConfirmation('push');
+}
+function doPushToLiveApp() {
   if(!db) { alert("Database not connected. Please refresh the page."); return; }
 
   const eventJson = buildEventBundle();
