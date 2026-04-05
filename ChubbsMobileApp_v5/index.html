@@ -3959,6 +3959,12 @@ function renderDay2(){
   const poker = pokerSummary();
   const penaltyPlayers = penaltyPlayersForHole(hole);
   const flaggedPlayer = effectiveLastPenaltyPlayerForHole(hole);
+  const pokerCurrency = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency) || 'RMB';
+  const nextHoleLabel = (() => {
+    const order = getHoleOrder('stableford');
+    const playPos = holeIdxToPlayOrder(state.stableford.hole, state.stableford.startingHole || 0);
+    return playPos < 17 ? String(order[playPos + 1] + 1) : '✓';
+  })();
   const importedGroup = activeEventDay2Group();
   const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedGroup ? ((importedGroup.groupName || importedGroup.groupId || 'Group') + (importedGroup.teeTime ? ' · ' + importedGroup.teeTime : '')) : 'Not assigned'} · ${stablePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedGroup, state.eventBundle)}</span><span class="small"> · Course · ${course.name}${course.detail ? ' · ' + course.detail : ''}</span></div>` : '';
 
@@ -4066,11 +4072,7 @@ function renderDay2(){
     <!-- NEXT HOLE — bottom of player cards for natural flow -->
     <div style="display:flex;gap:8px;margin:4px 0 8px">
       <button class="btn slim" onclick="navHole('stableford',-1)" style="flex:1;padding:12px;font-size:13px">← Prev</button>
-      <button class="btn gold slim" onclick="navHole('stableford',1)" style="flex:2;padding:12px;font-size:13px;font-weight:800">Next → Hole ${(() => {
-        const order = getHoleOrder('stableford');
-        const playPos = holeIdxToPlayOrder(state.stableford.hole, state.stableford.startingHole || 0);
-        return playPos < 17 ? order[playPos + 1] + 1 : '✓';
-      })()}</button>
+      <button class="btn gold slim" onclick="navHole('stableford',1)" style="flex:2;padding:12px;font-size:13px;font-weight:800">Next → Hole ${nextHoleLabel}</button>
     </div>
 
     ${state.options.threePuttPoker ? `
@@ -4079,7 +4081,7 @@ function renderDay2(){
         <div class="card" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between">
           <div class="section-title" style="margin:0">🃏 Putt Poker</div>
           <div style="display:flex;align-items:center;gap:8px">
-            <span style="font-size:12px;font-weight:700;color:var(--gold2)">Pot: ${state.options.ante > 0 ? (poker.pot + ' ' + (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency || 'RMB')) : '—'}</span>
+            <span style="font-size:12px;font-weight:700;color:var(--gold2)">Pot: ${state.options.ante > 0 ? poker.pot + ' ' + pokerCurrency : '—'}</span>
             <span class="small" style="color:var(--muted)">▸</span>
           </div>
         </div>
