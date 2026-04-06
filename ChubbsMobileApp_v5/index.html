@@ -2371,6 +2371,8 @@ function navHole(day, dir){
   // Scroll to top of scoring section so hole header is visible
   const section = document.getElementById(day === 'scramble' ? 'day1' : 'day2');
   if(section) section.scrollIntoView({behavior:'smooth',block:'start'});
+  // Check for heckle on next hole
+  if(dir > 0) checkHoleHeckle(day, state[key].hole);
 }
 function skipHoleWarning(day, dir){
   holeWarning = null;
@@ -5076,6 +5078,105 @@ checkPendingEvent(); // show import notification if admin sent an event from Chu
 })();
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ── Hole Heckler — warns players about upcoming tough holes ──
+(function holeHecklerSystem(){
+  const HECKLE_QUOTES = {
+    hardest: [
+      {text:"Hole {hole} is the hardest hole on the course. Which one of you hackers is going to Spenny this one?", who:"Chubbs Peterson"},
+      {text:"Coming up: Hole {hole} — SI 1. The gator lives here. Don't be the one who feeds him.", who:"Chubbs Peterson"},
+      {text:"Next up is Hole {hole}, the hardest on the card. I eat pieces of s*** like you for breakfast on this hole.", who:"Shooter McGavin"},
+      {text:"Hole {hole}. Hardest hole on the course. ARE YOU TOO GOOD FOR YOUR HOME?!", who:"Happy Gilmore"},
+      {text:"Hole {hole} is where legends are made and Spennys are born. Place your bets now.", who:"Chubbs Peterson"},
+    ],
+    second: [
+      {text:"Hole {hole} — second hardest on the course. The gator is watching. Don't embarrass yourself.", who:"Chubbs Peterson"},
+      {text:"Heads up: Hole {hole} is SI 2. Last chance to look good before the clubhouse judges you.", who:"Shooter McGavin"},
+      {text:"Hole {hole} coming up — second toughest. Who's feeling brave? Who's feeling Spenny?", who:"Happy Gilmore"},
+    ],
+    shortPar3: [
+      {text:"Hole {hole} — tiny par 3, only {yards} yards. No excuses. Hit the green or buy the drinks.", who:"Shooter McGavin"},
+      {text:"Hole {hole} is {yards} yards. My grandmother could par this. Can you?", who:"Happy Gilmore"},
+    ],
+    longPar5: [
+      {text:"Hole {hole} — {yards} yard monster. Grip it and rip it, but don't grip it too hard.", who:"Happy Gilmore"},
+      {text:"Hole {hole} at {yards} yards. That's a long walk for a triple bogey.", who:"Chubbs Peterson"},
+    ]
+  };
+
+  let lastHeckledHole = -1;
+
+  function pickQuote(bank, data){
+    const q = bank[Math.floor(Math.random()*bank.length)];
+    let txt = q.text;
+    for(const [k,v] of Object.entries(data)) txt = txt.replace(new RegExp('\\{'+k+'\\}','g'), v);
+    return {text:txt, who:q.who};
+  }
+
+  window.checkHoleHeckle = function(day, currentHoleIdx){
+    if(currentHoleIdx === lastHeckledHole) return;
+    const courseDay = day === 'scramble' ? 'day1' : 'day2';
+    const course = activeCourse(courseDay);
+    if(!course || !course.holes) return;
+
+    // Look at the NEXT hole in play order
+    const key = day === 'scramble' ? 'scramble' : 'stableford';
+    const order = getHoleOrder(day);
+    const playPos = holeIdxToPlayOrder(currentHoleIdx, state[key].startingHole || 0);
+    if(playPos >= 17) return; // last hole, nothing ahead
+    const nextHoleIdx = order[playPos + 1];
+    const nextHole = course.holes[nextHoleIdx];
+    if(!nextHole) return;
+
+    let quote = null;
+    const holeNum = nextHoleIdx + 1;
+
+    // Check for SI 1 (hardest)
+    if(nextHole.si === 1){
+      quote = pickQuote(HECKLE_QUOTES.hardest, {hole:holeNum});
+    }
+    // SI 2 (second hardest)
+    else if(nextHole.si === 2){
+      quote = pickQuote(HECKLE_QUOTES.second, {hole:holeNum});
+    }
+    // Short par 3 (under 130 yards — potential ace hole)
+    else if(nextHole.par === 3){
+      // Get yardage from course data if available
+      const yards = nextHole.gold || nextHole.blue || nextHole.white || '';
+      if(yards && yards < 140){
+        quote = pickQuote(HECKLE_QUOTES.shortPar3, {hole:holeNum, yards:yards});
+      }
+    }
+    // Monster par 5 (over 550 yards)
+    else if(nextHole.par === 5){
+      const yards = nextHole.gold || nextHole.blue || '';
+      if(yards && yards > 550){
+        quote = pickQuote(HECKLE_QUOTES.longPar5, {hole:holeNum, yards:yards});
+      }
+    }
+
+    if(!quote) return;
+    lastHeckledHole = currentHoleIdx;
+
+    // Show heckle overlay
+    const old = document.getElementById('heckle-overlay');
+    if(old) old.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'heckle-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9700;display:flex;align-items:center;justify-content:center;padding:20px;animation:toastIn 0.22s ease';
+    overlay.innerHTML = `
+      <div style="background:linear-gradient(180deg,#1a3c34,#0d1f19);border:2px solid var(--gold2,#c9a84c);border-radius:20px;padding:24px 20px;max-width:360px;width:100%;text-align:center">
+        <div style="font-size:42px;margin-bottom:6px">🐊</div>
+        <div style="font-size:11px;letter-spacing:0.15em;text-transform:uppercase;color:var(--gold2,#c9a84c);font-weight:800;margin-bottom:8px">Heads Up, Hackers!</div>
+        <div style="font-size:14px;color:#f0ead8;line-height:1.6;margin-bottom:12px;font-weight:600">"${quote.text}"</div>
+        <div style="font-size:11px;color:#7aaa8a;font-style:italic;margin-bottom:16px">— ${quote.who}</div>
+        <button onclick="document.getElementById('heckle-overlay').remove()" style="padding:10px 24px;border-radius:10px;background:rgba(201,168,76,0.15);border:1px solid rgba(201,168,76,0.3);color:#c9a84c;font-size:13px;font-weight:700;cursor:pointer">Bring it on 🏌️</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    // Auto-dismiss after 8 seconds
+    setTimeout(()=>{ const el=document.getElementById('heckle-overlay'); if(el) el.remove(); }, 8000);
+  };
+})();
+
 // ── DRINK FOR SPENNY! Alert System ──
 // ══════════════════════════════════════════════════════════════════════════════
 (function spennyAlertSystem(){
