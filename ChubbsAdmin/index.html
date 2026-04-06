@@ -143,16 +143,20 @@
         <div class="subtitle">Event Setup Portal <span id="fb-status" style="font-size:10px;margin-left:8px">⏳ Connecting…</span> <span id="cloud-save-status" style="font-size:10px;margin-left:6px"></span></div>
       </div>
     </div>
-	<div style="display:flex; gap: 12px; flex-wrap:wrap;">
-      <button class="danger" onclick="confirmReset()" title="Clear all admin setup data — roster, teams, groups. Does not affect Firebase.">🗑 Clear Setup</button>
-      <button onclick="document.getElementById('roster-upload').click()" title="Import a player roster JSON file exported from a previous session.">📥 Import Roster</button>
+	<div style="display:flex; gap: 10px; flex-wrap:wrap; align-items:center;">
+      <button onclick="document.getElementById('roster-upload').click()" title="Import a player roster JSON file.">📥 Import Roster</button>
       <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
-
-      <button class="ghost" onclick="generateAndDownloadJson()" title="Download the event bundle as a JSON file. Share via WeChat as a backup.">💾 Export JSON</button>
-      <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud. Players receive it via their personal link.">☁️ Send to App</button>
-      <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight checklist: verifies Firebase, players, teams, groups, dates, and cloud publish status.">✅ Game Day Check</button>
-      <button id="btn-purge" class="ghost" onclick="btnLoading(this);purgeTestEvents()" style="border-color:#d16b5d;color:#d16b5d" title="Scan Firebase for events flagged as TEST and delete them. Live events are never touched.">🧹 Purge Tests</button>
-      <button id="btn-nuke" class="danger" onclick="btnLoading(this);showNuclearReset()" style="font-size:11px" title="Full Firebase event manager. View all events, select which to delete. Double confirmation for live events.">☢️ Nuclear Reset</button>
+      <button class="ghost" onclick="generateAndDownloadJson()" title="Download event bundle as JSON backup.">💾 Export JSON</button>
+      <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud.">☁️ Send to App</button>
+      <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight readiness checklist.">✅ Game Day Check</button>
+      <div style="position:relative;display:inline-block">
+        <button class="ghost" onclick="toggleCleanupMenu()" style="border-color:#d16b5d;color:#d16b5d" title="Cleanup tools: clear setup, purge tests, nuclear reset">🧹 Cleanup ▾</button>
+        <div id="cleanup-menu" style="display:none;position:absolute;top:100%;right:0;z-index:100;background:#12251b;border:1px solid #d16b5d;border-radius:10px;padding:4px;box-shadow:0 12px 32px rgba(0,0,0,0.6);min-width:200px;margin-top:4px">
+          <button onclick="confirmReset();toggleCleanupMenu()" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--text,#f4efe2);font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Clear roster, teams, groups. Does not affect Firebase.">🗑 Clear Setup</button>
+          <button onclick="btnLoading(document.getElementById('btn-purge-inner'));purgeTestEvents();toggleCleanupMenu()" id="btn-purge-inner" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:#f5d85c;font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Delete TEST-flagged events from Firebase.">🧹 Purge Test Events</button>
+          <button onclick="btnLoading(document.getElementById('btn-nuke-inner'));showNuclearReset();toggleCleanupMenu()" id="btn-nuke-inner" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:#f55c5c;font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Full Firebase event manager. Select and delete events.">☢️ Nuclear Reset</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -1568,6 +1572,20 @@ function showToast(msg, type) {
   t._hide = setTimeout(()=>{ t.style.opacity='0'; }, 3000);
 }
 
+// ── Cleanup dropdown ──
+function toggleCleanupMenu(){
+  const m=document.getElementById('cleanup-menu');
+  if(!m) return;
+  m.style.display=m.style.display==='none'?'block':'none';
+  // Close on outside click
+  if(m.style.display==='block'){
+    setTimeout(()=>{
+      const close=e=>{if(!m.contains(e.target)){m.style.display='none';document.removeEventListener('click',close);}};
+      document.addEventListener('click',close);
+    },10);
+  }
+}
+
 // ── Button loading state ──
 function btnLoading(btn){
   if(!btn) return;
@@ -1614,10 +1632,10 @@ buildEventBundle = function(){
 
 // ── Purge Test Events ──
 function purgeTestEvents(){
-  if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-purge'); return; }
+  if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-purge-inner'); return; }
   db.ref('/events').once('value').then(snap => {
     const events = snap.val();
-    if(!events){ showAdminToast('No events found.', 'ok'); btnReset('btn-purge'); return; }
+    if(!events){ showAdminToast('No events found.', 'ok'); btnReset('btn-purge-inner'); return; }
     const testEvents = [];
     Object.entries(events).forEach(([eid, data]) => {
       const bundle = data && data.bundle;
@@ -1625,19 +1643,19 @@ function purgeTestEvents(){
     });
     if(testEvents.length === 0){
       showAdminToast('No test events found — all clean!', 'ok');
-      btnReset('btn-purge'); return;
+      btnReset('btn-purge-inner'); return;
     }
     const list = testEvents.map(t => `• ${t.name} (${t.eid})`).join('\n');
-    if(!confirm(`Found ${testEvents.length} test event(s):\n\n${list}\n\nDelete all test events and their scoring data from Firebase?`)){ btnReset('btn-purge'); return; }
+    if(!confirm(`Found ${testEvents.length} test event(s):\n\n${list}\n\nDelete all test events and their scoring data from Firebase?`)){ btnReset('btn-purge-inner'); return; }
     const deletes = testEvents.map(t => db.ref(`/events/${t.eid}`).remove());
     Promise.all(deletes).then(() => {
       showAdminToast(`✅ Purged ${testEvents.length} test event(s)!`, 'ok');
-      btnReset('btn-purge');
+      btnReset('btn-purge-inner');
     }).catch(e => {
       showAdminToast('Purge failed: ' + e.message, 'err');
-      btnReset('btn-purge');
+      btnReset('btn-purge-inner');
     });
-  }).catch(e => { showAdminToast('Firebase error: ' + e.message, 'err'); btnReset('btn-purge'); });
+  }).catch(e => { showAdminToast('Firebase error: ' + e.message, 'err'); btnReset('btn-purge-inner'); });
 }
 
 // ── Game Day Readiness Check ──
@@ -1749,9 +1767,9 @@ function renderGameDayOverlay(checks, evId, players){
 
 // ── Nuclear Reset — manage all Firebase events ──
 function showNuclearReset(){
-  if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-nuke'); return; }
+  if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-nuke-inner'); return; }
   db.ref('/events').once('value').then(snap => {
-    btnReset('btn-nuke');
+    btnReset('btn-nuke-inner');
     const events = snap.val();
     if(!events){
       alert('Firebase is already clean — no events found.');
@@ -1809,7 +1827,7 @@ function showNuclearReset(){
       </div>`;
     document.body.appendChild(overlay);
     window._nukeEntries = entries;
-  }).catch(e => { btnReset('btn-nuke'); alert('Failed to load events: ' + e.message); });
+  }).catch(e => { btnReset('btn-nuke-inner'); alert('Failed to load events: ' + e.message); });
 }
 
 function executeNuclearReset(){
