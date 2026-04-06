@@ -143,13 +143,15 @@
         <div class="subtitle">Event Setup Portal</div>
       </div>
     </div>
-	<div style="display:flex; gap: 12px;">
+	<div style="display:flex; gap: 12px; flex-wrap:wrap;">
       <button class="danger" onclick="confirmReset()">🗑 Clear Setup</button>
       <button onclick="document.getElementById('roster-upload').click()">📥 Import cpi_roster.json</button>
       <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
-      
+
       <button class="ghost" onclick="generateAndDownloadJson()">💾 Export JSON</button>
       <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()">☁️ Send to App</button>
+      <button class="ghost" onclick="showGameDayCheck()" style="border-color:var(--green);color:var(--green)">✅ Game Day Check</button>
+      <button class="ghost" onclick="purgeTestEvents()" style="border-color:#d16b5d;color:#d16b5d">🧹 Purge Tests</button>
     </div>
   </div>
 
@@ -178,6 +180,15 @@
         <input type="text" id="ev-display" value="Weekend Golf">
         <label>Currency</label>
         <input type="text" id="ev-currency" value="RMB">
+
+        <div style="margin-top:12px;padding:12px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,0.2)">
+          <label style="margin:0;font-size:12px;color:var(--gold2)">Event Mode</label>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button id="mode-live" class="primary small" style="flex:1;padding:10px" onclick="setEventMode('live')">🟢 LIVE EVENT</button>
+            <button id="mode-test" class="small ghost" style="flex:1;padding:10px" onclick="setEventMode('test')">🧪 TEST</button>
+          </div>
+          <div id="event-mode-note" style="font-size:10px;color:var(--muted);margin-top:6px">Live event — scores count. Test data can be purged later.</div>
+        </div>
         
         <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line);">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -1475,6 +1486,168 @@ function showToast(msg, type) {
   t.style.opacity = '1';
   clearTimeout(t._hide);
   t._hide = setTimeout(()=>{ t.style.opacity='0'; }, 3000);
+}
+
+// ── Event Mode (test vs live) ──
+let eventMode = 'live';
+function setEventMode(mode){
+  eventMode = mode;
+  const liveBtn = document.getElementById('mode-live');
+  const testBtn = document.getElementById('mode-test');
+  const note = document.getElementById('event-mode-note');
+  if(mode === 'test'){
+    testBtn.className = 'small'; testBtn.style.cssText = 'flex:1;padding:10px;background:#5c3a0a;border:1px solid #d6a030;color:#f5d85c';
+    liveBtn.className = 'small ghost'; liveBtn.style.cssText = 'flex:1;padding:10px';
+    note.textContent = '🧪 Test event — will be flagged for cleanup. Scores do NOT count.';
+    note.style.color = '#f5d85c';
+  } else {
+    liveBtn.className = 'primary small'; liveBtn.style.cssText = 'flex:1;padding:10px';
+    testBtn.className = 'small ghost'; testBtn.style.cssText = 'flex:1;padding:10px';
+    note.textContent = '🟢 Live event — scores count. Test data can be purged later.';
+    note.style.color = 'var(--muted)';
+  }
+}
+
+// Include _isTest flag in event bundle
+const origBuildBundle = buildEventBundle;
+buildEventBundle = function(){
+  const bundle = origBuildBundle();
+  bundle._isTest = eventMode === 'test';
+  return bundle;
+};
+
+// ── Purge Test Events ──
+function purgeTestEvents(){
+  if(!db){ alert('Firebase not connected.'); return; }
+  showAdminToast('Scanning for test events…', 'ok');
+  db.ref('/events').once('value').then(snap => {
+    const events = snap.val();
+    if(!events){ showAdminToast('No events found.', 'ok'); return; }
+    const testEvents = [];
+    Object.entries(events).forEach(([eid, data]) => {
+      const bundle = data && data.bundle;
+      if(bundle && bundle._isTest) testEvents.push({eid, name: (bundle.event && bundle.event.displayName) || eid});
+    });
+    if(testEvents.length === 0){
+      showAdminToast('No test events found — all clean!', 'ok');
+      return;
+    }
+    const list = testEvents.map(t => `• ${t.name} (${t.eid})`).join('\n');
+    if(!confirm(`Found ${testEvents.length} test event(s):\n\n${list}\n\nDelete all test events and their scoring data from Firebase?`)) return;
+    const deletes = testEvents.map(t => db.ref(`/events/${t.eid}`).remove());
+    Promise.all(deletes).then(() => {
+      showAdminToast(`✅ Purged ${testEvents.length} test event(s)!`, 'ok');
+    }).catch(e => {
+      showAdminToast('Purge failed: ' + e.message, 'err');
+    });
+  });
+}
+
+// ── Game Day Readiness Check ──
+function showGameDayCheck(){
+  if(!db){ alert('Firebase not connected.'); return; }
+  const bundle = buildEventBundle();
+  const ev = bundle.event || {};
+  const players = bundle.players || [];
+  const teams = bundle.day1ScrambleTeams || [];
+  const groups = bundle.day2Groups || [];
+  const evId = ev.eventId;
+  const checks = [];
+
+  // 1. Firebase connection
+  checks.push({label:'Firebase connection', status:'ok', detail:'Connected'});
+
+  // 2. Event ID
+  if(!evId) checks.push({label:'Event ID', status:'fail', detail:'No event ID — fill in event name and dates'});
+  else checks.push({label:'Event ID', status:'ok', detail:evId});
+
+  // 3. Players
+  if(players.length === 0) checks.push({label:'Players', status:'fail', detail:'No players set to attend'});
+  else checks.push({label:'Players', status:'ok', detail:`${players.length} players`});
+
+  // 4. Teams
+  const emptyTeams = teams.filter(t => t.playerIds.length === 0);
+  if(teams.length === 0) checks.push({label:'Scramble teams', status:'warn', detail:'No teams created'});
+  else if(emptyTeams.length) checks.push({label:'Scramble teams', status:'warn', detail:`${emptyTeams.length} empty team(s)`});
+  else checks.push({label:'Scramble teams', status:'ok', detail:`${teams.length} teams · ${teams.reduce((s,t)=>s+t.playerIds.length,0)} players assigned`});
+
+  // 5. Groups
+  const emptyGroups = groups.filter(g => g.playerIds.length === 0);
+  if(groups.length === 0) checks.push({label:'Stableford groups', status:'warn', detail:'No groups created'});
+  else if(emptyGroups.length) checks.push({label:'Stableford groups', status:'warn', detail:`${emptyGroups.length} empty group(s)`});
+  else checks.push({label:'Stableford groups', status:'ok', detail:`${groups.length} groups · ${groups.reduce((s,g)=>s+g.playerIds.length,0)} players assigned`});
+
+  // 6. Dates
+  if(!ev.satDate && !ev.sunDate) checks.push({label:'Event dates', status:'fail', detail:'No dates set'});
+  else checks.push({label:'Event dates', status:'ok', detail:`${ev.satDate || '—'} / ${ev.sunDate || '—'}`});
+
+  // 7. Event mode
+  if(eventMode === 'test') checks.push({label:'Event mode', status:'warn', detail:'🧪 TEST — switch to LIVE before game day'});
+  else checks.push({label:'Event mode', status:'ok', detail:'🟢 LIVE'});
+
+  // 8. Check if event exists in Firebase
+  db.ref(`/events/${evId}/bundle`).once('value').then(snap => {
+    const existing = snap.val();
+    if(existing){
+      checks.push({label:'Published to Firebase', status:'ok', detail:'Event bundle found in cloud'});
+      if(existing._isTest) checks.push({label:'Published version', status:'warn', detail:'Cloud version is flagged as TEST — re-publish as LIVE'});
+    } else {
+      checks.push({label:'Published to Firebase', status:'fail', detail:'Not yet published — hit "Send to App" first'});
+    }
+    renderGameDayOverlay(checks, evId, players);
+  }).catch(() => {
+    checks.push({label:'Published to Firebase', status:'fail', detail:'Could not check — Firebase error'});
+    renderGameDayOverlay(checks, evId, players);
+  });
+}
+
+function renderGameDayOverlay(checks, evId, players){
+  const old = document.getElementById('gameday-overlay');
+  if(old) old.remove();
+
+  const hasFailures = checks.some(c => c.status === 'fail');
+  const hasWarnings = checks.some(c => c.status === 'warn');
+  const icons = {ok:'✅', warn:'⚠️', fail:'❌'};
+  const colors = {ok:'#a5f0c5', warn:'#f5d85c', fail:'#f55c5c'};
+
+  const checkRows = checks.map(c =>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:12px">
+      <span style="flex-shrink:0">${icons[c.status]}</span>
+      <span style="flex:1;font-weight:700;color:#f4efe2">${c.label}</span>
+      <span style="color:${colors[c.status]};text-align:right">${c.detail}</span>
+    </div>`
+  ).join('');
+
+  const appUrl = 'https://chubbs-golf.netlify.app';
+  const testLink = `${appUrl}/?loadEvent=${encodeURIComponent(evId)}&player=${encodeURIComponent(players[0]?.playerId||'')}`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'gameday-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+  overlay.innerHTML = `
+    <div style="background:#12251b;border:2px solid ${hasFailures?'#f55c5c':hasWarnings?'#f5d85c':'#2aa36a'};border-radius:16px;padding:24px;max-width:520px;width:100%;max-height:90vh;overflow-y:auto">
+      <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:900;color:${hasFailures?'#f55c5c':hasWarnings?'#f5d85c':'#2aa36a'};margin-bottom:4px">
+        ${hasFailures?'❌ Not Ready':'🏌️ Game Day Readiness'}
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:16px">
+        ${hasFailures?'Fix the issues below before game day.':hasWarnings?'Almost there — review warnings below.':'All systems go! You\'re ready for game day.'}
+      </div>
+      ${checkRows}
+      <div style="margin-top:16px;padding:12px;border-radius:8px;background:rgba(0,0,0,0.3);font-size:11px;color:var(--muted)">
+        <strong style="color:#f4efe2">Pre-flight tips:</strong><br/>
+        • Publish the event as LIVE before sharing player links<br/>
+        • Test one player link in incognito to verify load<br/>
+        • Have the event.json file ready as a WeChat backup<br/>
+        • Players should open their link the night before to cache the app
+      </div>
+      ${!hasFailures ? `<div style="margin-top:12px">
+        <button onclick="window.open('${testLink}','_blank')" style="width:100%;padding:10px;border-radius:10px;background:rgba(74,176,224,0.15);border:1px solid rgba(74,176,224,0.4);color:#79b0e3;font-size:12px;font-weight:700;cursor:pointer">🔗 Test first player link in new tab</button>
+      </div>` : ''}
+      <div style="margin-top:8px">
+        <button onclick="document.getElementById('gameday-overlay').remove()" style="width:100%;padding:10px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--muted);font-size:12px;cursor:pointer">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
 }
 
 window.onload = () => {

@@ -4826,7 +4826,15 @@ function renderAll(){
     const ev = state.eventBundle && state.eventBundle.event;
     if(ev && (ev.displayName || ev.name)){
       eBanner.style.display = '';
-      document.getElementById('event-banner-name').textContent = ev.displayName || ev.name;
+      const isTest = !!state.eventBundle._isTest;
+      const nameEl = document.getElementById('event-banner-name');
+      nameEl.textContent = (isTest ? '🧪 TEST · ' : '') + (ev.displayName || ev.name);
+      if(isTest) nameEl.style.color = '#f5d85c';
+      else nameEl.style.color = '';
+      eBanner.style.borderBottom = isTest ? '2px solid rgba(245,216,92,0.4)' : '1px solid rgba(201,168,76,0.2)';
+      eBanner.style.background = isTest
+        ? 'linear-gradient(135deg,rgba(245,216,92,0.06),rgba(92,58,10,0.3))'
+        : 'linear-gradient(135deg,rgba(201,168,76,0.08),rgba(29,56,40,0.4))';
       const ep = state.eventBundle.players.find(p => String(p.playerId) === String(state.eventPlayerId));
       const playerName = ep ? (ep.displayName || ep.fullName || ep.playerId) : '';
       const courseName = ev.day1CourseLabel || '';
