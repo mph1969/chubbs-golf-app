@@ -140,7 +140,7 @@
       <img src="./ChubbsGatorIcon.png" alt="Chubbs Logo" style="width:96px; height:96px; border-radius:12px; border: 1px solid var(--gold2);" onerror="this.style.display='none'" />
       <div>
         <h1>Chubbs Admin</h1>
-        <div class="subtitle">Event Setup Portal <span id="fb-status" style="font-size:10px;margin-left:8px">⏳ Connecting…</span></div>
+        <div class="subtitle">Event Setup Portal <span id="fb-status" style="font-size:10px;margin-left:8px">⏳ Connecting…</span> <span id="cloud-save-status" style="font-size:10px;margin-left:6px"></span></div>
       </div>
     </div>
 	<div style="display:flex; gap: 12px; flex-wrap:wrap;">
@@ -387,6 +387,9 @@ const baseRosterData = [
 
 const ADMIN_STORAGE_KEY = 'chubbsAdmin_state';
 const ADMIN_ROSTER_KEY = 'chubbsAdmin_roster';
+const CLOUD_ADMIN_PATH = '/admin'; // Firebase path for admin persistence
+let _cloudSaveTimer = null;
+let _cloudLoaded = false;
 
 function defaultRoster(){
   return baseRosterData.map(r => ({
@@ -402,9 +405,6 @@ function loadAdminRoster(){
   }catch(e){}
   return defaultRoster();
 }
-function saveAdminRoster(){
-  try{ localStorage.setItem(ADMIN_ROSTER_KEY, JSON.stringify(masterRoster)); }catch(e){}
-}
 function loadAdminState(){
   try{
     const raw = localStorage.getItem(ADMIN_STORAGE_KEY);
@@ -412,8 +412,73 @@ function loadAdminState(){
   }catch(e){}
   return { attendance:{}, captains:[], scrambleTeams:[], stablefordGroups:[] };
 }
+// Save to localStorage immediately + debounce save to Firebase
+function saveAdminRoster(){
+  try{ localStorage.setItem(ADMIN_ROSTER_KEY, JSON.stringify(masterRoster)); }catch(e){}
+  scheduleCloudSave();
+}
 function saveAdminState(){
   try{ localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  scheduleCloudSave();
+}
+function scheduleCloudSave(){
+  if(_cloudSaveTimer) clearTimeout(_cloudSaveTimer);
+  _cloudSaveTimer = setTimeout(saveToCloud, 2000); // debounce 2s
+}
+function saveToCloud(){
+  if(!db) return;
+  const payload = {
+    roster: masterRoster,
+    state: state,
+    savedAt: Date.now(),
+    savedBy: 'ChubbsAdmin'
+  };
+  db.ref(CLOUD_ADMIN_PATH).set(payload)
+    .then(()=>{ updateCloudStatus('saved'); })
+    .catch(e=>{ console.warn('Cloud save failed:', e.message); updateCloudStatus('error'); });
+}
+function loadFromCloud(callback){
+  if(!db){ callback(); return; }
+  db.ref(CLOUD_ADMIN_PATH).once('value').then(snap => {
+    const data = snap.val();
+    if(data && data.roster && data.state){
+      // Cloud data is newer or localStorage is empty — use cloud
+      const localTs = parseInt(localStorage.getItem('chubbsAdmin_ts') || '0', 10);
+      const cloudTs = data.savedAt || 0;
+      if(cloudTs > localTs || !localStorage.getItem(ADMIN_STORAGE_KEY)){
+        masterRoster = data.roster;
+        state = data.state;
+        // Sync to localStorage
+        try{
+          localStorage.setItem(ADMIN_ROSTER_KEY, JSON.stringify(masterRoster));
+          localStorage.setItem(ADMIN_STORAGE_KEY, JSON.stringify(state));
+          localStorage.setItem('chubbsAdmin_ts', String(cloudTs));
+        }catch(e){}
+        _cloudLoaded = true;
+        showAdminToast('☁️ Admin data restored from cloud', 'ok');
+      }
+    }
+    callback();
+  }).catch(e => {
+    console.warn('Cloud load failed:', e.message);
+    callback();
+  });
+}
+function updateCloudStatus(status){
+  const el = document.getElementById('cloud-save-status');
+  if(!el) return;
+  if(status === 'saved'){
+    el.textContent = '☁️ Saved';
+    el.style.color = '#a5f0c5';
+    try{ localStorage.setItem('chubbsAdmin_ts', String(Date.now())); }catch(e){}
+  } else if(status === 'error'){
+    el.textContent = '⚠️ Save failed';
+    el.style.color = '#f5d85c';
+  } else {
+    el.textContent = '☁️ Saving…';
+    el.style.color = 'var(--muted)';
+  }
+  if(status === 'saved') setTimeout(()=>{ if(el.textContent==='☁️ Saved') el.textContent=''; }, 3000);
 }
 
 let masterRoster = loadAdminRoster();
@@ -456,11 +521,13 @@ function init() {
 }
 
 function confirmReset() {
-  if(confirm("Are you sure you want to clear all data and start from scratch?")) {
+  if(confirm("Are you sure you want to clear all data and start from scratch? This also clears cloud-saved admin data.")) {
     masterRoster = defaultRoster();
     state = { attendance:{}, captains:[], scrambleTeams:[], stablefordGroups:[] };
     saveAdminRoster();
     saveAdminState();
+    // Also clear cloud
+    if(db) db.ref(CLOUD_ADMIN_PATH).remove().catch(()=>{});
     document.getElementById('ev-name').value = "Chubbs Peterson Invitational";
     document.getElementById('ev-display').value = "Weekend Golf";
     init();
@@ -1748,30 +1815,47 @@ function showNuclearReset(){
 function executeNuclearReset(){
   const checkboxes = document.querySelectorAll('[id^=nuke-]:checked');
   const ids = Array.from(checkboxes).map(c => c.value);
-  if(ids.length === 0){ showAdminToast('Nothing selected.', 'ok'); return; }
+  if(ids.length === 0){ alert('Nothing selected — check the boxes next to the events you want to delete.'); return; }
 
   const liveOnes = ids.filter(id => {
     const e = (window._nukeEntries||[]).find(x => x.eid === id);
     return e && !e.isTest;
   });
-  if(liveOnes.length > 0){
-    if(!confirm(`⚠️ You are about to delete ${liveOnes.length} LIVE event(s)!\n\nThis cannot be undone. Are you absolutely sure?`)) return;
-  }
 
-  if(!confirm(`Final confirmation: Delete ${ids.length} event(s) from Firebase?\n\nThis is permanent.`)) return;
+  const msg = liveOnes.length > 0
+    ? `⚠️ WARNING: ${liveOnes.length} of these ${ids.length} event(s) are NOT flagged as test.\n\nDelete ${ids.length} event(s) from Firebase?\n\nThis is permanent and cannot be undone.`
+    : `Delete ${ids.length} test event(s) from Firebase?\n\nThis is permanent.`;
 
-  showAdminToast('Deleting…', 'ok');
-  Promise.all(ids.map(id => db.ref(`/events/${id}`).remove()))
-    .then(() => {
-      showAdminToast(`☢️ Deleted ${ids.length} event(s) from Firebase.`, 'ok');
-      document.getElementById('nuclear-overlay').remove();
-    })
-    .catch(e => showAdminToast('Delete failed: ' + e.message, 'err'));
+  if(!confirm(msg)) return;
+
+  // Update button to show progress
+  const btn = document.querySelector('#nuclear-overlay button[onclick="executeNuclearReset()"]');
+  if(btn){ btn.textContent = '⏳ Deleting…'; btn.disabled = true; }
+
+  let deleted = 0, failed = 0;
+  const results = ids.map(id =>
+    db.ref(`/events/${id}`).remove()
+      .then(() => { deleted++; })
+      .catch(e => { failed++; console.error(`Failed to delete ${id}:`, e.message); })
+  );
+
+  Promise.all(results).then(() => {
+    if(failed > 0){
+      alert(`Deleted ${deleted} event(s). ${failed} failed — check Firebase rules allow write access at /events/$eventId.`);
+    } else {
+      showAdminToast(`☢️ Deleted ${deleted} event(s) from Firebase.`, 'ok');
+    }
+    const overlay = document.getElementById('nuclear-overlay');
+    if(overlay) overlay.remove();
+  });
 }
 
 window.onload = () => {
   initFirebase();
-  init();
+  // Try loading from cloud first, then init
+  loadFromCloud(() => {
+    init();
+  });
 };
 </script>
 </body>
