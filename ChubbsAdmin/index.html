@@ -140,19 +140,19 @@
       <img src="./ChubbsGatorIcon.png" alt="Chubbs Logo" style="width:96px; height:96px; border-radius:12px; border: 1px solid var(--gold2);" onerror="this.style.display='none'" />
       <div>
         <h1>Chubbs Admin</h1>
-        <div class="subtitle">Event Setup Portal</div>
+        <div class="subtitle">Event Setup Portal <span id="fb-status" style="font-size:10px;margin-left:8px">⏳ Connecting…</span></div>
       </div>
     </div>
 	<div style="display:flex; gap: 12px; flex-wrap:wrap;">
-      <button class="danger" onclick="confirmReset()">🗑 Clear Setup</button>
-      <button onclick="document.getElementById('roster-upload').click()">📥 Import cpi_roster.json</button>
+      <button class="danger" onclick="confirmReset()" title="Clear all admin setup data — roster, teams, groups. Does not affect Firebase.">🗑 Clear Setup</button>
+      <button onclick="document.getElementById('roster-upload').click()" title="Import a player roster JSON file exported from a previous session.">📥 Import Roster</button>
       <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
 
-      <button class="ghost" onclick="generateAndDownloadJson()">💾 Export JSON</button>
-      <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()">☁️ Send to App</button>
-      <button class="ghost" onclick="showGameDayCheck()" style="border-color:var(--green);color:var(--green)">✅ Game Day Check</button>
-      <button class="ghost" onclick="purgeTestEvents()" style="border-color:#d16b5d;color:#d16b5d">🧹 Purge Tests</button>
-      <button class="danger" onclick="showNuclearReset()" style="font-size:11px">☢️ Nuclear Reset</button>
+      <button class="ghost" onclick="generateAndDownloadJson()" title="Download the event bundle as a JSON file. Share via WeChat as a backup.">💾 Export JSON</button>
+      <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud. Players receive it via their personal link.">☁️ Send to App</button>
+      <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight checklist: verifies Firebase, players, teams, groups, dates, and cloud publish status.">✅ Game Day Check</button>
+      <button id="btn-purge" class="ghost" onclick="btnLoading(this);purgeTestEvents()" style="border-color:#d16b5d;color:#d16b5d" title="Scan Firebase for events flagged as TEST and delete them. Live events are never touched.">🧹 Purge Tests</button>
+      <button id="btn-nuke" class="danger" onclick="btnLoading(this);showNuclearReset()" style="font-size:11px" title="Full Firebase event manager. View all events, select which to delete. Double confirmation for live events.">☢️ Nuclear Reset</button>
     </div>
   </div>
 
@@ -1184,8 +1184,20 @@ function initFirebase() {
     if(typeof firebase !== 'undefined' && firebase.apps.length === 0) {
       firebase.initializeApp(FIREBASE_CONFIG);
       db = firebase.database();
+      // Verify connection
+      db.ref('.info/connected').on('value', snap => {
+        const el = document.getElementById('fb-status');
+        if(el) el.innerHTML = snap.val() ? '<span style="color:#a5f0c5">🟢 Firebase connected</span>' : '<span style="color:#f55c5c">🔴 Firebase offline</span>';
+      });
+    } else if(typeof firebase === 'undefined'){
+      const el = document.getElementById('fb-status');
+      if(el) el.innerHTML = '<span style="color:#f55c5c">❌ Firebase SDK not loaded</span>';
     }
-  } catch(e) { console.warn('Firebase init failed', e); }
+  } catch(e) {
+    console.warn('Firebase init failed', e);
+    const el = document.getElementById('fb-status');
+    if(el) el.innerHTML = '<span style="color:#f55c5c">❌ Firebase init failed</span>';
+  }
 }
 
 function buildEventBundle() {
@@ -1489,6 +1501,22 @@ function showToast(msg, type) {
   t._hide = setTimeout(()=>{ t.style.opacity='0'; }, 3000);
 }
 
+// ── Button loading state ──
+function btnLoading(btn){
+  if(!btn) return;
+  btn._origText = btn._origText || btn.innerHTML;
+  btn.innerHTML = '⏳ Loading…';
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+}
+function btnReset(id){
+  const btn = document.getElementById(id);
+  if(!btn) return;
+  btn.innerHTML = btn._origText || btn.innerHTML;
+  btn.disabled = false;
+  btn.style.opacity = '';
+}
+
 // ── Event Mode (test vs live) ──
 let eventMode = 'live';
 function setEventMode(mode){
@@ -1519,11 +1547,10 @@ buildEventBundle = function(){
 
 // ── Purge Test Events ──
 function purgeTestEvents(){
-  if(!db){ alert('Firebase not connected.'); return; }
-  showAdminToast('Scanning for test events…', 'ok');
+  if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-purge'); return; }
   db.ref('/events').once('value').then(snap => {
     const events = snap.val();
-    if(!events){ showAdminToast('No events found.', 'ok'); return; }
+    if(!events){ showAdminToast('No events found.', 'ok'); btnReset('btn-purge'); return; }
     const testEvents = [];
     Object.entries(events).forEach(([eid, data]) => {
       const bundle = data && data.bundle;
@@ -1531,22 +1558,24 @@ function purgeTestEvents(){
     });
     if(testEvents.length === 0){
       showAdminToast('No test events found — all clean!', 'ok');
-      return;
+      btnReset('btn-purge'); return;
     }
     const list = testEvents.map(t => `• ${t.name} (${t.eid})`).join('\n');
-    if(!confirm(`Found ${testEvents.length} test event(s):\n\n${list}\n\nDelete all test events and their scoring data from Firebase?`)) return;
+    if(!confirm(`Found ${testEvents.length} test event(s):\n\n${list}\n\nDelete all test events and their scoring data from Firebase?`)){ btnReset('btn-purge'); return; }
     const deletes = testEvents.map(t => db.ref(`/events/${t.eid}`).remove());
     Promise.all(deletes).then(() => {
       showAdminToast(`✅ Purged ${testEvents.length} test event(s)!`, 'ok');
+      btnReset('btn-purge');
     }).catch(e => {
       showAdminToast('Purge failed: ' + e.message, 'err');
+      btnReset('btn-purge');
     });
-  });
+  }).catch(e => { showAdminToast('Firebase error: ' + e.message, 'err'); btnReset('btn-purge'); });
 }
 
 // ── Game Day Readiness Check ──
 function showGameDayCheck(){
-  if(!db){ alert('Firebase not connected.'); return; }
+  if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-gameday'); return; }
   const bundle = buildEventBundle();
   const ev = bundle.event || {};
   const players = bundle.players || [];
@@ -1595,10 +1624,10 @@ function showGameDayCheck(){
     } else {
       checks.push({label:'Published to Firebase', status:'fail', detail:'Not yet published — hit "Send to App" first'});
     }
-    renderGameDayOverlay(checks, evId, players);
+    btnReset('btn-gameday'); renderGameDayOverlay(checks, evId, players);
   }).catch(() => {
     checks.push({label:'Published to Firebase', status:'fail', detail:'Could not check — Firebase error'});
-    renderGameDayOverlay(checks, evId, players);
+    btnReset('btn-gameday'); renderGameDayOverlay(checks, evId, players);
   });
 }
 
@@ -1653,9 +1682,9 @@ function renderGameDayOverlay(checks, evId, players){
 
 // ── Nuclear Reset — manage all Firebase events ──
 function showNuclearReset(){
-  if(!db){ alert('Firebase not connected.'); return; }
-  showAdminToast('Loading all events from Firebase…', 'ok');
+  if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-nuke'); return; }
   db.ref('/events').once('value').then(snap => {
+    btnReset('btn-nuke');
     const events = snap.val();
     if(!events){
       alert('Firebase is already clean — no events found.');
@@ -1713,7 +1742,7 @@ function showNuclearReset(){
       </div>`;
     document.body.appendChild(overlay);
     window._nukeEntries = entries;
-  }).catch(e => alert('Failed to load events: ' + e.message));
+  }).catch(e => { btnReset('btn-nuke'); alert('Failed to load events: ' + e.message); });
 }
 
 function executeNuclearReset(){
