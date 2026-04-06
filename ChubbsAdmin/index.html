@@ -1833,20 +1833,28 @@ function executeNuclearReset(){
   if(btn){ btn.textContent = '⏳ Deleting…'; btn.disabled = true; }
 
   let deleted = 0, failed = 0;
-  const results = ids.map(id =>
-    db.ref(`/events/${id}`).remove()
-      .then(() => { deleted++; })
-      .catch(e => { failed++; console.error(`Failed to delete ${id}:`, e.message); })
-  );
+  const errors = [];
+  const results = ids.map(id => {
+    return new Promise(resolve => {
+      // Timeout after 10 seconds
+      const timer = setTimeout(() => {
+        failed++; errors.push(`${id}: timed out (check Firebase rules)`);
+        resolve();
+      }, 10000);
+      db.ref(`/events/${id}`).remove()
+        .then(() => { clearTimeout(timer); deleted++; resolve(); })
+        .catch(e => { clearTimeout(timer); failed++; errors.push(`${id}: ${e.message}`); resolve(); });
+    });
+  });
 
   Promise.all(results).then(() => {
+    const overlay = document.getElementById('nuclear-overlay');
+    if(overlay) overlay.remove();
     if(failed > 0){
-      alert(`Deleted ${deleted} event(s). ${failed} failed — check Firebase rules allow write access at /events/$eventId.`);
+      alert(`Deleted ${deleted} event(s). ${failed} failed:\n\n${errors.join('\n')}\n\nCheck Firebase Console → Realtime Database → Rules.\nRules must include:\n"events": { ".read": true, "$eventId": { ".write": true } }`);
     } else {
       showAdminToast(`☢️ Deleted ${deleted} event(s) from Firebase.`, 'ok');
     }
-    const overlay = document.getElementById('nuclear-overlay');
-    if(overlay) overlay.remove();
   });
 }
 
