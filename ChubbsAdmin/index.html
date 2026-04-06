@@ -152,6 +152,7 @@
       <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()">☁️ Send to App</button>
       <button class="ghost" onclick="showGameDayCheck()" style="border-color:var(--green);color:var(--green)">✅ Game Day Check</button>
       <button class="ghost" onclick="purgeTestEvents()" style="border-color:#d16b5d;color:#d16b5d">🧹 Purge Tests</button>
+      <button class="danger" onclick="showNuclearReset()" style="font-size:11px">☢️ Nuclear Reset</button>
     </div>
   </div>
 
@@ -1648,6 +1649,95 @@ function renderGameDayOverlay(checks, evId, players){
       </div>
     </div>`;
   document.body.appendChild(overlay);
+}
+
+// ── Nuclear Reset — manage all Firebase events ──
+function showNuclearReset(){
+  if(!db){ alert('Firebase not connected.'); return; }
+  showAdminToast('Loading all events from Firebase…', 'ok');
+  db.ref('/events').once('value').then(snap => {
+    const events = snap.val();
+    if(!events){
+      alert('Firebase is already clean — no events found.');
+      return;
+    }
+    const entries = Object.entries(events).map(([eid, data]) => {
+      const bundle = data && data.bundle;
+      const ev = bundle && bundle.event || {};
+      const isTest = bundle && bundle._isTest;
+      const playerCount = bundle && bundle.players ? bundle.players.length : 0;
+      const groupCount = (data.groups ? Object.keys(data.groups).length : 0) + (data.teams ? Object.keys(data.teams).length : 0);
+      const ts = bundle && bundle._publishedAt ? new Date(bundle._publishedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+      return {eid, name: ev.displayName || ev.name || eid, isTest, playerCount, groupCount, date: ev.satDate || '', published: ts, hasScores: groupCount > 0};
+    });
+
+    const old = document.getElementById('nuclear-overlay');
+    if(old) old.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'nuclear-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+
+    const rows = entries.map(e => {
+      const badge = e.isTest
+        ? '<span style="background:#5c3a0a;color:#f5d85c;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">TEST</span>'
+        : '<span style="background:#1a3d2b;color:#a5f0c5;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700">LIVE</span>';
+      const scoreWarn = e.hasScores ? '<span style="font-size:9px;color:#f5d85c"> ⚠️ has scoring data</span>' : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <input type="checkbox" id="nuke-${e.eid}" value="${e.eid}" ${e.isTest ? 'checked' : ''} style="flex-shrink:0;width:18px;height:18px;accent-color:#d16b5d">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700;color:#f4efe2;display:flex;align-items:center;gap:6px">${badge} ${e.name}${scoreWarn}</div>
+          <div style="font-size:10px;color:#7aaa8a">${e.eid} · ${e.playerCount} players · ${e.date || 'no date'} · Published: ${e.published}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    overlay.innerHTML = `
+      <div style="background:#12251b;border:2px solid #d16b5d;border-radius:16px;padding:24px;max-width:560px;width:100%;max-height:90vh;overflow-y:auto">
+        <div style="font-family:'Playfair Display',serif;font-size:20px;font-weight:900;color:#d16b5d;margin-bottom:4px">☢️ Nuclear Reset</div>
+        <div style="font-size:12px;color:#f5d85c;margin-bottom:4px;font-weight:700">⚠️ This permanently deletes events and all scoring data from Firebase.</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:16px">Test events are pre-checked. Uncheck any event you want to KEEP. Live events are unchecked by default for safety.</div>
+
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button onclick="document.querySelectorAll('[id^=nuke-]').forEach(c=>c.checked=true)" style="flex:1;padding:6px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--muted);font-size:10px;cursor:pointer">Select all</button>
+          <button onclick="document.querySelectorAll('[id^=nuke-]').forEach(c=>c.checked=false)" style="flex:1;padding:6px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--muted);font-size:10px;cursor:pointer">Deselect all</button>
+          <button onclick="document.querySelectorAll('[id^=nuke-]').forEach(c=>{const e=window._nukeEntries.find(x=>'nuke-'+x.eid===c.id);c.checked=e&&e.isTest;})" style="flex:1;padding:6px;border-radius:6px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--muted);font-size:10px;cursor:pointer">Tests only</button>
+        </div>
+
+        <div style="max-height:350px;overflow-y:auto;border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:4px 8px">${rows}</div>
+
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button onclick="document.getElementById('nuclear-overlay').remove()" style="flex:1;padding:12px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--muted);font-size:13px;cursor:pointer">Cancel</button>
+          <button onclick="executeNuclearReset()" style="flex:1;padding:12px;border-radius:10px;background:#5c2020;border:1px solid #d16b5d;color:#ffb5ae;font-size:13px;font-weight:900;cursor:pointer">☢️ Delete Selected</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    window._nukeEntries = entries;
+  }).catch(e => alert('Failed to load events: ' + e.message));
+}
+
+function executeNuclearReset(){
+  const checkboxes = document.querySelectorAll('[id^=nuke-]:checked');
+  const ids = Array.from(checkboxes).map(c => c.value);
+  if(ids.length === 0){ showAdminToast('Nothing selected.', 'ok'); return; }
+
+  const liveOnes = ids.filter(id => {
+    const e = (window._nukeEntries||[]).find(x => x.eid === id);
+    return e && !e.isTest;
+  });
+  if(liveOnes.length > 0){
+    if(!confirm(`⚠️ You are about to delete ${liveOnes.length} LIVE event(s)!\n\nThis cannot be undone. Are you absolutely sure?`)) return;
+  }
+
+  if(!confirm(`Final confirmation: Delete ${ids.length} event(s) from Firebase?\n\nThis is permanent.`)) return;
+
+  showAdminToast('Deleting…', 'ok');
+  Promise.all(ids.map(id => db.ref(`/events/${id}`).remove()))
+    .then(() => {
+      showAdminToast(`☢️ Deleted ${ids.length} event(s) from Firebase.`, 'ok');
+      document.getElementById('nuclear-overlay').remove();
+    })
+    .catch(e => showAdminToast('Delete failed: ' + e.message, 'err'));
 }
 
 window.onload = () => {
