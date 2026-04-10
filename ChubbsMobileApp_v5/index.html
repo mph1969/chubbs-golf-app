@@ -247,6 +247,45 @@
     .results-card{border:2px solid var(--gold);background:linear-gradient(180deg,rgba(214,176,90,0.06),rgba(16,38,28,0.95))}
     .results-item{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
     .results-item:last-child{border-bottom:none}
+    /* ── Font Size Modes ── */
+    body.fs-large{font-size:16px}
+    body.fs-large .player-name{font-size:17px}
+    body.fs-large .stepper button{height:50px;font-size:24px}
+    body.fs-large .stepper .val{height:50px;font-size:22px}
+    body.fs-large .stepper-clr{height:42px;font-size:16px}
+    body.fs-large .hole-chip{font-size:14px;padding:9px 12px}
+    body.fs-large .btn{font-size:15px;padding:13px 16px}
+    body.fs-large .btn.slim{font-size:14px;padding:10px 13px}
+    body.fs-large .driver-btn{font-size:15px;padding:12px}
+    body.fs-large .hcp-badge{font-size:13px}
+    body.fs-large .meta .v{font-size:22px}
+    body.fs-large .meta .k{font-size:12px}
+    body.fs-large th,body.fs-large td{font-size:14px;padding:11px 6px}
+    body.fs-large .sc-grid{font-size:12px}
+    body.fs-large .sc-grid .sc-cell{padding:7px 4px}
+    body.fs-xl{font-size:18px}
+    body.fs-xl .player-name{font-size:20px}
+    body.fs-xl .stepper{grid-template-columns:56px 1fr 56px}
+    body.fs-xl .stepper button{height:60px;font-size:28px}
+    body.fs-xl .stepper .val{height:60px;font-size:28px}
+    body.fs-xl .stepper-clr{height:48px;min-width:40px;font-size:18px}
+    body.fs-xl .hole-chip{font-size:16px;padding:10px 14px}
+    body.fs-xl .btn{font-size:17px;padding:15px 18px}
+    body.fs-xl .btn.slim{font-size:15px;padding:12px 15px}
+    body.fs-xl .driver-btn{font-size:17px;padding:14px}
+    body.fs-xl .hcp-badge{font-size:14px;padding:5px 10px}
+    body.fs-xl .meta .v{font-size:26px}
+    body.fs-xl .meta .k{font-size:13px}
+    body.fs-xl .player-card{padding:16px}
+    body.fs-xl th,body.fs-xl td{font-size:15px;padding:12px 6px}
+    body.fs-xl .sc-grid{font-size:13px}
+    body.fs-xl .sc-grid .sc-cell{padding:8px 4px;min-width:28px}
+    body.fs-xl .tab{font-size:13px;padding:12px 8px}
+    body.fs-xl button.val{font-size:28px}
+    /* Display size selector */
+    .fs-selector{display:flex;gap:6px;margin-top:8px}
+    .fs-opt{flex:1;padding:10px;border-radius:10px;border:1px solid var(--line);background:#12251b;color:var(--text);font-size:12px;font-weight:700;cursor:pointer;text-align:center}
+    .fs-opt.on{border-color:var(--gold);background:rgba(214,176,90,0.12);color:var(--gold2)}
   </style>
 </head>
 <body>
@@ -2300,10 +2339,22 @@ function stepScore(day, idx, delta, field='gross'){
     const newVal = Math.max(0, current + delta);
     bucket[field][idx] = newVal;
     if(field === 'putts') syncPenaltyStamp(state.stableford.hole, idx, newVal, oldVal);
+    if(field === 'gross') suggestPutts(state.stableford.hole, idx);
     state.poker.digitalDeal = null;
   }
   saveState();
   renderAll();
+}
+function suggestPutts(holeIdx, playerIdx){
+  if(!state.options.threePuttPoker) return;
+  const bucket=state.stableford.holes[holeIdx];
+  if(typeof bucket.putts[playerIdx]==='number') return; // already set
+  const gross=bucket.gross[playerIdx];
+  if(typeof gross!=='number') return;
+  const par=(holeMeta(holeIdx,'day2').par)||4;
+  const suggested=gross<=1?0:gross<par?1:2;
+  bucket.putts[playerIdx]=Math.min(suggested,Math.max(gross,0));
+  syncPenaltyStamp(holeIdx, playerIdx, bucket.putts[playerIdx], null);
 }
 function setExact(day, idx, value, field='gross'){
   if(isScoreLocked(day)) return;
@@ -2315,6 +2366,7 @@ function setExact(day, idx, value, field='gross'){
     const oldVal = bucket[field][idx];
     bucket[field][idx] = value;
     if(field === 'putts') syncPenaltyStamp(state.stableford.hole, idx, value, oldVal);
+    if(field === 'gross') suggestPutts(state.stableford.hole, idx);
     state.poker.digitalDeal = null;
   }
   saveState();
@@ -3877,7 +3929,7 @@ function renderDay1(){
       <div class="holebar tight">
         <button class="btn slim" onclick="navHole('scramble',-1)">← Prev</button>
         <div class="hole-chip" style="flex:1;text-align:center">${state.scramble.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole)+1}/18</span> ` : ''}Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}${challengeBadgeHtml(state.scramble.hole,'day1')}</div>
-        <button class="btn slim" onclick="navHole('scramble',1)">Next →</button>
+        <button class="btn slim" onclick="navHole('scramble',1)">Next → ${(()=>{const o=getHoleOrder('scramble');const pp=holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole||0);return pp<17?'H'+(o[pp+1]+1):'✓';})()}</button>
       </div>
       ${!state.scramble.holes.some(h=>typeof h.gross==='number') ? `<div style="text-align:center;margin:4px 0"><button class="btn slim ghost" style="font-size:10px" onclick="showStartingHoleModal('scramble')">⛳ Starting hole: ${(state.scramble.startingHole||0)+1}</button></div>` : (state.scramble.startingHole ? `<div style="text-align:center;font-size:9px;color:var(--muted);margin:2px 0">Started on hole ${state.scramble.startingHole+1}</div>` : '')}
 
@@ -4773,6 +4825,16 @@ function renderAbout(){
     </div>
 
     <div class="card">
+      <div class="section-title">Display Size 🏌️</div>
+      <div class="fs-selector">
+        <button class="fs-opt${document.body.classList.contains('fs-large')||document.body.classList.contains('fs-xl')?'':' on'}" onclick="setChubbsFontSize('normal')">Standard</button>
+        <button class="fs-opt${document.body.classList.contains('fs-large')?' on':''}" onclick="setChubbsFontSize('large')">Large</button>
+        <button class="fs-opt${document.body.classList.contains('fs-xl')?' on':''}" onclick="setChubbsFontSize('xl')">🏌️ Senior</button>
+      </div>
+      <div class="inline-note">Senior mode increases all text and buttons for easier reading on the course.</div>
+    </div>
+
+    <div class="card">
       <div class="section-title">Credits</div>
       <div style="display:flex;flex-direction:column;gap:12px">
         <div style="display:flex;align-items:center;gap:12px">
@@ -4933,6 +4995,19 @@ seedJacketHistory();     // apply badge data to event.json-imported players (Nic
     }).catch(() => { initSync(eid); renderAll(); });
   }
 })();
+// ── Font size modes ──
+function setChubbsFontSize(size){
+  document.body.classList.remove('fs-large','fs-xl');
+  if(size==='large') document.body.classList.add('fs-large');
+  else if(size==='xl') document.body.classList.add('fs-xl');
+  try{localStorage.setItem('chubbs_fontsize',size);}catch(e){}
+  showToast(size==='xl'?'🏌️ Senior mode — larger text & buttons':size==='large'?'Large text enabled':'Standard text','ok',2000);
+  renderAll();
+}
+(function restoreFontSize(){
+  try{const s=localStorage.getItem('chubbs_fontsize');if(s==='large')document.body.classList.add('fs-large');else if(s==='xl')document.body.classList.add('fs-xl');}catch(e){}
+})();
+
 renderAll();
 checkLivePaywall();
 checkPendingEvent(); // show import notification if admin sent an event from ChubbsAdmin
@@ -4940,12 +5015,10 @@ checkPendingEvent(); // show import notification if admin sent an event from Chu
 // ── Service Worker: registration + update prompt ──
 (function(){
   if(!('serviceWorker' in navigator)) return;
-  navigator.serviceWorker.register('./sw.js').then(reg => {
-    // Check for updates on every launch
+  navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg => {
     reg.addEventListener('updatefound', () => {
       const newSW = reg.installing;
       newSW.addEventListener('statechange', () => {
-        // New SW installed and waiting — show update banner
         if(newSW.state === 'installed' && navigator.serviceWorker.controller){
           showUpdateBanner(newSW);
         }
