@@ -4586,9 +4586,11 @@ function renderLeaderboard(){
 
   // ── SCRAMBLE SECTION ─────────────────────────────────────────────
   const scrambleHasScores = scramble.entered > 0;
-  const driveHtml = scramblePlayers.map((p, idx) => {
+  const minD = state.scramble.minDrives || 4;
+  const driveHtml = `<div style="font-size:10px;color:var(--muted);margin-bottom:4px">Drives used / ${minD} min required</div>` + scramblePlayers.map((p, idx) => {
     const count = scramble.drives[idx];
-    return `<div class="summary-row"><div class="n">${fmtName(p.name, idx)}</div><div class="s">${count} / 4</div></div>`;
+    const ok = count >= minD;
+    return `<div class="summary-row"><div class="n">${fmtName(p.name, idx)}</div><div class="s" style="color:${ok?'var(--green)':'#ffb5ae'}">${count}/${minD} ${ok?'✓':'⚠️'}</div></div>`;
   }).join('\n');
 
   let scrambleCard;

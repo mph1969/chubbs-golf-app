@@ -1,6 +1,6 @@
 // Chubbs Golf — Service Worker
 // Bump CACHE_VERSION on every deploy to trigger update prompt
-const CACHE_VERSION = 'chubbs-v5.24';
+const CACHE_VERSION = 'chubbs-v5.25';
 const ASSETS = [
   './',
   './index.html',
@@ -10,6 +10,7 @@ const ASSETS = [
   './cpi_badge.svg',
   './mph_contact_qr.png',
   './mph_pay_code.jpeg',
+  './nansha_logo.png',
   './CPI Handbook.pdf'
 ];
 
