@@ -4235,7 +4235,7 @@ function renderDay2(){
         ${quickPuttButtons(idx)}` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:11px;color:var(--muted)">
           <span>${hasGross ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${shots?' · +'+shots+' shots':''}` : ''}</span>
-          <button class="btn slim" style="font-size:11px;padding:6px 12px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter a terrible score (blob/pick-up) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
+          <button class="btn slim" style="font-size:11px;padding:6px 12px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter double-par (max allowed score per Chubbs rules) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
         </div>
       </div>
     `;
