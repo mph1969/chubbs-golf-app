@@ -147,6 +147,9 @@
       <button onclick="document.getElementById('roster-upload').click()" title="Import a player roster JSON file.">📥 Import Roster</button>
       <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
       <button class="ghost" onclick="generateAndDownloadJson()" title="Download event bundle as JSON backup.">💾 Export JSON</button>
+      <button class="ghost" onclick="exportConfig()" title="Export full admin setup (roster, teams, groups, settings) to clone into a new event." style="border-color:var(--blue);color:var(--blue)">📋 Export Config</button>
+      <button class="ghost" onclick="document.getElementById('config-upload').click()" title="Import a saved config to pre-fill this setup." style="border-color:var(--blue);color:var(--blue)">📥 Import Config</button>
+      <input type="file" id="config-upload" accept=".json" style="display:none" onchange="importConfig(this)">
       <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud.">☁️ Send to App</button>
       <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight readiness checklist.">✅ Game Day Check</button>
       <div style="position:relative;display:inline-block">
@@ -1406,6 +1409,111 @@ function buildEventBundle() {
     day1Challenges: getChallenges('scramble'),
     day2Challenges: getChallenges('stableford')
   };
+}
+
+// ── Export/Import Admin Config ──
+function exportConfig(){
+  const config={
+    _type:'chubbs-admin-config',
+    _exportedAt:new Date().toISOString(),
+    roster:masterRoster,
+    state:state,
+    form:{
+      eventName:document.getElementById('ev-name').value,
+      displayName:document.getElementById('ev-display').value,
+      scrambleDate:document.getElementById('scramble-date').value,
+      scrambleTime:document.getElementById('scramble-time').value,
+      stablefordDate:document.getElementById('stableford-date').value,
+      stablefordTime:document.getElementById('stableford-time').value,
+      scrambleCourse:document.getElementById('scramble-course').value,
+      scrambleFront:document.getElementById('scramble-front').value,
+      scrambleBack:document.getElementById('scramble-back').value,
+      stablefordCourse:document.getElementById('stableford-course').value,
+      stablefordFront:document.getElementById('stableford-front').value,
+      stablefordBack:document.getElementById('stableford-back').value,
+      currency:document.getElementById('ev-currency').value,
+      teamSize:document.getElementById('scramble-team-size').value,
+      minDrives:document.getElementById('scramble-min-drives').value,
+      ante:document.getElementById('ev-ante').value,
+      pen3:document.getElementById('ev-pen3').value,
+      pen4:document.getElementById('ev-pen4').value,
+    },
+    challenges:{
+      scramble:getChallenges('scramble'),
+      stableford:getChallenges('stableford')
+    }
+  };
+  const name=config.form.eventName.replace(/\s+/g,'-').substring(0,20)||'chubbs';
+  const blob=new Blob([JSON.stringify(config,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`${name}-config-${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);a.click();a.remove();
+}
+function importConfig(input){
+  const file=input.files[0];
+  if(!file) return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      const config=JSON.parse(e.target.result);
+      if(config._type!=='chubbs-admin-config'){
+        alert('This doesn\'t look like a Chubbs Admin config file.');
+        return;
+      }
+      if(!confirm(`Import config from ${config._exportedAt?.slice(0,10)||'unknown date'}?\n\nThis will replace your current roster, teams, groups, and settings.\n\nA NEW event ID will be generated.`)) return;
+      // Restore roster
+      if(Array.isArray(config.roster)&&config.roster.length){
+        masterRoster=config.roster;
+        saveAdminRoster();
+      }
+      // Restore state (attendance, teams, groups)
+      if(config.state){
+        state=config.state;
+        saveAdminState();
+      }
+      // Restore form fields
+      const f=config.form||{};
+      if(f.eventName) document.getElementById('ev-name').value=f.eventName;
+      if(f.displayName) document.getElementById('ev-display').value=f.displayName;
+      if(f.scrambleDate) document.getElementById('scramble-date').value=f.scrambleDate;
+      if(f.scrambleTime) document.getElementById('scramble-time').value=f.scrambleTime;
+      if(f.stablefordDate) document.getElementById('stableford-date').value=f.stablefordDate;
+      if(f.stablefordTime) document.getElementById('stableford-time').value=f.stablefordTime;
+      if(f.scrambleCourse){document.getElementById('scramble-course').value=f.scrambleCourse;togglePalmSelectors('scramble');}
+      if(f.scrambleFront) document.getElementById('scramble-front').value=f.scrambleFront;
+      if(f.scrambleBack) document.getElementById('scramble-back').value=f.scrambleBack;
+      if(f.stablefordCourse){document.getElementById('stableford-course').value=f.stablefordCourse;togglePalmSelectors('stableford');}
+      if(f.stablefordFront) document.getElementById('stableford-front').value=f.stablefordFront;
+      if(f.stablefordBack) document.getElementById('stableford-back').value=f.stablefordBack;
+      if(f.currency) document.getElementById('ev-currency').value=f.currency;
+      if(f.teamSize) document.getElementById('scramble-team-size').value=f.teamSize;
+      if(f.minDrives) document.getElementById('scramble-min-drives').value=f.minDrives;
+      if(f.ante) document.getElementById('ev-ante').value=f.ante;
+      if(f.pen3) document.getElementById('ev-pen3').value=f.pen3;
+      if(f.pen4) document.getElementById('ev-pen4').value=f.pen4;
+      // Restore challenge hole assignments
+      if(config.challenges){
+        populateChallengeHoles('scramble');
+        populateChallengeHoles('stableford');
+        (config.challenges.scramble||[]).forEach(ch=>{
+          const sel=document.getElementById('ch-scramble-'+ch.id);
+          if(sel) sel.value=ch.hole;
+        });
+        (config.challenges.stableford||[]).forEach(ch=>{
+          const sel=document.getElementById('ch-stableford-'+ch.id);
+          if(sel) sel.value=ch.hole;
+        });
+      }
+      // Re-render everything
+      init();
+      alert('Config imported successfully! Review the setup and update dates/event name for the new event.');
+    }catch(err){
+      alert('Failed to parse config file: '+err.message);
+    }
+  };
+  reader.readAsText(file);
+  input.value=''; // reset file input
 }
 
 function generateAndDownloadJson() {
