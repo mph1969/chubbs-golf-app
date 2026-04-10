@@ -284,8 +284,20 @@
           <div style="font-size:11px;color:var(--muted);align-self:end;padding-bottom:8px" id="drives-hint">4 players × 4 drives = 16 of 18 holes · 2 flex</div>
         </div>
 
+        <!-- SCRAMBLE SPECIAL HOLES -->
+        <div style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.2);border-radius:10px;padding:14px;margin-top:8px;margin-bottom:12px">
+          <label style="color:var(--gold2);margin-bottom:10px;font-size:12px">🏆 Scramble Challenges</label>
+          <div class="grid-2" style="gap:8px">
+            <div><label>🏌️ Dick Putter</label><select id="ch-scramble-dickputter"><option value="">— None —</option></select></div>
+            <div><label>⚾ Buddy Balls</label><select id="ch-scramble-buddyballs"><option value="">— None —</option></select></div>
+            <div><label>📏 Shortest Drive</label><select id="ch-scramble-shortestdrive"><option value="">— None —</option></select></div>
+            <div><label>🏒 One Iron of Destiny</label><select id="ch-scramble-oneiron"><option value="">— None —</option></select></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:6px">Assign each challenge to a hole. These will display as special markers in the app.</div>
+        </div>
+
         <div class="section-divider"></div>
-        
+
         <div style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <div>
@@ -328,8 +340,21 @@
           <div><label>Back 9</label><select id="stableford-back"><option value="B">B - Lake</option><option value="C">C - River</option><option value="A">A - Lychee</option></select></div>
         </div>
 
+        <!-- STABLEFORD SPECIAL HOLES -->
+        <div style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.2);border-radius:10px;padding:14px;margin-top:8px;margin-bottom:12px">
+          <label style="color:var(--gold2);margin-bottom:10px;font-size:12px">🏆 Stableford Challenges</label>
+          <div class="grid-2" style="gap:8px">
+            <div><label>🐊 Little Chubby</label><select id="ch-stableford-littlechubby"><option value="">— None —</option></select></div>
+            <div><label>🎯 CTP (Closest to Pin)</label><select id="ch-stableford-ctp"><option value="">— None —</option></select></div>
+            <div><label>💰 Money Hole</label><select id="ch-stableford-moneyhole"><option value="">— None —</option></select></div>
+            <div><label>🏌️ Longest Putt</label><select id="ch-stableford-longestputt"><option value="">— None —</option></select></div>
+            <div><label>💥 Longest Drive</label><select id="ch-stableford-longestdrive"><option value="">— None —</option></select></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:6px">Assign each challenge to a hole. These will display as special markers in the app.</div>
+        </div>
+
         <div class="section-divider"></div>
-        
+
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
           <h3 style="margin:0; font-size:14px; color:var(--gold2)">Stableford Groups (Drag & Drop)</h3>
           <div>
@@ -522,6 +547,9 @@ function init() {
     if(!state.attendance[p.playerId]) state.attendance[p.playerId] = 'none';
   });
   renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+  // Populate challenge hole dropdowns
+  populateChallengeHoles('scramble');
+  populateChallengeHoles('stableford');
 }
 
 function confirmReset() {
@@ -541,7 +569,53 @@ function confirmReset() {
 function togglePalmSelectors(prefix) {
   const isPalm = document.getElementById(`${prefix}-course`).value === 'palmIsland';
   document.getElementById(`${prefix}-palm-selectors`).style.display = isPalm ? 'grid' : 'none';
+  populateChallengeHoles(prefix);
 }
+
+// ── Special Holes / Challenges ──
+const NINE_LABELS={A:'A · Lychee',B:'B · Lake',C:'C · River'};
+const SCRAMBLE_CHALLENGES=['dickputter','buddyballs','shortestdrive','oneiron'];
+const SCRAMBLE_CHALLENGE_NAMES={dickputter:'Dick Putter',buddyballs:'Buddy Balls',shortestdrive:'Shortest Drive',oneiron:'One Iron of Destiny'};
+const STABLEFORD_CHALLENGES=['littlechubby','ctp','moneyhole','longestputt','longestdrive'];
+const STABLEFORD_CHALLENGE_NAMES={littlechubby:'Little Chubby',ctp:'CTP',moneyhole:'Money Hole',longestputt:'Longest Putt',longestdrive:'Longest Drive'};
+
+function populateChallengeHoles(prefix){
+  const front=document.getElementById(`${prefix}-front`).value||'A';
+  const back=document.getElementById(`${prefix}-back`).value||'B';
+  const challenges=prefix==='scramble'?SCRAMBLE_CHALLENGES:STABLEFORD_CHALLENGES;
+  // Build hole options: Front 9 (nine label + hole 1-9) then Back 9
+  let opts='<option value="">— None —</option>';
+  [front,back].forEach((nine,ni)=>{
+    const lbl=NINE_LABELS[nine]||nine;
+    for(let h=1;h<=9;h++){
+      const courseHole=ni*9+h; // 1-18
+      opts+=`<option value="${nine}${h}">${nine}${h} · Hole ${courseHole}</option>`;
+    }
+  });
+  challenges.forEach(ch=>{
+    const sel=document.getElementById(`ch-${prefix}-${ch}`);
+    if(sel){const cur=sel.value;sel.innerHTML=opts;if(cur)sel.value=cur;}
+  });
+}
+function getChallenges(prefix){
+  const challenges=prefix==='scramble'?SCRAMBLE_CHALLENGES:STABLEFORD_CHALLENGES;
+  const names=prefix==='scramble'?SCRAMBLE_CHALLENGE_NAMES:STABLEFORD_CHALLENGE_NAMES;
+  const result=[];
+  challenges.forEach(ch=>{
+    const sel=document.getElementById(`ch-${prefix}-${ch}`);
+    if(sel&&sel.value){
+      result.push({id:ch,name:names[ch],hole:sel.value});
+    }
+  });
+  return result;
+}
+// Populate on nine selector change
+document.addEventListener('change',e=>{
+  if(e.target.id&&(e.target.id.includes('-front')||e.target.id.includes('-back'))){
+    const prefix=e.target.id.startsWith('scramble')?'scramble':'stableford';
+    populateChallengeHoles(prefix);
+  }
+});
 
 // --- TIME HELPER ---
 function addMinutesToTime(timeStr, mins) {
@@ -1328,7 +1402,9 @@ function buildEventBundle() {
       currency: document.getElementById('ev-currency').value,
       notes: "Generated via Chubbs Admin Desktop Tool"
     },
-    options: opts, players: playersOut, day1ScrambleTeams: d1Teams, day2Groups: d2Groups
+    options: opts, players: playersOut, day1ScrambleTeams: d1Teams, day2Groups: d2Groups,
+    day1Challenges: getChallenges('scramble'),
+    day2Challenges: getChallenges('stableford')
   };
 }
 

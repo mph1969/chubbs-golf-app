@@ -745,8 +745,11 @@ function renderMasterBtn(){
   if(chip){
     chip.style.display = showChip ? '' : 'none';
     if(showChip){
-      const holeNum = tab === 'day1' ? state.scramble.hole + 1 : state.stableford.hole + 1;
-      chip.innerHTML = `Hole<span class="hnum">${holeNum}</span>`;
+      const holeIdx = tab === 'day1' ? state.scramble.hole : state.stableford.hole;
+      const holeNum = holeIdx + 1;
+      const chs = getChallengesForHole(holeIdx, tab);
+      const chIcon = chs.length ? `<span style="font-size:14px;display:block;margin-top:2px">${chs.map(c=>CHALLENGE_ICONS[c.id]||'🏆').join('')}</span>` : '';
+      chip.innerHTML = `Hole<span class="hnum">${holeNum}</span>${chIcon}`;
     }
   }
 }
@@ -1149,7 +1152,9 @@ function normalizeEventBundle(raw){
     options:data.options || {},
     players:normalizedPlayers,
     day1ScrambleTeams:Array.isArray(data.day1ScrambleTeams) ? data.day1ScrambleTeams.map(item => normalizeLineup(item, 'team')) : [],
-    day2Groups:Array.isArray(data.day2Groups) ? data.day2Groups.map(item => normalizeLineup(item, 'group')) : []
+    day2Groups:Array.isArray(data.day2Groups) ? data.day2Groups.map(item => normalizeLineup(item, 'group')) : [],
+    day1Challenges:Array.isArray(data.day1Challenges) ? data.day1Challenges : [],
+    day2Challenges:Array.isArray(data.day2Challenges) ? data.day2Challenges : []
   };
 }
 function applyImportedEventBundle(bundle, requestedPlayerId){
@@ -2090,6 +2095,32 @@ function handicapAdjustment(points){
 }
 function holeMeta(holeIdx, day){
   return activeCourse(day).holes[holeIdx] || {par:null, si:null};
+}
+// ── Challenge / Special Hole helpers ──
+const CHALLENGE_ICONS={dickputter:'🏌️',buddyballs:'⚾',shortestdrive:'📏',oneiron:'🏒',littlechubby:'🐊',ctp:'🎯',moneyhole:'💰',longestputt:'🏌️',longestdrive:'💥'};
+function getChallengesForHole(holeIdx, day){
+  const challenges=(day==='day1'||day==='scramble')
+    ?(state.eventBundle.day1Challenges||[])
+    :(state.eventBundle.day2Challenges||[]);
+  if(!challenges.length) return [];
+  // Convert nine+hole notation (e.g. "B5") to course hole index (0-17)
+  const ev=state.eventBundle.event||{};
+  const front=(day==='day1'||day==='scramble')?ev.day1PalmIslandFront:ev.day2PalmIslandFront;
+  const back=(day==='day1'||day==='scramble')?ev.day1PalmIslandBack:ev.day2PalmIslandBack;
+  return challenges.filter(ch=>{
+    if(!ch.hole) return false;
+    const nine=ch.hole[0]; // 'A','B','C'
+    const holeInNine=parseInt(ch.hole.slice(1))-1; // 0-8
+    let courseIdx=-1;
+    if(nine===front) courseIdx=holeInNine;       // front nine: 0-8
+    else if(nine===back) courseIdx=9+holeInNine;  // back nine: 9-17
+    return courseIdx===holeIdx;
+  });
+}
+function challengeBadgeHtml(holeIdx, day){
+  const chs=getChallengesForHole(holeIdx, day);
+  if(!chs.length) return '';
+  return chs.map(ch=>`<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:12px;background:rgba(214,176,90,0.15);border:1px solid rgba(214,176,90,0.3);font-size:10px;font-weight:700;color:var(--gold2);margin-left:4px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span>`).join('');
 }
 // ── Starting Hole helpers ──
 // Returns the actual course hole index (0-17) for a given play position (0-17)
@@ -3844,7 +3875,7 @@ function renderDay1(){
       ${holeWarning && holeWarning.day==='scramble' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('scramble',1)">Skip anyway</button></div>` : ''}
       <div class="holebar tight">
         <button class="btn slim" onclick="navHole('scramble',-1)">← Prev</button>
-        <div class="hole-chip" style="flex:1;text-align:center">${state.scramble.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole)+1}/18</span> ` : ''}Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
+        <div class="hole-chip" style="flex:1;text-align:center">${state.scramble.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole)+1}/18</span> ` : ''}Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}${challengeBadgeHtml(state.scramble.hole,'day1')}</div>
         <button class="btn slim" onclick="navHole('scramble',1)">Next →</button>
       </div>
       ${!state.scramble.holes.some(h=>typeof h.gross==='number') ? `<div style="text-align:center;margin:4px 0"><button class="btn slim ghost" style="font-size:10px" onclick="showStartingHoleModal('scramble')">⛳ Starting hole: ${(state.scramble.startingHole||0)+1}</button></div>` : (state.scramble.startingHole ? `<div style="text-align:center;font-size:9px;color:var(--muted);margin:2px 0">Started on hole ${state.scramble.startingHole+1}</div>` : '')}
@@ -4080,7 +4111,7 @@ function renderDay2(){
       ${holeWarning && holeWarning.day==='stableford' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('stableford',1)">Skip anyway</button></div>` : ''}
       <div class="holebar tight">
         <button class="btn slim" onclick="navHole('stableford',-1)">← Prev</button>
-        <div class="hole-chip" style="flex:1;text-align:center">${state.stableford.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.stableford.hole,state.stableford.startingHole)+1}/18</span> ` : ''}Hole ${state.stableford.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}</div>
+        <div class="hole-chip" style="flex:1;text-align:center">${state.stableford.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.stableford.hole,state.stableford.startingHole)+1}/18</span> ` : ''}Hole ${state.stableford.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}${challengeBadgeHtml(state.stableford.hole,'day2')}</div>
         <button class="btn slim" onclick="navHole('stableford',1)">Next →</button>
       </div>
       ${!state.stableford.holes.some(h=>h.gross.some(g=>typeof g==='number')) ? `<div style="text-align:center;margin:4px 0"><button class="btn slim ghost" style="font-size:10px" onclick="showStartingHoleModal('stableford')">⛳ Starting hole: ${(state.stableford.startingHole||0)+1}</button></div>` : (state.stableford.startingHole ? `<div style="text-align:center;font-size:9px;color:var(--muted);margin:2px 0">Started on hole ${state.stableford.startingHole+1}</div>` : '')}
@@ -4891,7 +4922,9 @@ seedJacketHistory();     // apply badge data to event.json-imported players (Nic
           day2Groups:        bundle.day2Groups        || [],
           day1ScrambleTeams: bundle.day1ScrambleTeams || [],
           event:             bundle.event             || {},
-          options:           bundle.options           || {}
+          options:           bundle.options           || {},
+          day1Challenges:    bundle.day1Challenges    || [],
+          day2Challenges:    bundle.day2Challenges    || []
         };
       }
       initSync(eid);
