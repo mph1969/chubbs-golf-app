@@ -93,8 +93,20 @@
     .stepper .val{height:42px;border-radius:12px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;background:#0b1b14;transition:border-color 0.15s,background 0.15s}
     .stepper .val.empty{color:#5f7268}
     .stepper .val.entered{border-color:rgba(42,163,106,0.4);background:rgba(42,163,106,0.06)}
+    /* Pulsing required fields */
+    .stepper button.val.needs-entry{animation:pulseGold 1.8s ease-in-out infinite;border-color:rgba(214,176,90,0.5)}
+    .stepper .val.needs-putts{animation:pulseRed 1.8s ease-in-out infinite;border-color:rgba(209,107,93,0.5)}
+    @keyframes pulseGold{0%,100%{box-shadow:0 0 0 0 rgba(214,176,90,0)}50%{box-shadow:0 0 12px 3px rgba(214,176,90,0.25)}}
+    @keyframes pulseRed{0%,100%{box-shadow:0 0 0 0 rgba(209,107,93,0)}50%{box-shadow:0 0 12px 3px rgba(209,107,93,0.25)}}
     .player-card.scored{background:rgba(42,163,106,0.03);border-color:rgba(42,163,106,0.2)}
     .player-card.partial{background:rgba(214,176,90,0.03);border-color:rgba(214,176,90,0.2)}
+    .player-card.needs-score{border-color:rgba(214,176,90,0.35)}
+    /* Hole progress bar */
+    .hole-progress{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid var(--line);margin-bottom:8px;font-size:11px;color:var(--muted)}
+    .hole-progress .hp-bar{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden}
+    .hole-progress .hp-fill{height:100%;border-radius:3px;transition:width 0.3s}
+    .hole-progress .hp-fill.done{background:#2aa36a}
+    .hole-progress .hp-fill.partial{background:#d6b05a}
     .holebar{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:10px}
     .hole-chip{padding:7px 10px;border-radius:999px;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.25);font-size:12px;color:var(--gold2);font-weight:800}
     .hole-nav{display:flex;gap:8px;flex-wrap:wrap}
@@ -4046,8 +4058,8 @@ function renderDay1(){
             <button onclick="stepScore('scramble',0,-1)" style="font-size:20px;padding:12px 16px">−</button>
             ${typeof hole.gross==='number'
               ? `<div class="val" style="font-size:32px;min-width:60px">${hole.gross}</div>`
-              : (meta.par ? `<button class="val" style="font-size:32px;min-width:60px" onclick="setExact('scramble',0,${meta.par})">${meta.par}</button>`
-                          : `<div class="val empty" style="font-size:32px;min-width:60px">—</div>`)}
+              : (meta.par ? `<button class="val needs-entry" style="font-size:32px;min-width:60px" onclick="setExact('scramble',0,${meta.par})">${meta.par}</button>`
+                          : `<div class="val empty needs-entry" style="font-size:32px;min-width:60px">—</div>`)}
             <button onclick="stepScore('scramble',0,1)" style="font-size:20px;padding:12px 16px">+</button>
           </div>
           ${typeof hole.gross==='number' ? `<button class="stepper-clr" onclick="clearScore('scramble')" title="Clear score" style="font-size:16px">✕</button>` : ''}
@@ -4191,7 +4203,7 @@ function renderDay2(){
       ? `<div style="display:flex;gap:8px;align-items:center">
            <div class="stepper" style="flex:1">
              <button onclick="stepScore('stableford',${idx},-1,'putts')">−</button>
-             <div class="val ${hasPutts ? 'entered' : 'empty'}">${hasPutts ? (putts >= 4 ? '4+' : putts) : '—'}</div>
+             <div class="val ${hasPutts ? 'entered' : 'empty'+(hasGross&&!hasPutts?' needs-putts':'')}">${hasPutts ? (putts >= 4 ? '4+' : putts) : '—'}</div>
              <button onclick="stepScore('stableford',${idx},1,'putts')">+</button>
            </div>
            ${hasPutts ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
@@ -4203,9 +4215,9 @@ function renderDay2(){
     const cardState = fullyScored ? ' scored' : (partialScored ? ' partial' : '');
 
     return `
-      <div class="player-card p${idx}${cardState}">
+      <div class="player-card p${idx}${cardState}${!hasGross?' needs-score':''}">
         <div class="player-head">
-          <div class="player-name">${fmtName(p.name, idx)}${jacketDots(p.name)}${fullyScored ? ' <span style="color:#2aa36a;font-size:11px">✓</span>' : ''}</div>
+          <div class="player-name">${fmtName(p.name, idx)}${jacketDots(p.name)}${fullyScored ? ' <span style="color:#2aa36a;font-size:11px">✓</span>' : (!hasGross ? ' <span style="font-size:10px;color:#d6b05a">⬤ score</span>' : (partialScored ? ' <span style="font-size:10px;color:#d6b05a">⬤ putts</span>' : ''))}</div>
           <div class="toolbar tight">
             ${showFlag ? `<button class="flag-btn ${flagOn ? 'on' : 'safe'}" onclick="setLastPenaltyFlag(${idx})">🚩 ${flagOn ? 'Last 3-putt+' : 'Mark last 3-putt+'}</button>` : ''}
             <div class="hcp-badge">HCP ${p.hcp}</div>
@@ -4216,8 +4228,8 @@ function renderDay2(){
             <button onclick="stepScore('stableford',${idx},-1,'gross')">−</button>
             ${hasGross
               ? `<div class="val entered">${gross}</div>`
-              : (meta.par ? `<button class="val" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
-                          : `<div class="val empty">—</div>`)}
+              : (meta.par ? `<button class="val needs-entry" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
+                          : `<div class="val empty needs-entry">—</div>`)}
             <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
           </div>
           ${hasGross ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear">✕</button>` : ''}
@@ -4265,6 +4277,14 @@ function renderDay2(){
       ${state.options.threePuttPoker && penaltyPlayers.length > 1 ? `<div class="status warn tight">More than one player 3-putted this hole. Flag the last one.</div>` : ''}
     </div>
 
+    ${(()=>{
+      const total=stablePlayers.length;
+      const scored=stablePlayers.filter((_,i)=>typeof hole.gross[i]==='number').length;
+      const puttsDone=state.options.threePuttPoker?stablePlayers.filter((_,i)=>typeof hole.gross[i]==='number'&&typeof hole.putts[i]==='number').length:scored;
+      const allDone=scored===total&&puttsDone===total;
+      const pct=total?Math.round((allDone?100:(scored/total*50+puttsDone/total*50))):0;
+      return allDone?'':`<div class="hole-progress"><div class="hp-bar"><div class="hp-fill ${scored===total?'partial':'done'}" style="width:${pct}%"></div></div><span>${scored}/${total} scored${state.options.threePuttPoker?' · '+puttsDone+'/'+total+' putts':''}</span></div>`;
+    })()}
     <div class="stack">${playerCards}</div>
 
     <!-- NEXT HOLE — bottom of player cards for natural flow -->
