@@ -2501,37 +2501,49 @@ function setDriver(idx){
   saveState();
   renderAll();
 }
+function showHoleWarningModal(day, warnings){
+  const existing=document.getElementById('hole-warn-modal');
+  if(existing) existing.remove();
+  const holeNum=day==='scramble'?state.scramble.hole+1:state.stableford.hole+1;
+  const ov=document.createElement('div');
+  ov.id='hole-warn-modal';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn 0.15s ease';
+  ov.innerHTML=`
+    <div style="background:#10261c;border:2px solid rgba(245,92,92,0.5);border-radius:16px;padding:24px;max-width:340px;width:100%;text-align:center">
+      <div style="font-size:36px;margin-bottom:8px">⚠️</div>
+      <div style="font-size:16px;font-weight:800;color:#ffb5ae;margin-bottom:12px">Hole ${holeNum} Incomplete</div>
+      <div style="font-size:13px;color:#f4efe2;line-height:1.6;margin-bottom:16px">${warnings.join('<br/>')}</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="this.closest('#hole-warn-modal').remove()" style="flex:2;padding:14px;border-radius:10px;background:rgba(42,163,106,0.15);border:1px solid rgba(42,163,106,0.4);color:#a5f0c5;font-size:14px;font-weight:800;cursor:pointer">← Go Back</button>
+        <button onclick="this.closest('#hole-warn-modal').remove();skipHoleWarning('${day}',1)" style="flex:1;padding:14px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--muted);font-size:12px;cursor:pointer">Skip →</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+}
 function navHole(day, dir){
   holeWarning = null;
   const key = day === 'scramble' ? 'scramble' : 'stableford';
   const order = getHoleOrder(day);
   const playPos = holeIdxToPlayOrder(state[key].hole, state[key].startingHole || 0);
   if(dir > 0){
+    const warnings=[];
     if(day === 'scramble'){
       const hole = state.scramble.holes[state.scramble.hole];
-      if(typeof hole.gross !== 'number'){
-        holeWarning = {day:'scramble', msg:"Enter the team score before moving on."};
-        renderAll(); return;
-      }
-      if(hole.driver === null){
-        holeWarning = {day:'scramble', msg:"Who drove? Select the player whose drive was used before moving on."};
-        renderAll(); return;
-      }
+      if(typeof hole.gross !== 'number') warnings.push("🏌️ Enter the team score");
+      if(hole.driver === null) warnings.push("🚗 Select whose drive was used");
     } else {
       const hole = state.stableford.holes[state.stableford.hole];
       const players = currentPlayers('stableford');
       const missingScore = players.map((p,i) => typeof hole.gross[i] !== 'number' ? fmtName(p.name,i) : null).filter(Boolean);
-      if(missingScore.length){
-        holeWarning = {day:'stableford', msg:`Enter a score for: ${missingScore.join(', ')}`};
-        renderAll(); return;
-      }
-      if(state.options.threePuttPoker){
+      if(missingScore.length) warnings.push(`🏌️ Missing scores: ${missingScore.join(', ')}`);
+      if(state.options.threePuttPoker && !missingScore.length){
         const missingPutts = players.map((p,i) => typeof hole.gross[i] === 'number' && typeof hole.putts[i] !== 'number' ? fmtName(p.name,i) : null).filter(Boolean);
-        if(missingPutts.length){
-          holeWarning = {day:'stableford', msg:`3-putt poker is on — add putts for: ${missingPutts.join(', ')}`};
-          renderAll(); return;
-        }
+        if(missingPutts.length) warnings.push(`🃏 Missing putts: ${missingPutts.join(', ')}`);
       }
+    }
+    if(warnings.length){
+      showHoleWarningModal(day, warnings);
+      return;
     }
     // Check if we're on the last hole in play order
     if(playPos >= 17){
@@ -4019,7 +4031,6 @@ function renderDay1(){
       ${importedNote}
       ${scrambleLockHtml}
       <input type="text" value="${(state.scramble.teamName || '').replace(/"/g,'&quot;')}" placeholder="Team name (required for export)" onchange="setScrambleTeamName(this.value)" />
-      ${holeWarning && holeWarning.day==='scramble' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('scramble',1)">Skip anyway</button></div>` : ''}
       <div class="holebar tight">
         <button class="btn slim" onclick="navHole('scramble',-1)">← Prev</button>
         <div class="hole-chip" style="flex:1;text-align:center">${state.scramble.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole)+1}/18</span> ` : ''}Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}${challengeBadgeHtml(state.scramble.hole,'day1')}</div>
@@ -4200,42 +4211,32 @@ function renderDay2(){
             <div class="hcp-badge">HCP ${p.hcp}</div>
           </div>
         </div>
-        <div class="grid-2">
-          <div>
-            <label>Gross</label>
-            <div style="display:flex;gap:8px;align-items:center">
-              <div class="stepper" style="flex:1">
-                <button onclick="stepScore('stableford',${idx},-1,'gross')">−</button>
-                ${hasGross
-                  ? `<div class="val entered">${gross}</div>`
-                  : (meta.par ? `<button class="val" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
-                              : `<div class="val empty">—</div>`)}
-                <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
-              </div>
-              ${hasGross ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear">✕</button>` : ''}
-            </div>
-            ${typeof gross==='number' && typeof meta.par==='number' ? `<div class="small tight" style="color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'}">vs par: ${fmtToPar(gross - meta.par)}</div>` : ''}
-            <div class="toolbar tight" style="margin-top:6px">
-              <button class="btn slim" onclick="setBlob(${idx})">Spenny</button>
-            </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
+          <div class="stepper" style="flex:1">
+            <button onclick="stepScore('stableford',${idx},-1,'gross')">−</button>
+            ${hasGross
+              ? `<div class="val entered">${gross}</div>`
+              : (meta.par ? `<button class="val" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
+                          : `<div class="val empty">—</div>`)}
+            <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
           </div>
-          <div>
-            <label>Putts</label>
-            ${puttBlock}
-          </div>
+          ${hasGross ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear">✕</button>` : ''}
+          ${typeof gross==='number' && typeof meta.par==='number' ? `<span style="font-size:12px;font-weight:700;color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'};min-width:50px;text-align:right">${fmtToPar(gross - meta.par)}</span>` : ''}
         </div>
-        <details class="tight">
-          <summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:10px;color:var(--muted)">
-            <span>${hasGross ? `Net ${net ?? '—'} · ${points ?? 0} pts` : 'Tap for details'}</span>
-            <span>▸</span>
-          </summary>
-          <div class="meta-grid-4 tight">
-            <div class="meta"><div class="k">Shots</div><div class="v">${shots ?? '—'}</div></div>
-            <div class="meta"><div class="k">Net</div><div class="v">${net ?? '—'}</div></div>
-            <div class="meta"><div class="k">Pts</div><div class="v">${points ?? '—'}</div></div>
-            <div class="meta"><div class="k">Cards</div><div class="v">${total.pokerCards}</div></div>
+        ${needsPutts ? `<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--line)">
+          <span style="font-size:10px;color:var(--muted);min-width:32px">🃏 Putts</span>
+          <div class="stepper" style="flex:1">
+            <button onclick="stepScore('stableford',${idx},-1,'putts')">−</button>
+            <div class="val ${hasPutts ? 'entered' : 'empty'}">${hasPutts ? (putts >= 4 ? '4+' : putts) : '—'}</div>
+            <button onclick="stepScore('stableford',${idx},1,'putts')">+</button>
           </div>
-        </details>
+          ${hasPutts ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
+        </div>
+        ${quickPuttButtons(idx)}` : ''}
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:11px;color:var(--muted)">
+          <span>${hasGross ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${shots?' · +'+shots+' shots':''}` : ''}</span>
+          <button class="btn slim ghost" style="font-size:9px;padding:4px 8px" onclick="setBlob(${idx})">Spenny</button>
+        </div>
       </div>
     `;
   }).join('\n');
@@ -4255,7 +4256,6 @@ function renderDay2(){
       ${importedNote}
       ${stableLockHtml}
       ${complete ? '' : `<div class="status warn tight">Complete the scorecard on Setup first. Stableford needs par and stroke index for all 18 holes.</div>`}
-      ${holeWarning && holeWarning.day==='stableford' ? `<div class="status warn tight">${holeWarning.msg} <button class="btn slim ghost" style="margin-left:8px" onclick="skipHoleWarning('stableford',1)">Skip anyway</button></div>` : ''}
       <div class="holebar tight">
         <button class="btn slim" onclick="navHole('stableford',-1)">← Prev</button>
         <div class="hole-chip" style="flex:1;text-align:center">${state.stableford.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.stableford.hole,state.stableford.startingHole)+1}/18</span> ` : ''}Hole ${state.stableford.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}${challengeBadgeHtml(state.stableford.hole,'day2')}</div>
@@ -4650,25 +4650,25 @@ function renderLeaderboard(){
     </div>`;
   }
 
-  const fullRankHtml = ranking.map((row, i) => {
+  const LB_TOP_N = 5;
+  function rankRow(row, i){
     const isAway = row.source === 'none';
-    const holesLabel = row.entered > 0
-      ? `${row.entered}/18 holes${row.source==='remote' ? ' · live' : ''}`
-      : (row.source==='remote' ? 'Connected · no holes complete' : 'No scores');
-    return `<div class="player-card leader${isAway ? ' away' : ''}">
-      <div class="player-head">
-        <div><span class="rank">${i+1}</span><strong>${row.name}</strong>${renderJacketBadges(row, true)}</div>
-        <div class="hcp-badge">HCP ${row.hcp}</div>
+    const medal = i===0?'🥇':i===1?'🥈':i===2?'🥉':'';
+    const holesTag = row.entered>0?`<span style="color:var(--muted);font-size:10px">${row.entered}/18${row.source==='remote'?' · live':''}</span>`:'';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 6px;border-bottom:1px solid var(--line);${isAway?'opacity:0.35':''}">
+      <span style="min-width:22px;font-size:12px;font-weight:800;color:${i<3?'var(--gold2)':'var(--muted)'};text-align:center">${medal||i+1}</span>
+      <div style="flex:1;min-width:0;overflow:hidden">
+        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${row.name}${renderJacketBadges(row, true)}</div>
+        <div style="font-size:10px;color:var(--muted)">HCP ${row.hcp} ${holesTag}</div>
       </div>
-      <div class="meta-grid-4">
-        <div class="meta"><div class="k">Pts</div><div class="v">${row.points||0}</div></div>
-        <div class="meta"><div class="k">Gross</div><div class="v">${row.entered ? row.gross : '—'}</div></div>
-        <div class="meta"><div class="k">Back 9</div><div class="v">${row.back9 || '—'}</div></div>
-        <div class="meta"><div class="k">3-putt+</div><div class="v">${row.putts3plus||0}</div></div>
-      </div>
-      <div class="inline-note">${holesLabel}</div>
+      <div style="text-align:right;min-width:42px"><div style="font-size:16px;font-weight:900;color:var(--gold2)">${row.points||0}</div><div style="font-size:9px;color:var(--muted)">pts</div></div>
+      <div style="text-align:right;min-width:32px;font-size:11px;color:var(--muted)">${row.entered?row.gross:'—'}<div style="font-size:9px">gross</div></div>
     </div>`;
-  }).join('\n');
+  }
+  const topRankHtml = ranking.slice(0,LB_TOP_N).map(rankRow).join('');
+  const restRankHtml = ranking.length>LB_TOP_N ? ranking.slice(LB_TOP_N).map(rankRow).join('') : '';
+  const expandBtn = restRankHtml ? `<details style="margin-top:2px"><summary style="list-style:none;cursor:pointer;text-align:center;padding:8px;font-size:12px;color:var(--gold2);font-weight:700">Show all ${ranking.length} players ▾</summary>${restRankHtml}</details>` : '';
+  const fullRankHtml = topRankHtml + expandBtn;
 
   // ── Spenny Easter Egg: if not playing, permanently last on leaderboard ──
   const spennyPlaying = ranking.some(r => r.name && r.name.toUpperCase().includes('SPENNY'));
