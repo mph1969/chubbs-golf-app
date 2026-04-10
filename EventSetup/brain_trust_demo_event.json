@@ -1,0 +1,138 @@
+{
+  "version": 2,
+  "event": {
+    "eventId": "2026-BrainTrust-Demo",
+    "name": "Chubbs Peterson Invitational",
+    "displayName": "Brain Trust Demo — Chubbs App Preview",
+    "satDate": "4/12/2026",
+    "satTime": "12:00",
+    "sunDate": "4/13/2026",
+    "sunTime": "08:00",
+    "day1CourseId": "valley",
+    "day1PalmIslandFront": "A",
+    "day1PalmIslandBack": "B",
+    "day2CourseId": "valley",
+    "day2PalmIslandFront": "A",
+    "day2PalmIslandBack": "B",
+    "currency": "RMB"
+  },
+  "options": {
+    "threePuttPoker": true,
+    "pokerMode": "digital",
+    "ante": 50,
+    "penalty3": 10,
+    "penalty4plus": 20
+  },
+  "players": [
+    {
+      "playerId": "TERRY",
+      "displayName": "TERRY",
+      "fullName": "Terry Madill",
+      "shortName": "Terry",
+      "playingHandicap": 28,
+      "goldJackets": 1,
+      "clownJackets": 1,
+      "scrambleWins": 2
+    },
+    {
+      "playerId": "MATT",
+      "displayName": "MATT",
+      "fullName": "Matt Dillon",
+      "shortName": "Matt",
+      "playingHandicap": 18,
+      "goldJackets": 1,
+      "clownJackets": 0,
+      "scrambleWins": 2
+    },
+    {
+      "playerId": "POS",
+      "displayName": "POS",
+      "fullName": "Pos",
+      "shortName": "Pos",
+      "playingHandicap": 20,
+      "goldJackets": 1,
+      "clownJackets": 2,
+      "scrambleWins": 1
+    },
+    {
+      "playerId": "RYAN N",
+      "displayName": "RYAN N",
+      "fullName": "Ryan N",
+      "shortName": "Ryan N",
+      "playingHandicap": 15,
+      "goldJackets": 1,
+      "clownJackets": 0,
+      "scrambleWins": 2
+    },
+    {
+      "playerId": "NICK",
+      "displayName": "NICK",
+      "fullName": "Nick",
+      "shortName": "Nick",
+      "playingHandicap": 16,
+      "goldJackets": 1,
+      "clownJackets": 1,
+      "scrambleWins": 1
+    },
+    {
+      "playerId": "DIEGO",
+      "displayName": "DIEGO",
+      "fullName": "Diego",
+      "shortName": "Diego",
+      "playingHandicap": 11,
+      "goldJackets": 2,
+      "clownJackets": 0,
+      "scrambleWins": 3
+    },
+    {
+      "playerId": "JACK S",
+      "displayName": "JACK S",
+      "fullName": "Jack S",
+      "shortName": "Jack S",
+      "playingHandicap": 19,
+      "goldJackets": 4,
+      "clownJackets": 1,
+      "scrambleWins": 2
+    },
+    {
+      "playerId": "HANSON",
+      "displayName": "HANSON",
+      "fullName": "Michael Hanson",
+      "shortName": "Hanson",
+      "playingHandicap": 22,
+      "goldJackets": 1,
+      "clownJackets": 0,
+      "scrambleWins": 1
+    }
+  ],
+  "day1ScrambleTeams": [
+    {
+      "teamId": "bt-team-1",
+      "teamName": "Team 1",
+      "scorerPlayerId": "TERRY",
+      "playerIds": ["DIEGO", "POS", "TERRY", "HANSON"]
+    },
+    {
+      "teamId": "bt-team-2",
+      "teamName": "Team 2",
+      "scorerPlayerId": "MATT",
+      "playerIds": ["RYAN N", "NICK", "JACK S", "MATT"]
+    }
+  ],
+  "day2Groups": [
+    {
+      "groupId": "bt-grp-1",
+      "groupName": "Group 1",
+      "teeTime": "08:00",
+      "scorerPlayerId": "HANSON",
+      "playerIds": ["RYAN N", "DIEGO", "MATT", "HANSON"]
+    },
+    {
+      "groupId": "bt-grp-2",
+      "groupName": "Group 2",
+      "teeTime": "08:08",
+      "scorerPlayerId": "TERRY",
+      "playerIds": ["NICK", "JACK S", "POS", "TERRY"]
+    }
+  ]
+}
