@@ -896,6 +896,8 @@ function initSync(eventId){
       day1ScrambleTeams: state.eventBundle.day1ScrambleTeams|| [],
       event:             state.eventBundle.event            || {},
       options:           state.eventBundle.options          || {},
+      day1Challenges:    state.eventBundle.day1Challenges   || [],
+      day2Challenges:    state.eventBundle.day2Challenges   || [],
       ts: Date.now()
     }).catch(()=>{});
   }
@@ -927,6 +929,12 @@ function initSync(eventId){
     scoreLockOverride = !!data;
     renderAll();
   });
+  // Listen for challenge winners (admin sets winners, all devices see them)
+  listen(`/events/${eventId}/challengeWinners`, data => {
+    state.challengeWinners = data || {};
+    renderAll();
+  });
+  SYNC._eventId = eventId;
 }
 function pushToFirebase(){
   if(!SYNC.enabled || !SYNC.db || readOnlyMode || !hasImportedEvent()) return;
@@ -2026,11 +2034,23 @@ function jacketDots(name){
   if(!p) return '';
   const gold = p.goldJackets || 0;
   const clown = p.clownJackets || 0;
-  if(!gold && !clown) return '';
-  let dots = '';
-  for(let i=0;i<Math.min(gold,6);i++) dots += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d6b05a;margin-left:2px"></span>';
-  for(let i=0;i<Math.min(clown,6);i++) dots += '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#d16b5d;margin-left:2px"></span>';
-  return `<span style="margin-left:4px;vertical-align:middle">${dots}</span>`;
+  const scram = p.scrambleWins || 0;
+  let badges = '';
+  if(gold) badges += `<span title="${gold} Gold Jacket${gold>1?'s':''}" style="font-size:11px;margin-left:2px">${'🧥'.repeat(Math.min(gold,4))}</span>`;
+  if(clown) badges += `<span title="${clown} Clown Jacket${clown>1?'s':''}" style="font-size:11px;margin-left:2px">${'🤡'.repeat(Math.min(clown,3))}</span>`;
+  // Event challenge winner badges (temporary — only this event)
+  const w = getChallengeWinners();
+  const nameUpper = (name||'').toUpperCase();
+  const allChallenges = [...(state.eventBundle.day1Challenges||[]).map(c=>({...c,dk:'day1'})), ...(state.eventBundle.day2Challenges||[]).map(c=>({...c,dk:'day2'}))];
+  allChallenges.forEach(ch => {
+    const winner = (w[ch.dk+'_'+ch.id]||'').toUpperCase();
+    if(winner && winner === nameUpper){
+      const icon = CHALLENGE_ICONS[ch.id]||'🏆';
+      badges += `<span title="${ch.name} winner" style="font-size:11px;margin-left:2px">${icon}</span>`;
+    }
+  });
+  if(!badges) return '';
+  return `<span style="display:inline-flex;align-items:center;margin-left:4px;vertical-align:middle;line-height:1">${badges}</span>`;
 }
 function normalizeDayKey(day){ return day === 'day2' ? 'day2' : 'day1'; }
 function currentCourseEditorTarget(){ return state.ui && state.ui.courseEditorTarget === 'day2' ? 'day2' : 'day1'; }
@@ -2161,6 +2181,78 @@ function challengeBadgeHtml(holeIdx, day){
   const chs=getChallengesForHole(holeIdx, day);
   if(!chs.length) return '';
   return chs.map(ch=>`<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:12px;background:rgba(214,176,90,0.15);border:1px solid rgba(214,176,90,0.3);font-size:10px;font-weight:700;color:var(--gold2);margin-left:4px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span>`).join('');
+}
+// ── Challenge Winners ──
+function getChallengeWinners(){
+  return state.challengeWinners || {};
+}
+function setChallengeWinner(dayKey, challengeId, winner){
+  if(!state.challengeWinners) state.challengeWinners={};
+  state.challengeWinners[dayKey+'_'+challengeId]=winner;
+  saveState();
+  // Push to Firebase if synced
+  if(SYNC.enabled&&SYNC.db&&SYNC._eventId){
+    SYNC.db.ref(`/events/${SYNC._eventId}/challengeWinners`).set(state.challengeWinners).catch(()=>{});
+  }
+  renderAll();
+}
+function setMoneyHolePot(val){
+  if(!state.challengeWinners) state.challengeWinners={};
+  state.challengeWinners._moneyHolePot=val;
+  saveState();
+  if(SYNC.enabled&&SYNC.db&&SYNC._eventId){
+    SYNC.db.ref(`/events/${SYNC._eventId}/challengeWinners`).set(state.challengeWinners).catch(()=>{});
+  }
+  renderAll();
+}
+function renderChallengeWinnersAdmin(){
+  const d1ch=state.eventBundle.day1Challenges||[];
+  const d2ch=state.eventBundle.day2Challenges||[];
+  if(!d1ch.length&&!d2ch.length) return '';
+  const w=getChallengeWinners();
+  const currency=(state.eventBundle.event&&state.eventBundle.event.currency)||'RMB';
+  let html='<div class="card"><div class="section-title">🏆 Challenge Winners</div><div class="small tight">Assign winners as challenges are decided. Results show on the leaderboard for all players.</div>';
+  if(d1ch.length){
+    html+='<div style="font-size:11px;font-weight:800;color:var(--gold2);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.08em">Scramble</div>';
+    d1ch.forEach(ch=>{
+      const val=w['day1_'+ch.id]||'';
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12px;min-width:100px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span><span style="font-size:10px;color:var(--muted)">${ch.hole}</span><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="Winner" onchange="setChallengeWinner('day1','${ch.id}',this.value)" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:#0b1b14;color:var(--text)"/></div>`;
+    });
+  }
+  if(d2ch.length){
+    html+='<div style="font-size:11px;font-weight:800;color:var(--gold2);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.08em">Stableford</div>';
+    d2ch.forEach(ch=>{
+      const val=w['day2_'+ch.id]||'';
+      const isMoneyHole=ch.id==='moneyhole';
+      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12px;min-width:100px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span><span style="font-size:10px;color:var(--muted)">${ch.hole}</span><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="Winner" onchange="setChallengeWinner('day2','${ch.id}',this.value)" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:#0b1b14;color:var(--text)"/></div>`;
+      if(isMoneyHole){
+        const pot=w._moneyHolePot||'';
+        html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span style="font-size:10px;color:var(--muted);min-width:100px">💰 Money Hole Pot</span><input type="number" value="${pot}" placeholder="Total pot (${currency})" onchange="setMoneyHolePot(this.value)" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:#0b1b14;color:var(--text)"/><span style="font-size:11px;color:var(--muted)">${currency}</span></div>`;
+      }
+    });
+  }
+  html+='</div>';
+  return html;
+}
+function renderChallengesCard(){
+  const d1ch=state.eventBundle.day1Challenges||[];
+  const d2ch=state.eventBundle.day2Challenges||[];
+  if(!d1ch.length&&!d2ch.length) return '';
+  const w=getChallengeWinners();
+  const currency=(state.eventBundle.event&&state.eventBundle.event.currency)||'RMB';
+  let html='<div class="card"><div class="section-title">🏆 Hole Challenges</div>';
+  function renderList(chs,dayKey){
+    return chs.map(ch=>{
+      const winner=w[dayKey+'_'+ch.id];
+      const icon=CHALLENGE_ICONS[ch.id]||'🏆';
+      const potLine=ch.id==='moneyhole'&&w._moneyHolePot?` · <span style="color:var(--gold2)">${w._moneyHolePot} ${currency}</span>`:'';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)"><div><span style="margin-right:4px">${icon}</span><strong>${ch.name}</strong><span style="color:var(--muted);font-size:11px;margin-left:6px">${ch.hole}</span>${potLine}</div><div style="font-weight:700;color:${winner?'var(--gold2)':'var(--muted)'};font-size:13px">${winner||'—'}</div></div>`;
+    }).join('');
+  }
+  if(d1ch.length) html+=`<div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:6px 0 4px">Scramble</div>${renderList(d1ch,'day1')}`;
+  if(d2ch.length) html+=`<div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:10px 0 4px">Stableford</div>${renderList(d2ch,'day2')}`;
+  html+='</div>';
+  return html;
 }
 // ── Starting Hole helpers ──
 // Returns the actual course hole index (0-17) for a given play position (0-17)
@@ -3637,7 +3729,9 @@ function renderSetup(){
         <button class="btn slim ${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'gold':'ghost'}" onclick="if(typeof toggleLiveAlerts==='function')toggleLiveAlerts();renderAll();">${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'Turn off':'Turn on'}</button>
       </div>
       <div class="inline-note" style="margin-top:8px">Only fires for other groups (not your own). Max 1 alert per 30 seconds. Per-device setting.</div>
-    </div>`;
+    </div>
+
+    ${renderChallengeWinnersAdmin()}`;
 
   const history   = loadHistory();
   const histSnaps = history.slice().reverse().map((snap, ri) => {
@@ -4662,6 +4756,8 @@ function renderLeaderboard(){
     ${pokerSection}
 
     ${renderResultsSummary()}
+
+    ${renderChallengesCard()}
 
     ${renderSponsorTile()}
     <div onclick="copyText('MPH_SIC').then(()=>showToast('WeChat ID copied — open WeChat and paste','ok'))"
