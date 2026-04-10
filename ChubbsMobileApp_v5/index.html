@@ -2097,7 +2097,8 @@ function holeMeta(holeIdx, day){
   return activeCourse(day).holes[holeIdx] || {par:null, si:null};
 }
 // ── Challenge / Special Hole helpers ──
-const CHALLENGE_ICONS={dickputter:'🏌️',buddyballs:'⚾',shortestdrive:'📏',oneiron:'🏒',littlechubby:'🐊',ctp:'🎯',moneyhole:'💰',longestputt:'🏌️',longestdrive:'💥'};
+const DICK_PUTTER_SVG=`<svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align:middle"><path d="M12 2 C12 2 14 2.5 14 5 C14 7 13 8 13 8 L13 18 L15 19 C15 19 16 19.5 16 21 C16 22.5 14.5 23 12 23 C9.5 23 8 22.5 8 21 C8 19.5 9 19 11 19 L11 8 C11 8 10 7 10 5 C10 2.5 12 2 12 2Z" fill="currentColor" opacity="0.9"/></svg>`;
+const CHALLENGE_ICONS={dickputter:DICK_PUTTER_SVG,buddyballs:'⚾',shortestdrive:'📏',oneiron:'🏒',littlechubby:'🐊',ctp:'🎯',moneyhole:'💰',longestputt:'🏌️',longestdrive:'💥'};
 function getChallengesForHole(holeIdx, day){
   const challenges=(day==='day1'||day==='scramble')
     ?(state.eventBundle.day1Challenges||[])
