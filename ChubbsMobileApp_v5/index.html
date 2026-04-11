@@ -948,6 +948,28 @@ function initSync(eventId){
   });
   SYNC._eventId = eventId;
 }
+// ── Auto-cleanup: delete events older than 90 days ──
+function cleanupOldEvents(){
+  if(!SYNC.enabled||!SYNC.db) return;
+  const cutoff=Date.now()-90*24*60*60*1000;
+  SYNC.db.ref('/events').orderByChild('bundle/_publishedAt').endAt(cutoff).limitToFirst(10).once('value').then(snap=>{
+    if(!snap.exists()) return;
+    const toDelete=[];
+    snap.forEach(c=>{
+      const b=c.val();
+      // Double-check: only delete if _publishedAt exists and is old
+      const pub=b&&b.bundle&&b.bundle._publishedAt;
+      if(pub&&pub<cutoff) toDelete.push(c.key);
+    });
+    if(toDelete.length){
+      const updates={};
+      toDelete.forEach(k=>updates[k]=null);
+      SYNC.db.ref('/events').update(updates).then(()=>console.log(`[Cleanup] Removed ${toDelete.length} events older than 90 days`)).catch(()=>{});
+    }
+  }).catch(()=>{});
+}
+setTimeout(cleanupOldEvents, 8000); // run once on app open, non-blocking
+
 function pushToFirebase(){
   if(!SYNC.enabled || !SYNC.db || readOnlyMode || !hasImportedEvent()) return;
   const eventId = state.eventBundle.event && state.eventBundle.event.eventId;
