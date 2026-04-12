@@ -4565,34 +4565,26 @@ function openSponsorLink(){
       .catch(()=> showToast('Open WeChat and search: 南沙高球通', 'info'));
   }
 }
-function renderSponsorTile(){
-  const hasLogo = true; // set false if nansha_logo.png not yet in folder
-  return `
-  <div onclick="openSponsorLink()" style="
-      background:linear-gradient(135deg,rgba(10,40,20,0.97),rgba(5,20,12,0.98));
-      border:1px solid rgba(214,176,90,0.4);
-      border-radius:16px;padding:14px 16px;
-      display:flex;align-items:center;gap:14px;
-      cursor:pointer;margin-bottom:2px;
-      box-shadow:0 2px 12px rgba(0,0,0,0.4)">
-    <div style="flex-shrink:0;width:52px;height:52px;border-radius:10px;overflow:hidden;
-                background:rgba(255,255,255,0.06);border:1px solid rgba(214,176,90,0.25);
-                display:flex;align-items:center;justify-content:center">
-      <img src="./nansha_logo.png" alt="南沙高球通"
-        style="width:52px;height:52px;object-fit:contain"
-        onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"  />
-      <div style="display:none;font-size:22px;align-items:center;justify-content:center;width:100%;height:100%">⛳</div>
+function sponsorTile(icon,fallback,title,sub,action,actionLabel){
+  return `<div onclick="${action}" style="background:linear-gradient(135deg,rgba(10,40,20,0.97),rgba(5,20,12,0.98));border:1px solid rgba(214,176,90,0.25);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:12px;cursor:pointer;margin-bottom:4px">
+    <div style="flex-shrink:0;width:44px;height:44px;border-radius:10px;overflow:hidden;background:rgba(255,255,255,0.06);border:1px solid rgba(214,176,90,0.2);display:flex;align-items:center;justify-content:center">
+      <img src="${icon}" alt="${title}" style="width:44px;height:44px;object-fit:contain" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+      <div style="display:none;font-size:18px;align-items:center;justify-content:center;width:100%;height:100%">${fallback}</div>
     </div>
     <div style="flex:1;min-width:0">
-      <div style="font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--gold2);opacity:.7;margin-bottom:2px">Weekend sponsor</div>
-      <div style="font-weight:800;font-size:15px;color:#fff">南沙高球通</div>
-      <div style="font-size:12px;color:var(--muted)">Nansha Golf · Book tee times</div>
+      <div style="font-weight:800;font-size:14px;color:#fff">${title}</div>
+      <div style="font-size:11px;color:var(--muted)">${sub}</div>
     </div>
-    <div style="flex-shrink:0;font-size:11px;color:var(--gold2);font-weight:700;
-                border:1px solid rgba(214,176,90,0.4);border-radius:8px;
-                padding:5px 10px;white-space:nowrap">
-      Open in<br/>WeChat ↗
-    </div>
+    <div style="flex-shrink:0;font-size:10px;color:var(--gold2);font-weight:700;border:1px solid rgba(214,176,90,0.3);border-radius:7px;padding:4px 8px;white-space:nowrap">${actionLabel}</div>
+  </div>`;
+}
+function renderSponsorTile(){
+  return `
+  <div style="margin-bottom:4px">
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--gold2);opacity:.5;margin-bottom:6px;padding-left:2px">Partners</div>
+    ${sponsorTile('./nansha_logo.png','⛳','南沙高球通','Nansha Golf · Book tee times','openSponsorLink()','WeChat ↗')}
+    ${sponsorTile('./dragonshot_icon.png','🐉','The Dragon Shot','Hole-in-One Challenge · Da Nang',"window.open('https://thedragonshot.com/','_blank')","Visit ↗")}
+    ${sponsorTile('./dxgolf_icon.jpg','🏌️','DX! Golf','Live golf scoring app',"window.open('https://dx-golf.netlify.app/','_blank')","Open ↗")}
   </div>`;
 }
 function renderLeaderboard(){
