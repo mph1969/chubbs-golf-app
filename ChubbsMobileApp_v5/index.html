@@ -2277,19 +2277,47 @@ function renderChallengesCard(){
   if(!d1ch.length&&!d2ch.length) return '';
   const w=getChallengeWinners();
   const currency=(state.eventBundle.event&&state.eventBundle.event.currency)||'RMB';
-  let html='<div class="card"><div class="section-title">🏆 Hole Challenges</div>';
+  // Check if any scores exist
+  const hasD1Scores=state.scramble.holes.some(h=>typeof h.gross==='number');
+  const hasD2Scores=state.stableford.holes.some(h=>h.gross&&h.gross.some(g=>typeof g==='number'));
+  if(!hasD1Scores&&!hasD2Scores) return ''; // no scores yet — don't show
+  // Check if winners are entered per day
+  const d1HasWinners=d1ch.some(ch=>w['day1_'+ch.id]);
+  const d2HasWinners=d2ch.some(ch=>w['day2_'+ch.id]);
+  const anyWinners=d1HasWinners||d2HasWinners;
   function renderList(chs,dayKey){
     return chs.map(ch=>{
       const winner=w[dayKey+'_'+ch.id];
       const icon=CHALLENGE_ICONS[ch.id]||'🏆';
       const potLine=ch.id==='moneyhole'&&w._moneyHolePot?` · <span style="color:var(--gold2)">${w._moneyHolePot} ${currency}</span>`:'';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line)"><div><span style="margin-right:4px">${icon}</span><strong>${ch.name}</strong><span style="color:var(--muted);font-size:11px;margin-left:6px">${ch.hole}</span>${potLine}</div><div style="font-weight:700;color:${winner?'var(--gold2)':'var(--muted)'};font-size:13px">${winner||'—'}</div></div>`;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><div><span style="margin-right:4px">${icon}</span><strong style="font-size:12px">${ch.name}</strong><span style="color:var(--muted);font-size:10px;margin-left:5px">${ch.hole}</span>${potLine}</div><div style="font-weight:700;color:${winner?'var(--gold2)':'var(--muted)'};font-size:12px">${winner||'—'}</div></div>`;
     }).join('');
   }
-  if(d1ch.length) html+=`<div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:6px 0 4px">Scramble</div>${renderList(d1ch,'day1')}`;
-  if(d2ch.length) html+=`<div style="font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin:10px 0 4px">Stableford</div>${renderList(d2ch,'day2')}`;
-  html+='</div>';
-  return html;
+  // Build sub-sections
+  let inner='';
+  if(d1ch.length&&hasD1Scores){
+    const d1Content=renderList(d1ch,'day1');
+    if(d1HasWinners){
+      // Scramble has winners — show expanded
+      inner+=`<details open><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:.08em"><span>Scramble ${d1ch.filter(c=>w['day1_'+c.id]).length}/${d1ch.length} decided</span><span style="font-size:9px;color:var(--muted)">▾</span></summary>${d1Content}</details>`;
+    } else {
+      inner+=`<details><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><span>Scramble · awaiting winners</span><span style="font-size:9px">▸</span></summary>${d1Content}</details>`;
+    }
+  }
+  if(d2ch.length&&hasD2Scores){
+    const d2Content=renderList(d2ch,'day2');
+    if(d2HasWinners){
+      inner+=`<details open><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:.08em"><span>Stableford ${d2ch.filter(c=>w['day2_'+c.id]).length}/${d2ch.length} decided</span><span style="font-size:9px;color:var(--muted)">▾</span></summary>${d2Content}</details>`;
+    } else {
+      inner+=`<details><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><span>Stableford · awaiting winners</span><span style="font-size:9px">▸</span></summary>${d2Content}</details>`;
+    }
+  }
+  if(!inner) return '';
+  // Outer wrapper — collapsed by default, open if any winners
+  if(anyWinners){
+    return `<details open><summary style="list-style:none;cursor:pointer"><div class="card" style="margin-bottom:0"><div style="display:flex;align-items:center;justify-content:space-between"><div class="section-title" style="margin:0">🏆 Hole Challenges</div><span class="small" style="color:var(--gold2)">▾</span></div></div></summary><div class="card" style="border-top:none;border-top-left-radius:0;border-top-right-radius:0;padding-top:4px">${inner}</div></details>`;
+  }
+  return `<details><summary style="list-style:none;cursor:pointer"><div class="card" style="margin-bottom:0"><div style="display:flex;align-items:center;justify-content:space-between"><div class="section-title" style="margin:0">🏆 Hole Challenges</div><span class="small" style="color:var(--muted)">▸</span></div></div></summary><div class="card" style="border-top:none;border-top-left-radius:0;border-top-right-radius:0;padding-top:4px">${inner}</div></details>`;
 }
 // ── Starting Hole helpers ──
 // Returns the actual course hole index (0-17) for a given play position (0-17)
