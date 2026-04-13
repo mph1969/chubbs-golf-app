@@ -101,6 +101,9 @@
     .player-card.scored{background:rgba(42,163,106,0.03);border-color:rgba(42,163,106,0.2)}
     .player-card.partial{background:rgba(214,176,90,0.03);border-color:rgba(214,176,90,0.2)}
     .player-card.needs-score{border-color:rgba(214,176,90,0.35)}
+    /* View-only mode: disable scoring controls */
+    .view-only .stepper button,.view-only button.val,.view-only .stepper-clr,.view-only .driver-btn,.view-only .flag-btn,.view-only .pills button{pointer-events:none;opacity:0.4}
+    .view-only .stepper .val{opacity:0.7}
     /* Hole progress bar */
     .hole-progress{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid var(--line);margin-bottom:8px;font-size:11px;color:var(--muted)}
     .hole-progress .hp-bar{flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06);overflow:hidden}
@@ -2443,7 +2446,25 @@ function syncPenaltyStamp(holeIdx, playerIdx, newVal, oldVal){
   if(hole.lastPenaltyOverride !== null && !penaltyPlayers.includes(hole.lastPenaltyOverride)) hole.lastPenaltyOverride = null;
 }
 
+function isCurrentPlayerScorer(day){
+  if(masterMode) return true; // admin always has access
+  if(!hasImportedEvent()) return true; // manual mode, no restriction
+  const pid=String(state.eventPlayerId||'').trim();
+  if(!pid) return true; // no player selected, allow (legacy)
+  if(day==='scramble'){
+    const team=activeEventDay1Team();
+    return team?String(lineupScorerId(team))===pid:true;
+  } else {
+    const group=activeEventDay2Group();
+    return group?String(lineupScorerId(group))===pid:true;
+  }
+}
 function isScoreLocked(day){
+  // Check scorer restriction first
+  if(!isCurrentPlayerScorer(day)){
+    showToast(`👁 View only — ${day==='scramble'?'scramble':'stableford'} scorer enters scores`, 'info', 2500);
+    return true;
+  }
   const lock = getScoreLockStatus(day);
   if(lock.locked){ showToast(`🔒 ${lock.reason}`, 'info', 2500); return true; }
   return false;
@@ -4059,9 +4080,11 @@ function renderDay1(){
     ${masterMode ? `<button class="btn slim gold" style="margin-top:8px;font-size:10px" onclick="toggleScoreLockOverride()">🔓 Admin: unlock early</button>` : ''}
   </div>` : '';
 
+  const d1ViewOnly=!isCurrentPlayerScorer('scramble');
   document.getElementById('day1').innerHTML = `
-    <div class="card">
+    <div class="card${d1ViewOnly?' view-only':''}">
       <div class="section-title">Scramble</div>
+      ${d1ViewOnly?'<div class="status info tight">👁 View only — scores are entered by your team\'s scorer</div>':''}
       ${importedNote}
       ${scrambleLockHtml}
       <input type="text" value="${(state.scramble.teamName || '').replace(/"/g,'&quot;')}" placeholder="Team name (required for export)" onchange="setScrambleTeamName(this.value)" />
@@ -4283,10 +4306,12 @@ function renderDay2(){
     <div style="font-size:11px;color:var(--muted)">${stableLock.reason}</div>
     ${masterMode ? `<button class="btn slim gold" style="margin-top:8px;font-size:10px" onclick="toggleScoreLockOverride()">🔓 Admin: unlock early</button>` : ''}
   </div>` : '';
+  const d2ViewOnly=!isCurrentPlayerScorer('stableford');
   document.getElementById('day2').innerHTML = `
     ${!state.options.threePuttPoker ? pokerSetupCard : ''}
     <div class="card">
       <div class="section-title">Stableford</div>
+      ${d2ViewOnly?'<div class="status info tight">👁 View only — scores are entered by your group\'s scorer</div>':''}
       ${importedNote}
       ${stableLockHtml}
       ${complete ? '' : `<div class="status warn tight">Complete the scorecard on Setup first. Stableford needs par and stroke index for all 18 holes.</div>`}
@@ -4307,7 +4332,7 @@ function renderDay2(){
       const pct=total?Math.round((allDone?100:(scored/total*50+puttsDone/total*50))):0;
       return allDone?'':`<div class="hole-progress"><div class="hp-bar"><div class="hp-fill ${scored===total?'partial':'done'}" style="width:${pct}%"></div></div><span>${scored}/${total} scored${state.options.threePuttPoker?' · '+puttsDone+'/'+total+' putts':''}</span></div>`;
     })()}
-    <div class="stack">${playerCards}</div>
+    <div class="stack${d2ViewOnly?' view-only':''}">${playerCards}</div>
 
     <!-- NEXT HOLE — bottom of player cards for natural flow -->
     <div style="display:flex;gap:8px;margin:4px 0 8px">
