@@ -2511,7 +2511,9 @@ function stepScore(day, idx, delta, field='gross'){
     const start = field === 'gross' ? (holeMeta(state.stableford.hole).par || 4) : 2;
     let current = oldVal;
     current = typeof current === 'number' ? current : start;
-    const newVal = Math.max(0, current + delta);
+    // Gross score floors at 1 (can't score zero on a hole); putts floor at 0
+    const floor = field === 'gross' ? 1 : 0;
+    const newVal = Math.max(floor, current + delta);
     bucket[field][idx] = newVal;
     if(field === 'putts') syncPenaltyStamp(state.stableford.hole, idx, newVal, oldVal);
     if(field === 'gross') suggestPutts(state.stableford.hole, idx);
