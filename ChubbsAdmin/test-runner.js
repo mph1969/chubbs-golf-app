@@ -50,28 +50,68 @@
   assert('R1', 'masterRoster is array', Array.isArray(masterRoster));
   assert('R2', 'masterRoster has players', masterRoster.length > 0);
 
-  // Check key players exist
-  const keyPlayers = ['HANSON', 'TERRY', 'KEVIN', 'DIEGO', 'JORDAN'];
-  keyPlayers.forEach(name => {
-    const found = masterRoster.some(p => p.displayName === name || p.playerId === name);
-    assert(`R-${name}`, `${name} in roster`, found);
+  // ═══ APRIL CPI ROSTER (source: Chubbs Events/April Chubbs Palm Island/cpi_players_v3.csv) ═══
+  // Match by playerId (stable from CSV) with case-insensitive displayName fallback.
+  function findRosterPlayer(playerId, displayName) {
+    return masterRoster.find(p =>
+      p.playerId === playerId ||
+      (p.displayName && p.displayName.toLowerCase() === displayName.toLowerCase())
+    );
+  }
+  const cpiRoster = [
+    { playerId: 'TerryM',    displayName: 'Tmoney',          hcp: 25 },
+    { playerId: 'JordanCa',  displayName: 'Junk Yard Dog',   hcp: 25 },
+    { playerId: 'Diego',     displayName: 'Diego',           hcp: 11 },
+    { playerId: 'Jamie',     displayName: 'Jamie',           hcp: 18 },
+    { playerId: 'Nick',      displayName: 'Nick',            hcp: 25 },
+    { playerId: 'Matt',      displayName: 'Matt',            hcp: 12 },
+    { playerId: 'Graeme',    displayName: 'GraemeBo',        hcp: 28 },
+    { playerId: 'George',    displayName: 'GeorgieBoy',      hcp: 24 },
+    { playerId: 'Kevin',     displayName: 'Kevin',           hcp: 15 },
+    { playerId: 'Ryan',      displayName: 'Ryan',            hcp: 12 },
+    { playerId: 'Daryl',     displayName: 'Daryl',           hcp: 18 },
+    { playerId: 'Michael',   displayName: 'Hanson',          hcp: 15 },
+  ];
+
+  // Existence check
+  cpiRoster.forEach(({ playerId, displayName }) => {
+    const found = !!findRosterPlayer(playerId, displayName);
+    assert(`R-${playerId}`, `${displayName} (${playerId}) in roster`, found);
   });
 
-  // Check handicap updates
-  const hcpChecks = [
-    { name: 'HANSON', hcp: 15 },
-    { name: 'TERRY', hcp: 28 },
-    { name: 'KEVIN', hcp: 14 },
-    { name: 'DIEGO', hcp: 18 },
-    { name: 'JORDAN', hcp: 22 },
-    { name: 'RYAN N', hcp: 13 },
-    { name: 'DARYL', hcp: 23 },
-    { name: 'JAMIE', hcp: 21 },
-  ];
-  hcpChecks.forEach(({ name, hcp }) => {
-    const p = masterRoster.find(x => x.displayName === name);
-    if (p) assert(`HCP-${name}`, `${name} HCP is ${hcp}`, p.playingHandicap === hcp);
-    else assert(`HCP-${name}`, `${name} found in roster`, false);
+  // Handicap check
+  cpiRoster.forEach(({ playerId, displayName, hcp }) => {
+    const p = findRosterPlayer(playerId, displayName);
+    if (p) {
+      const actual = p.playingHandicap;
+      assert(`HCP-${playerId}`,
+        `${displayName} HCP is ${hcp}`,
+        actual === hcp,
+        `got ${actual}`);
+    } else {
+      assert(`HCP-${playerId}`, `${displayName} not in roster — cannot check HCP`, false);
+    }
+  });
+
+  // Ryan dedup check — should have exactly one Ryan card after the Ryan/Ryan N cleanup.
+  const ryanCards = masterRoster.filter(p =>
+    (p.playerId && p.playerId.toLowerCase().startsWith('ryan')) ||
+    (p.displayName && p.displayName.toLowerCase().startsWith('ryan'))
+  );
+  assert('R-Ryan-dedup',
+    'Exactly one Ryan card in roster (no Ryan/Ryan N duplicate)',
+    ryanCards.length === 1,
+    `found ${ryanCards.length} cards: ${ryanCards.map(p=>p.playerId+'/'+p.displayName).join(', ')}`);
+
+  // WeChat name presence check — all CPI players should have a wechatName populated.
+  cpiRoster.forEach(({ playerId, displayName }) => {
+    const p = findRosterPlayer(playerId, displayName);
+    if (p) {
+      assert(`WC-${playerId}`,
+        `${displayName} has wechatName populated`,
+        !!(p.wechatName && String(p.wechatName).trim()),
+        `wechatName="${p.wechatName||''}"`);
+    }
   });
 
   // ═══ ADMIN PLAYERS ═══
