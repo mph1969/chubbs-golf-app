@@ -153,6 +153,7 @@
       <button class="ghost" onclick="showLibraryPanel()" title="Saved exports stored inside the app — bundles + configs, with re-download and re-apply options." style="border-color:var(--gold2,#c9a84c);color:var(--gold2,#c9a84c)">📚 Library</button>
       <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud.">☁️ Send to App</button>
       <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight readiness checklist.">✅ Game Day Check</button>
+      <button id="btn-verify-mobile" class="ghost" onclick="showVerifyMobile()" style="border-color:#79b0e3;color:#79b0e3" title="Listen for an actual mobile fetch. Forces an end-to-end check of cloud → phone before game day.">🩺 Verify Mobile Access</button>
       <div style="position:relative;display:inline-block">
         <button class="ghost" onclick="toggleCleanupMenu()" style="border-color:#d16b5d;color:#d16b5d" title="Cleanup tools: clear setup, purge tests, nuclear reset">🧹 Cleanup ▾</button>
         <div id="cleanup-menu" style="display:none;position:absolute;top:100%;right:0;z-index:100;background:#12251b;border:1px solid #d16b5d;border-radius:10px;padding:4px;box-shadow:0 12px 32px rgba(0,0,0,0.6);min-width:200px;margin-top:4px">
@@ -1993,6 +1994,93 @@ function purgeTestEvents(){
 }
 
 // ── Game Day Readiness Check ──
+// ─────────────────────────────────────────────────────────────────────
+// Verify Mobile Access — listens for a real fetch from a real phone.
+// Mobile pings /events/{eventId}/_loadHits whenever it loads the
+// bundle. This polls for any push with at > start time. Use this
+// pre-event to confirm both admins can actually fetch the event from
+// their game-day phones, not just the admin desktop.
+// ─────────────────────────────────────────────────────────────────────
+let _verifyHandle = null;
+let _verifyTimeout = null;
+let _verifyHitsRef = null;
+function showVerifyMobile(){
+  if(!db){ alert('Firebase not connected. Refresh and try again.'); return; }
+  const bundle = buildEventBundle();
+  const evId = bundle && bundle.event && bundle.event.eventId;
+  if(!evId){ alert('No event ID set. Fill in event name + dates first.'); return; }
+  const isLive = !bundle._isTest;
+  const startTime = Date.now();
+  const joinUrl = `${APP_BASE_URL}/`;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'verify-mobile-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <div style="background:#12251b;border:1px solid #79b0e3;border-radius:14px;padding:22px;max-width:480px;width:100%">
+      <h2 style="margin:0 0 10px;color:#79b0e3;font-size:18px">🩺 Verify Mobile Access</h2>
+      <div style="font-size:12px;color:#9a8e78;margin-bottom:14px;line-height:1.5">Event <code>${evId}</code> · ${isLive?'🟢 LIVE':'🧪 TEST'}</div>
+      <ol style="font-size:13px;color:#e8dcc4;line-height:1.7;margin:0 0 14px;padding-left:20px">
+        <li>Open <a href="${joinUrl}" target="_blank" style="color:#c9a84c">${joinUrl}</a> on your <strong>game-day phone</strong> (and have Terry do the same on his).</li>
+        <li>Scan cloud events → tap <strong>${escHtml(bundle.event.displayName||bundle.event.name||evId)}</strong> → pick your name → load.</li>
+        <li>This panel will tick green the moment your phone successfully fetches the bundle.</li>
+      </ol>
+      <div id="verify-status" style="background:#0d1f15;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:14px;font-size:13px;color:#9a8e78;text-align:center;margin-bottom:12px">⏳ Listening for mobile fetches… (60s)</div>
+      <div id="verify-hits" style="font-size:11px;color:#9a8e78;margin-bottom:12px;max-height:120px;overflow:auto"></div>
+      <div style="display:flex;gap:8px">
+        <button onclick="closeVerifyMobile()" style="flex:1;padding:10px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#9a8e78;font-size:12px;cursor:pointer">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const hits = [];
+  _verifyHitsRef = db.ref(`/events/${evId}/_loadHits`).orderByChild('at').startAt(startTime);
+  _verifyHandle = _verifyHitsRef.on('child_added', snap => {
+    const v = snap.val() || {};
+    hits.push(v);
+    const statusEl = document.getElementById('verify-status');
+    const hitsEl = document.getElementById('verify-hits');
+    if(statusEl){
+      statusEl.style.background = 'rgba(62,207,142,0.12)';
+      statusEl.style.borderColor = 'rgba(62,207,142,0.5)';
+      statusEl.style.color = '#3ecf8e';
+      statusEl.innerHTML = `✅ ${hits.length} mobile fetch${hits.length>1?'es':''} confirmed`;
+    }
+    if(hitsEl){
+      hitsEl.innerHTML = hits.map(h => {
+        const t = new Date(h.at).toLocaleTimeString();
+        const dev = (h.device || 'unknown').replace(/^Mozilla\/[^ ]+ /, '').substring(0, 60);
+        return `<div style="padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.04)">✓ ${t}${h.player?' · '+h.player:''}<br/><span style="opacity:0.6">${escHtml(dev)}</span></div>`;
+      }).join('');
+    }
+  });
+  _verifyTimeout = setTimeout(() => {
+    if(hits.length === 0){
+      const statusEl = document.getElementById('verify-status');
+      if(statusEl){
+        statusEl.style.background = 'rgba(209,107,93,0.12)';
+        statusEl.style.borderColor = 'rgba(209,107,93,0.5)';
+        statusEl.style.color = '#d16b5d';
+        statusEl.innerHTML = `❌ No mobile fetches in 60s. Phone might not have internet, or the event isn't published — check "Send to App" status.`;
+      }
+    }
+    closeVerifyListeners();
+  }, 60000);
+}
+function closeVerifyListeners(){
+  if(_verifyHitsRef && _verifyHandle){
+    try { _verifyHitsRef.off('child_added', _verifyHandle); } catch(e){}
+  }
+  _verifyHitsRef = null; _verifyHandle = null;
+  if(_verifyTimeout){ clearTimeout(_verifyTimeout); _verifyTimeout = null; }
+}
+function closeVerifyMobile(){
+  closeVerifyListeners();
+  const overlay = document.getElementById('verify-mobile-overlay');
+  if(overlay) overlay.remove();
+}
+function escHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
 function showGameDayCheck(){
   if(!db){ alert('Firebase not connected. Check your internet connection and refresh.'); btnReset('btn-gameday'); return; }
   const bundle = buildEventBundle();

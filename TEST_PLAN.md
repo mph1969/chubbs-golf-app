@@ -20,6 +20,79 @@ Legend: 🔴 must-pass before event · 🟡 high value but can be triaged · �
 
 ---
 
+## Pre-Event Access Verification 🔴🔴
+> The single most important checklist for game-day reliability. Run on the **actual phones** that Michael and Terry will use on Saturday morning. The other blocks test app correctness; this one tests **whether you can get to the event at all**.
+
+Covers: `pingVerifyHit` + `cacheBundle` + `loadFromCache` (mobile, post-`_doApplyBundle`), `showVerifyMobile` (admin).
+
+### V1. T-7 days — Real-device dress rehearsal 🔴
+Run this once for each admin (Michael + Terry), on each admin's game-day phone.
+
+1. In admin (desktop): event mode = **🟢 LIVE**. Hit **☁️ Send to App**.
+2. On admin's phone (Safari/Chrome — the one going to the course): open `https://chubbs-golf.netlify.app/`.
+3. Confirm cloud-events list shows the event with a **🟢 LIVE** chip prefix. Tap the event.
+4. Pick your name from the player picker → load.
+5. Navigate to scorer screen for both Day 1 and Day 2. Confirm:
+   - Your name appears as scorer (or you're a viewer if you're not the assigned scorer).
+   - Hole numbers, par, SI, challenge badges all render.
+   - Master mode PIN works (Settings → enter PIN → toggle).
+6. Enter and immediately delete a test score.
+7. Don't clear browser data on this phone for the next 7 days.
+
+**Expected state after V1:** Bundle is in this device's `chubbs_mobile_event_cache_v1` localStorage. Service worker is registered. You're logged in as the right player.
+
+### V2. T-7 days — End-to-end fetch verification 🔴
+On admin (desktop) immediately after V1: click **🩺 Verify Mobile Access** in header.
+
+1. Modal opens with instructions and live status.
+2. On phone: refresh the page or re-load the event from cache.
+3. Within ~2 seconds the admin modal should tick **✅ N mobile fetches confirmed** with the device's user-agent.
+4. Have Terry do the same on his phone — admin should see two separate hits.
+
+**Failure modes to look for:**
+- ❌ "No mobile fetches in 60s" → phone has no internet, OR Firebase rules blocked the write, OR event not published. Check **Send to App** status.
+- Hits arrive from one phone but not the other → second phone has connection issue or stale cache.
+
+### V3. T-7 days — Offline cache fallback 🔴
+On admin's phone, after V1 succeeded:
+
+1. Turn on Airplane Mode.
+2. Reload the live URL.
+3. Cloud scan should fail/timeout → **📦 Cached Events** card should still appear with the bundle in it.
+4. Tap the cached entry → confirms load. Scorer screen should render.
+5. Turn Wi-Fi/cellular back on. Firebase sync resumes automatically.
+
+**Expected:** App is fully usable offline once the bundle is cached. Scores entered offline will sync when connection returns.
+
+### V4. T-1 day (Friday) — Full re-verify 🔴
+1. Admin: re-run **✅ Game Day Check** in admin header. All rows green except dates (warn OK if needed).
+2. Admin: re-run **🩺 Verify Mobile Access**. Both phones must register a hit.
+3. Both admins: download the latest event JSON via admin **💾 Export JSON** → save to your phone's Files app as backup. Filename will be `{eventId}-LIVE-{YYYYMMDD}.json` — easy to identify.
+4. Confirm Master PIN is written down somewhere outside the app (Notes app or paper). Both admins should know it.
+
+### V5. T-30 minutes Saturday morning — Final sanity 🔴
+1. First admin to arrive at the course: load the live URL on phone.
+2. If cloud scan works → load event normally.
+3. If cloud scan is slow (>10s) → tap from **📦 Cached Events** card instead.
+4. Confirm scorer screen renders. Confirm score lock countdown is correct.
+5. **Don't touch admin during the round** unless required — every "Send to App" overwrites the cloud bundle.
+
+### V6. Mid-round emergency recovery 🟡
+If a player reports "I can't load the event":
+
+1. **Triage in this order:**
+   - Their phone has internet? (try a website)
+   - They're using the right URL? (`chubbs-golf.netlify.app`)
+   - The cloud-events scan is empty? → admin's bundle isn't published or got purged.
+   - They picked the wrong player ID? → reload, pick correct name.
+2. **Last resort:** WeChat them the event JSON file. They use **📥 Import from file** on the join screen.
+3. **Don't re-publish the bundle from admin** mid-round unless absolutely necessary — it triggers an "update available" banner on every other player's device and risks state confusion.
+
+### V7. Both admins must have viewed the LIVE event before Friday EOD 🔴
+This is the single most important pre-flight: if both Michael and Terry have successfully loaded the LIVE event on their game-day phones at least once, the bundle is cached locally and Firebase sync token is established. Even if the venue Wi-Fi is dead Saturday morning, the cached bundle loads instantly.
+
+---
+
 ## Block A — Event Bundle Import 🔴
 
 Covers: `importEventBundleText`, `importEventBundleFile`, `applyImportedEventBundle`, `_doApplyBundle` (lines 1682–1830), `normalizeEventBundle` (line 1200), `migrateState` (line 1103).

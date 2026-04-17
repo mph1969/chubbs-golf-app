@@ -1266,6 +1266,50 @@ function applyImportedEventBundle(bundle, requestedPlayerId){
   }
   _doApplyBundle(bundle, requestedPlayerId);
 }
+
+// ── Mobile event cache (offline-friendly load fallback) ──
+// Every successfully-loaded bundle gets cached locally. If Firebase
+// is unreachable on game-day morning, "Load from cache" loads the
+// last-known-good bundle without internet. Capped at 5 most recent.
+const MOBILE_CACHE_KEY = 'chubbs_mobile_event_cache_v1';
+const MOBILE_CACHE_MAX = 5;
+function loadEventCache(){
+  try { return JSON.parse(localStorage.getItem(MOBILE_CACHE_KEY) || '[]'); } catch(e){ return []; }
+}
+function cacheBundle(bundle){
+  if(!bundle || !bundle.event) return;
+  const eventId = bundle.event.eventId || 'event';
+  const existing = loadEventCache().filter(e => e.eventId !== eventId);
+  existing.unshift({
+    eventId,
+    displayName: bundle.event.displayName || bundle.event.name || eventId,
+    isLive: !bundle._isTest,
+    cachedAt: new Date().toISOString(),
+    bundle
+  });
+  try { localStorage.setItem(MOBILE_CACHE_KEY, JSON.stringify(existing.slice(0, MOBILE_CACHE_MAX))); } catch(e){ console.warn('[cache] save failed', e); }
+}
+function loadFromCache(eventId){
+  const entry = loadEventCache().find(e => e.eventId === eventId);
+  if(!entry){ showToast('Cached entry not found.', 'err'); return; }
+  showConfirm(`Load cached "${entry.displayName}" from ${new Date(entry.cachedAt).toLocaleString()}?\n\nFirebase sync will start automatically when you have internet.`, () => {
+    applyImportedEventBundle(entry.bundle);
+    showToast('Loaded from cache · ' + entry.displayName, 'ok', 4000);
+  });
+}
+// Fire-and-forget verify ping. Admin's "Verify mobile access" button
+// listens for these pushes under /events/{eventId}/_loadHits so it
+// can confirm an end-to-end fetch actually worked from a real phone.
+function pingVerifyHit(eventId){
+  if(!eventId || !SYNC.db) return;
+  try {
+    SYNC.db.ref(`/events/${eventId}/_loadHits`).push({
+      at: Date.now(),
+      device: (navigator.userAgent || 'unknown').substring(0, 80),
+      player: state.eventPlayerId || ''
+    }).catch(()=>{});
+  } catch(e){ /* offline / permission — ignore */ }
+}
 // ── Roster helpers ────────────────────────────────────────────────────────
 function loadRoster(){
   try { return JSON.parse(localStorage.getItem(ROSTER_KEY) || '[]'); } catch(e){ return []; }
@@ -1749,6 +1793,12 @@ function _doApplyBundle(bundle, requestedPlayerId){
   const evId = normalized.event && normalized.event.eventId;
   if(evId) initSync(evId);
 
+  // Snapshot to local cache for offline-fallback loads. Done after the
+  // bundle has been validated/normalised so we never cache garbage.
+  // pingVerifyHit fires after initSync so SYNC.db is ready.
+  cacheBundle(bundle);
+  setTimeout(() => pingVerifyHit(evId), 500);
+
   // Upsert all imported players into the persistent roster
   const rosterSnap = loadRoster();
   (normalized.players || []).forEach(ep => {
@@ -1856,7 +1906,29 @@ function importEventBundleFile(input){
 // ── Cloud event scanner + picker ──
 let _cloudEventsCache = []; // [{eid, bundle}]
 
+// Render the on-device cache card. Always shows whatever's saved
+// regardless of Firebase state — that's the whole point.
+function renderCachedEvents(){
+  const card = document.getElementById('local-cache-card');
+  const list = document.getElementById('cached-event-list');
+  if(!card || !list) return;
+  const cached = loadEventCache();
+  if(!cached.length){ card.style.display = 'none'; return; }
+  card.style.display = '';
+  list.innerHTML = cached.map(e => {
+    const chip = e.isLive
+      ? `<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.45);color:#3ecf8e;margin-right:6px">🟢 LIVE</span>`
+      : `<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(245,216,92,0.12);border:1px solid rgba(245,216,92,0.45);color:#f5d85c;margin-right:6px">🧪 TEST</span>`;
+    const when = e.cachedAt ? new Date(e.cachedAt).toLocaleString() : '';
+    return `<button class="btn full" style="text-align:left;margin-bottom:6px;padding:12px" onclick="loadFromCache('${e.eventId}')">
+      ${chip}<strong>${escHtml(e.displayName)}</strong><br/>
+      <span class="small" style="color:var(--muted)">cached ${when}</span>
+    </button>`;
+  }).join('');
+}
+
 function scanCloudEvents(){
+  renderCachedEvents();
   const listEl = document.getElementById('cloud-event-list');
   const pickEl = document.getElementById('cloud-player-pick');
   if(!listEl) return;
@@ -3797,6 +3869,11 @@ function renderSetup(){
         <div id="cloud-event-list"><div class="status info tight">Scanning for events…</div></div>
         <div id="cloud-player-pick" style="display:none"></div>
         <div id="cloud-load-status"></div>
+      </div>
+      <div class="card" id="local-cache-card" style="display:none">
+        <div class="section-title">📦 Cached Events (offline)</div>
+        <div class="small tight" style="margin-bottom:10px">Previously loaded events stored on this device. Use this if Firebase is slow or unreachable.</div>
+        <div id="cached-event-list"></div>
       </div>` : ''}
       <div style="text-align:center;margin-top:8px;padding-bottom:4px">
         <button onclick="toggleMasterMode()" style="background:transparent;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:8px 12px;">⚙️ Organiser / admin view</button>
