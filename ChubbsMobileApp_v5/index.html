@@ -1880,6 +1880,7 @@ function scanCloudEvents(){
         eid,
         bundle,
         name: bundle.event.displayName || bundle.event.name || eid,
+        isTest: !!bundle._isTest,
         publishedAt: bundle._publishedAt || 0,
         satDate: bundle.event.satDate || '',
         sunDate: bundle.event.sunDate || '',
@@ -1898,8 +1899,11 @@ function scanCloudEvents(){
 
     listEl.innerHTML = '<label>Select event</label>' + _cloudEventsCache.map((ev, i) => {
       const dates = [ev.satDate, ev.sunDate].filter(Boolean).join(' – ');
+      const chip = ev.isTest
+        ? `<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(245,216,92,0.12);border:1px solid rgba(245,216,92,0.45);color:#f5d85c;margin-right:6px">🧪 TEST</span>`
+        : `<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.45);color:#3ecf8e;margin-right:6px">🟢 LIVE</span>`;
       return `<button class="btn full" style="text-align:left;margin-bottom:6px;padding:12px" onclick="selectCloudEvent(${i})">
-        <strong>${escHtml(ev.name)}</strong><br/>
+        ${chip}<strong>${escHtml(ev.name)}</strong><br/>
         <span class="small" style="color:var(--muted)">${dates ? dates + ' · ' : ''}${ev.playerCount} players</span>
       </button>`;
     }).join('');
@@ -1917,9 +1921,12 @@ function selectCloudEvent(idx){
 
   // Highlight selected event
   const dates = [ev.satDate, ev.sunDate].filter(Boolean).join(' – ');
+  const chip = ev.isTest
+    ? `<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(245,216,92,0.12);border:1px solid rgba(245,216,92,0.45);color:#f5d85c;margin-right:6px">🧪 TEST</span>`
+    : `<span style="display:inline-block;font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.45);color:#3ecf8e;margin-right:6px">🟢 LIVE</span>`;
   listEl.innerHTML = `
     <div class="status ok tight" style="margin-bottom:10px">
-      <strong>${escHtml(ev.name)}</strong><br/>
+      ${chip}<strong>${escHtml(ev.name)}</strong><br/>
       <span class="small">${dates ? dates + ' · ' : ''}${ev.playerCount} players</span>
     </div>
     <button class="btn ghost slim" onclick="scanCloudEvents()" style="margin-bottom:8px">← Pick a different event</button>`;

@@ -139,7 +139,7 @@
     <div style="display:flex; align-items:center; gap:16px;">
       <img src="./ChubbsGatorIcon.png" alt="Chubbs Logo" style="width:96px; height:96px; border-radius:12px; border: 1px solid var(--gold2);" onerror="this.style.display='none'" />
       <div>
-        <h1>Chubbs Admin</h1>
+        <h1 style="display:flex;align-items:center;gap:10px">Chubbs Admin <span id="header-mode-chip" style="font-size:11px;font-weight:800;letter-spacing:0.08em;padding:4px 10px;border-radius:999px;background:rgba(74,176,224,0.12);border:1px solid rgba(74,176,224,0.4);color:#79b0e3">🟢 LIVE</span></h1>
         <div class="subtitle">Event Setup Portal <span id="fb-status" style="font-size:10px;margin-left:8px">⏳ Connecting…</span> <span id="cloud-save-status" style="font-size:10px;margin-left:6px"></span></div>
       </div>
     </div>
@@ -148,8 +148,9 @@
       <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
       <button class="ghost" onclick="generateAndDownloadJson()" title="Download event bundle as JSON backup.">💾 Export JSON</button>
       <button class="ghost" onclick="exportConfig()" title="Export full admin setup (roster, teams, groups, settings) to clone into a new event." style="border-color:var(--blue);color:var(--blue)">📋 Export Config</button>
-      <button class="ghost" onclick="document.getElementById('config-upload').click()" title="Import a saved config to pre-fill this setup." style="border-color:var(--blue);color:var(--blue)">📥 Import Config</button>
+      <button class="ghost" onclick="document.getElementById('config-upload').click()" title="Import a saved config from disk." style="border-color:var(--blue);color:var(--blue)">📥 Import Config</button>
       <input type="file" id="config-upload" accept=".json" style="display:none" onchange="importConfig(this)">
+      <button class="ghost" onclick="showLibraryPanel()" title="Saved exports stored inside the app — bundles + configs, with re-download and re-apply options." style="border-color:var(--gold2,#c9a84c);color:var(--gold2,#c9a84c)">📚 Library</button>
       <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud.">☁️ Send to App</button>
       <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight readiness checklist.">✅ Game Day Check</button>
       <div style="position:relative;display:inline-block">
@@ -1443,13 +1444,188 @@ function exportConfig(){
       stableford:getChallenges('stableford')
     }
   };
-  const name=config.form.eventName.replace(/\s+/g,'-').substring(0,20)||'chubbs';
+  // Mirror event-bundle naming: {eventId}-{LIVE|TEST}-{YYYYMMDD}-config.json
+  // Falls back to {eventName}-config-{date}.json if no event has been
+  // built yet (no eventId derivable).
+  const evt={event:{eventId:`${(config.form.scrambleDate||'').split('-')[0]||'event'}-${(config.form.eventName||'chubbs').replace(/\s+/g,'-').substring(0,10)}`},_isTest:eventMode==='test'};
+  saveConfigToLibrary(config);
   const blob=new Blob([JSON.stringify(config,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`${name}-config-${new Date().toISOString().slice(0,10)}.json`;
+  a.download=buildExportFilename(evt,'config');
   document.body.appendChild(a);a.click();a.remove();
 }
+// ─────────────────────────────────────────────────────────────────────
+// In-app Event Library (localStorage). Every export drops a copy here
+// so the admin has a "folder" of saved events independent of the OS
+// download folder. Survives browser refresh, capped at 20 most recent.
+// Holds both event bundles and admin configs (different `type`).
+// ─────────────────────────────────────────────────────────────────────
+const LIBRARY_KEY = 'chubbs_event_library_v1';
+const LIBRARY_MAX = 20;
+function loadEventLibrary(){
+  try { return JSON.parse(localStorage.getItem(LIBRARY_KEY) || '[]'); } catch(e){ return []; }
+}
+function saveEventLibrary(arr){
+  try { localStorage.setItem(LIBRARY_KEY, JSON.stringify(arr.slice(0, LIBRARY_MAX))); } catch(e){ console.warn('[Library] save failed', e); }
+}
+function saveBundleToLibrary(bundle){
+  if(!bundle || !bundle.event) return;
+  const lib = loadEventLibrary();
+  const eventId = bundle.event.eventId || 'event';
+  const isLive = !bundle._isTest;
+  lib.unshift({
+    key: `bundle-${eventId}-${Date.now()}`,
+    type: 'bundle',
+    eventId,
+    displayName: bundle.event.displayName || bundle.event.name || eventId,
+    isLive,
+    savedAt: new Date().toISOString(),
+    payload: bundle
+  });
+  saveEventLibrary(lib);
+}
+function saveConfigToLibrary(config){
+  if(!config) return;
+  const lib = loadEventLibrary();
+  const f = config.form || {};
+  const eventId = `${(f.scrambleDate||'').split('-')[0]||'cfg'}-${(f.eventName||'chubbs').replace(/\s+/g,'-').substring(0,10)}`;
+  const isLive = eventMode !== 'test';
+  lib.unshift({
+    key: `config-${eventId}-${Date.now()}`,
+    type: 'config',
+    eventId,
+    displayName: f.displayName || f.eventName || 'Admin config',
+    isLive,
+    savedAt: new Date().toISOString(),
+    payload: config
+  });
+  saveEventLibrary(lib);
+}
+function deleteFromLibrary(key){
+  const lib = loadEventLibrary().filter(e => e.key !== key);
+  saveEventLibrary(lib);
+  renderLibraryPanel();
+}
+function redownloadFromLibrary(key){
+  const entry = loadEventLibrary().find(e => e.key === key);
+  if(!entry) return;
+  const blob = new Blob([JSON.stringify(entry.payload, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = entry.type === 'config'
+    ? buildExportFilename({event:{eventId:entry.eventId},_isTest:!entry.isLive}, 'config')
+    : buildExportFilename(entry.payload);
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 500);
+}
+function applyConfigFromLibrary(key){
+  const entry = loadEventLibrary().find(e => e.key === key);
+  if(!entry || entry.type !== 'config') return;
+  if(!confirm(`Apply config "${entry.displayName}" from ${entry.savedAt.slice(0,10)}?\n\nThis will replace your current roster, teams, groups, and settings.`)) return;
+  applyConfigPayload(entry.payload);
+  closeLibraryPanel();
+}
+function showLibraryPanel(){
+  let overlay = document.getElementById('library-overlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'library-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto';
+    overlay.onclick = (e) => { if(e.target === overlay) closeLibraryPanel(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+  renderLibraryPanel();
+}
+function closeLibraryPanel(){
+  const overlay = document.getElementById('library-overlay');
+  if(overlay) overlay.style.display = 'none';
+}
+function renderLibraryPanel(){
+  const overlay = document.getElementById('library-overlay');
+  if(!overlay) return;
+  const lib = loadEventLibrary();
+  const rows = lib.length ? lib.map(e => {
+    const date = e.savedAt ? new Date(e.savedAt).toLocaleString() : '';
+    const chip = e.isLive
+      ? `<span style="font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.45);color:#3ecf8e">🟢 LIVE</span>`
+      : `<span style="font-size:9px;font-weight:800;letter-spacing:0.08em;padding:2px 7px;border-radius:999px;background:rgba(245,216,92,0.12);border:1px solid rgba(245,216,92,0.45);color:#f5d85c">🧪 TEST</span>`;
+    const typeChip = e.type === 'config'
+      ? `<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;background:rgba(74,176,224,0.12);border:1px solid rgba(74,176,224,0.4);color:#79b0e3">CONFIG</span>`
+      : `<span style="font-size:9px;font-weight:700;padding:2px 6px;border-radius:6px;background:rgba(201,168,76,0.12);border:1px solid rgba(201,168,76,0.4);color:#c9a84c">BUNDLE</span>`;
+    const applyBtn = e.type === 'config'
+      ? `<button onclick="applyConfigFromLibrary('${e.key}')" style="padding:6px 10px;background:rgba(74,176,224,0.12);border:1px solid #79b0e3;color:#79b0e3;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">📥 Apply</button>`
+      : '';
+    return `<div style="background:#0f1f15;border:1px solid rgba(255,255,255,0.08);border-radius:10px;padding:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+        ${chip}${typeChip}
+        <strong style="color:#e8dcc4">${e.displayName||e.eventId}</strong>
+      </div>
+      <div style="font-size:11px;color:#9a8e78;margin-bottom:8px"><code>${e.eventId}</code> · ${date}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${applyBtn}
+        <button onclick="redownloadFromLibrary('${e.key}')" style="padding:6px 10px;background:transparent;border:1px solid rgba(201,168,76,0.4);color:#c9a84c;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">💾 Re-download</button>
+        <button onclick="if(confirm('Delete this entry from the library?'))deleteFromLibrary('${e.key}')" style="padding:6px 10px;background:transparent;border:1px solid rgba(209,107,93,0.4);color:#d16b5d;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">🗑 Delete</button>
+      </div>
+    </div>`;
+  }).join('') : `<div style="text-align:center;padding:40px 20px;color:#9a8e78">No saved events yet. Export a bundle or config to populate the library.</div>`;
+  overlay.innerHTML = `
+    <div style="background:#12251b;border:1px solid var(--gold2,#c9a84c);border-radius:14px;padding:20px;max-width:560px;width:100%;max-height:85vh;overflow:auto">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h2 style="margin:0;color:#c9a84c;font-size:18px">📚 Event Library</h2>
+        <button onclick="closeLibraryPanel()" style="background:transparent;border:none;color:#9a8e78;font-size:22px;cursor:pointer;padding:0 6px">×</button>
+      </div>
+      <div style="font-size:11px;color:#9a8e78;margin-bottom:12px;line-height:1.5">In-app store of every bundle and config you've exported. Survives browser refresh. Capped at ${LIBRARY_MAX} most recent.</div>
+      ${rows}
+    </div>`;
+}
+
+// Apply a config payload (used by both file-based importConfig and
+// library-based applyConfigFromLibrary). Pulled out so both code paths
+// stay in sync — this WAS inline in importConfig.
+function applyConfigPayload(config){
+  if(config._type !== 'chubbs-admin-config'){
+    alert('This doesn\u2019t look like a Chubbs Admin config file.');
+    return;
+  }
+  if(Array.isArray(config.roster) && config.roster.length){
+    masterRoster = config.roster;
+    saveAdminRoster();
+  }
+  if(config.state){
+    state = config.state;
+    saveAdminState();
+  }
+  const f = config.form || {};
+  if(f.eventName) document.getElementById('ev-name').value = f.eventName;
+  if(f.displayName) document.getElementById('ev-display').value = f.displayName;
+  if(f.scrambleDate) document.getElementById('scramble-date').value = f.scrambleDate;
+  if(f.scrambleTime) document.getElementById('scramble-time').value = f.scrambleTime;
+  if(f.stablefordDate) document.getElementById('stableford-date').value = f.stablefordDate;
+  if(f.stablefordTime) document.getElementById('stableford-time').value = f.stablefordTime;
+  if(f.scrambleCourse){ document.getElementById('scramble-course').value = f.scrambleCourse; togglePalmSelectors('scramble'); }
+  if(f.scrambleFront) document.getElementById('scramble-front').value = f.scrambleFront;
+  if(f.scrambleBack) document.getElementById('scramble-back').value = f.scrambleBack;
+  if(f.stablefordCourse){ document.getElementById('stableford-course').value = f.stablefordCourse; togglePalmSelectors('stableford'); }
+  if(f.stablefordFront) document.getElementById('stableford-front').value = f.stablefordFront;
+  if(f.stablefordBack) document.getElementById('stableford-back').value = f.stablefordBack;
+  if(f.currency) document.getElementById('ev-currency').value = f.currency;
+  if(f.teamSize) document.getElementById('scramble-team-size').value = f.teamSize;
+  if(f.minDrives) document.getElementById('scramble-min-drives').value = f.minDrives;
+  if(f.ante) document.getElementById('ev-ante').value = f.ante;
+  if(f.pen3) document.getElementById('ev-pen3').value = f.pen3;
+  if(f.pen4) document.getElementById('ev-pen4').value = f.pen4;
+  if(config.challenges){
+    populateChallengeHoles('scramble');
+    populateChallengeHoles('stableford');
+    (config.challenges.scramble || []).forEach(ch => { const sel = document.getElementById('ch-scramble-'+ch.id); if(sel) sel.value = ch.hole; });
+    (config.challenges.stableford || []).forEach(ch => { const sel = document.getElementById('ch-stableford-'+ch.id); if(sel) sel.value = ch.hole; });
+  }
+  init();
+  alert('Config applied. Review the setup and update dates/event name for the new event.');
+}
+
 function importConfig(input){
   const file=input.files[0];
   if(!file) return;
@@ -1458,56 +1634,11 @@ function importConfig(input){
     try{
       const config=JSON.parse(e.target.result);
       if(config._type!=='chubbs-admin-config'){
-        alert('This doesn\'t look like a Chubbs Admin config file.');
+        alert('This doesn\u2019t look like a Chubbs Admin config file.');
         return;
       }
       if(!confirm(`Import config from ${config._exportedAt?.slice(0,10)||'unknown date'}?\n\nThis will replace your current roster, teams, groups, and settings.\n\nA NEW event ID will be generated.`)) return;
-      // Restore roster
-      if(Array.isArray(config.roster)&&config.roster.length){
-        masterRoster=config.roster;
-        saveAdminRoster();
-      }
-      // Restore state (attendance, teams, groups)
-      if(config.state){
-        state=config.state;
-        saveAdminState();
-      }
-      // Restore form fields
-      const f=config.form||{};
-      if(f.eventName) document.getElementById('ev-name').value=f.eventName;
-      if(f.displayName) document.getElementById('ev-display').value=f.displayName;
-      if(f.scrambleDate) document.getElementById('scramble-date').value=f.scrambleDate;
-      if(f.scrambleTime) document.getElementById('scramble-time').value=f.scrambleTime;
-      if(f.stablefordDate) document.getElementById('stableford-date').value=f.stablefordDate;
-      if(f.stablefordTime) document.getElementById('stableford-time').value=f.stablefordTime;
-      if(f.scrambleCourse){document.getElementById('scramble-course').value=f.scrambleCourse;togglePalmSelectors('scramble');}
-      if(f.scrambleFront) document.getElementById('scramble-front').value=f.scrambleFront;
-      if(f.scrambleBack) document.getElementById('scramble-back').value=f.scrambleBack;
-      if(f.stablefordCourse){document.getElementById('stableford-course').value=f.stablefordCourse;togglePalmSelectors('stableford');}
-      if(f.stablefordFront) document.getElementById('stableford-front').value=f.stablefordFront;
-      if(f.stablefordBack) document.getElementById('stableford-back').value=f.stablefordBack;
-      if(f.currency) document.getElementById('ev-currency').value=f.currency;
-      if(f.teamSize) document.getElementById('scramble-team-size').value=f.teamSize;
-      if(f.minDrives) document.getElementById('scramble-min-drives').value=f.minDrives;
-      if(f.ante) document.getElementById('ev-ante').value=f.ante;
-      if(f.pen3) document.getElementById('ev-pen3').value=f.pen3;
-      if(f.pen4) document.getElementById('ev-pen4').value=f.pen4;
-      // Restore challenge hole assignments
-      if(config.challenges){
-        populateChallengeHoles('scramble');
-        populateChallengeHoles('stableford');
-        (config.challenges.scramble||[]).forEach(ch=>{
-          const sel=document.getElementById('ch-scramble-'+ch.id);
-          if(sel) sel.value=ch.hole;
-        });
-        (config.challenges.stableford||[]).forEach(ch=>{
-          const sel=document.getElementById('ch-stableford-'+ch.id);
-          if(sel) sel.value=ch.hole;
-        });
-      }
-      // Re-render everything
-      init();
-      alert('Config imported successfully! Review the setup and update dates/event name for the new event.');
+      applyConfigPayload(config);
     }catch(err){
       alert('Failed to parse config file: '+err.message);
     }
@@ -1629,10 +1760,20 @@ function showExportConfirmation(action) {
     </div>`;
   document.body.appendChild(overlay);
 }
+// Filename: {eventId}-{LIVE|TEST}-{YYYYMMDD}.json — so the file you
+// hand off via WeChat is unmistakably the right event AND mode.
+function buildExportFilename(eventJson, suffix){
+  const eid = (eventJson && eventJson.event && eventJson.event.eventId) || 'event';
+  const mode = (eventJson && eventJson._isTest) ? 'TEST' : 'LIVE';
+  const date = new Date().toISOString().slice(0,10).replace(/-/g,'');
+  const safeEid = String(eid).replace(/[^A-Za-z0-9_.-]/g,'-');
+  return suffix ? `${safeEid}-${mode}-${date}-${suffix}.json` : `${safeEid}-${mode}-${date}.json`;
+}
 function doDownloadJson() {
   const eventJson = buildEventBundle();
+  if(typeof saveBundleToLibrary === 'function') saveBundleToLibrary(eventJson);
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(eventJson, null, 2));
-  const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", "event.json");
+  const a = document.createElement('a'); a.setAttribute("href", dataStr); a.setAttribute("download", buildExportFilename(eventJson));
   document.body.appendChild(a); a.click(); a.remove();
 }
 
@@ -1793,16 +1934,25 @@ function setEventMode(mode){
   const liveBtn = document.getElementById('mode-live');
   const testBtn = document.getElementById('mode-test');
   const note = document.getElementById('event-mode-note');
+  const chip = document.getElementById('header-mode-chip');
   if(mode === 'test'){
     testBtn.className = 'small'; testBtn.style.cssText = 'flex:1;padding:10px;background:#5c3a0a;border:1px solid #d6a030;color:#f5d85c';
     liveBtn.className = 'small ghost'; liveBtn.style.cssText = 'flex:1;padding:10px';
     note.textContent = '🧪 Test event — will be flagged for cleanup. Scores do NOT count.';
     note.style.color = '#f5d85c';
+    if(chip){
+      chip.textContent = '🧪 TEST';
+      chip.style.cssText = 'font-size:11px;font-weight:800;letter-spacing:0.08em;padding:4px 10px;border-radius:999px;background:rgba(245,216,92,0.12);border:1px solid rgba(245,216,92,0.45);color:#f5d85c';
+    }
   } else {
     liveBtn.className = 'primary small'; liveBtn.style.cssText = 'flex:1;padding:10px';
     testBtn.className = 'small ghost'; testBtn.style.cssText = 'flex:1;padding:10px';
     note.textContent = '🟢 Live event — scores count. Test data can be purged later.';
     note.style.color = 'var(--muted)';
+    if(chip){
+      chip.textContent = '🟢 LIVE';
+      chip.style.cssText = 'font-size:11px;font-weight:800;letter-spacing:0.08em;padding:4px 10px;border-radius:999px;background:rgba(62,207,142,0.12);border:1px solid rgba(62,207,142,0.45);color:#3ecf8e';
+    }
   }
 }
 
