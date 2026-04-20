@@ -33,7 +33,7 @@ The shape is path-specific all the way down. Paste this as the full ruleset:
       "presses": {
         "$player": {
           ".read": true,
-          ".write": "newData.isNumber() && newData.val() === (data.val() || 0) + 1 && newData.val() <= 9999"
+          ".write": "newData.isNumber() && newData.val() === (data.exists() ? data.val() : 0) + 1 && newData.val() <= 9999"
         }
       },
       "leaderboardPublished": {
@@ -44,6 +44,14 @@ The shape is path-specific all the way down. Paste this as the full ruleset:
   }
 }
 ```
+
+### Note on the ratchet rule syntax
+
+Firebase RTDB Security Rules are a restricted expression language — `||`
+requires boolean operands on both sides, unlike JavaScript. That's why the
+ratchet uses `(data.exists() ? data.val() : 0)` instead of the JS-idiomatic
+`(data.val() || 0)`. First press (no prior value) falls through to `0 + 1`;
+subsequent presses increment the stored integer.
 
 ### Merging into your existing rules
 
