@@ -1795,19 +1795,43 @@ function ensureActiveSeason(){
   if(store.seasons[ACTIVE_SEASON_ID].status !== 'active'){
     store.seasons[ACTIVE_SEASON_ID].status = 'active';
   }
-  if(!store.viewingSeasonId) store.viewingSeasonId = ACTIVE_SEASON_ID;
+  // Prune orphan empty seasons from prior builds (e.g. blank season-5 left over
+  // from v5.36). Don't touch the active season even if it's empty — we want
+  // the shell to persist so appended events have somewhere to land.
+  Object.keys(store.seasons).forEach(id => {
+    if(id === ACTIVE_SEASON_ID) return;
+    const s = store.seasons[id];
+    if(!s || !Array.isArray(s.events) || s.events.length === 0){
+      delete store.seasons[id];
+      if(store.viewingSeasonId === id) store.viewingSeasonId = ACTIVE_SEASON_ID;
+    }
+  });
+  if(!store.viewingSeasonId || !store.seasons[store.viewingSeasonId]){
+    store.viewingSeasonId = ACTIVE_SEASON_ID;
+  }
   saveSeasonStore(store);
   return store;
 }
 
-// Fire-and-forget on boot: fetch season-4.json if we don't already have it cached.
+// Fire-and-forget on boot: fetch season-4.json if we don't already have it loaded.
+// Treat an empty season-4 shell (zero events) the same as missing — the shell
+// may have been created by ensureActiveSeason before the baked-in JSON landed.
 async function fetchSeason4IfMissing(){
   const store = ensureActiveSeason();
-  if(store.seasons['season-4']) return;
+  const s = store.seasons['season-4'];
+  if(s && Array.isArray(s.events) && s.events.length > 0) return;
   try {
     const res = await fetch('./season-4.json', { cache: 'no-cache' });
     if(!res.ok) return;
     const data = await res.json();
+    // Preserve any locally-appended events if the shell happened to have any
+    const localEvents = (s && Array.isArray(s.events)) ? s.events : [];
+    if(localEvents.length){
+      const ids = new Set(localEvents.map(e => e.id));
+      data.events = (data.events || []).concat(localEvents.filter(e => !ids.has(e.id)));
+    }
+    // Force active status so the Season tab labels it Live
+    data.status = 'active';
     store.seasons['season-4'] = data;
     saveSeasonStore(store);
     if(state.ui.tab === 'season') renderSeason();
@@ -2020,10 +2044,15 @@ function toggleSeasonRow(name){
 }
 
 // Collapsible sections on Setup tab (Roster, Stableford groups, etc.)
-function isCollapsed(key){ return !!(state.ui.collapsed && state.ui.collapsed[key]); }
+// Default is COLLAPSED — user must explicitly expand. Once toggled, preference
+// persists via state.ui.collapsed per key.
+function isCollapsed(key){
+  if(state.ui.collapsed && key in state.ui.collapsed) return !!state.ui.collapsed[key];
+  return true;
+}
 function toggleCollapsed(key){
   state.ui.collapsed = state.ui.collapsed || {};
-  state.ui.collapsed[key] = !state.ui.collapsed[key];
+  state.ui.collapsed[key] = !isCollapsed(key);
   saveState();
   renderAll();
 }
@@ -5562,7 +5591,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.3';
+  const APP_VERSION = '5.4';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
