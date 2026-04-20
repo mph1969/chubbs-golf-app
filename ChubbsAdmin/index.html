@@ -41,6 +41,14 @@
 
     .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
     .card-title { font-family: Georgia, serif; font-size: 20px; color: var(--gold2); margin: 0 0 16px 0; display: flex; justify-content: space-between; align-items: center;}
+    /* Collapsible card sections — click title to toggle */
+    .collapsible-title { cursor: pointer; user-select: none; }
+    .collapsible-title:hover { opacity: 0.85; }
+    .collapse-chev { display:inline-block; font-size:14px; transition: transform 0.2s ease; margin-right:6px; color:var(--gold2); }
+    .collapsed .collapse-chev { transform: rotate(-90deg); }
+    .collapsible-body { transition: max-height 0.2s ease; }
+    .collapsed .collapsible-body { display: none; }
+    .collapsed-pill { font-size:11px;color:var(--muted);font-weight:400;font-style:italic;margin-left:8px }
     
     label { display: block; font-size: 11px; color: var(--muted); margin-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
     input[type="text"], input[type="date"], input[type="time"], input[type="number"], select, textarea {
@@ -143,25 +151,37 @@
         <div class="subtitle">Event Setup Portal <span id="fb-status" style="font-size:10px;margin-left:8px">⏳ Connecting…</span> <span id="cloud-save-status" style="font-size:10px;margin-left:6px"></span></div>
       </div>
     </div>
-	<div style="display:flex; gap: 10px; flex-wrap:wrap; align-items:center;">
-      <button onclick="document.getElementById('roster-upload').click()" title="Import a player roster JSON file.">📥 Import Roster</button>
-      <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
-      <button class="ghost" onclick="generateAndDownloadJson()" title="Download event bundle as JSON backup.">💾 Export JSON</button>
-      <button class="ghost" onclick="exportConfig()" title="Export full admin setup (roster, teams, groups, settings) to clone into a new event." style="border-color:var(--blue);color:var(--blue)">📋 Export Config</button>
-      <button class="ghost" onclick="document.getElementById('config-upload').click()" title="Import a saved config from disk." style="border-color:var(--blue);color:var(--blue)">📥 Import Config</button>
-      <input type="file" id="config-upload" accept=".json" style="display:none" onchange="importConfig(this)">
-      <button class="ghost" onclick="showLibraryPanel()" title="Saved exports stored inside the app — bundles + configs, with re-download and re-apply options." style="border-color:var(--gold2,#c9a84c);color:var(--gold2,#c9a84c)">📚 Library</button>
-      <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud.">☁️ Send to App</button>
-      <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight readiness checklist.">✅ Game Day Check</button>
-      <button id="btn-verify-mobile" class="ghost" onclick="showVerifyMobile()" style="border-color:#79b0e3;color:#79b0e3" title="Listen for an actual mobile fetch. Forces an end-to-end check of cloud → phone before game day.">🩺 Verify Mobile Access</button>
-      <div style="position:relative;display:inline-block">
-        <button class="ghost" onclick="toggleCleanupMenu()" style="border-color:#d16b5d;color:#d16b5d" title="Cleanup tools: clear setup, purge tests, nuclear reset">🧹 Cleanup ▾</button>
+	<div class="header-actions" style="display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
+      <!-- Group A: Data I/O (roster + event export/import + library) -->
+      <div class="btn-group" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 10px;border:1px solid rgba(214,176,90,0.15);border-radius:12px;background:rgba(214,176,90,0.03)">
+        <span class="btn-group-lbl" style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:var(--gold2);opacity:0.65;margin-right:4px">Data</span>
+        <button onclick="document.getElementById('roster-upload').click()" title="Import a player roster JSON file.">📥 Roster</button>
+        <input type="file" id="roster-upload" accept=".json" style="display:none" onchange="importRoster(this)">
+        <button class="ghost" onclick="generateAndDownloadJson()" title="Download event bundle as JSON backup.">💾 Export Event</button>
+        <button class="ghost" onclick="exportConfig()" title="Export full admin setup (roster, teams, groups, settings) to clone into a new event." style="border-color:var(--blue);color:var(--blue)">📋 Export Config</button>
+        <button class="ghost" onclick="document.getElementById('config-upload').click()" title="Import a saved config from disk." style="border-color:var(--blue);color:var(--blue)">📥 Import Config</button>
+        <input type="file" id="config-upload" accept=".json" style="display:none" onchange="importConfig(this)">
+        <button class="ghost" onclick="showLibraryPanel()" title="Saved exports stored inside the app — bundles + configs, with re-download and re-apply options." style="border-color:var(--gold2,#c9a84c);color:var(--gold2,#c9a84c)">📚 Library</button>
+      </div>
+      <!-- Group B: Deploy (push + verify) -->
+      <div class="btn-group" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:6px 10px;border:1px solid rgba(121,176,227,0.2);border-radius:12px;background:rgba(121,176,227,0.04)">
+        <span class="btn-group-lbl" style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#79b0e3;opacity:0.8;margin-right:4px">Deploy</span>
+        <button id="push-btn" class="primary" style="background:linear-gradient(180deg, #79b0e3, #3a7eb8); color:#fff;" onclick="pushToLiveApp()" title="Upload event to Firebase cloud.">☁️ Send to App</button>
+        <button id="btn-gameday" class="ghost" onclick="btnLoading(this);showGameDayCheck()" style="border-color:var(--green);color:var(--green)" title="Pre-flight readiness checklist.">✅ Game Day Check</button>
+        <button id="btn-verify-mobile" class="ghost" onclick="showVerifyMobile()" style="border-color:#79b0e3;color:#79b0e3" title="Listen for an actual mobile fetch. Forces an end-to-end check of cloud → phone before game day.">🩺 Verify Mobile</button>
+      </div>
+      <!-- Group C: Cleanup (dangerous actions tucked in a menu) -->
+      <div class="btn-group" style="display:flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid rgba(209,107,93,0.2);border-radius:12px;background:rgba(209,107,93,0.04)">
+        <span class="btn-group-lbl" style="font-size:10px;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;color:#d16b5d;opacity:0.8;margin-right:4px">Danger</span>
+        <div style="position:relative;display:inline-block">
+          <button class="ghost" onclick="toggleCleanupMenu()" style="border-color:#d16b5d;color:#d16b5d" title="Cleanup tools: clear setup, purge tests, nuclear reset">🧹 Cleanup ▾</button>
         <div id="cleanup-menu" style="display:none;position:absolute;top:100%;right:0;z-index:100;background:#12251b;border:1px solid #d16b5d;border-radius:10px;padding:4px;box-shadow:0 12px 32px rgba(0,0,0,0.6);min-width:200px;margin-top:4px">
           <button onclick="confirmReset();toggleCleanupMenu()" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--text,#f4efe2);font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Clear roster, teams, groups. Does not affect Firebase.">🗑 Clear Setup</button>
           <button onclick="btnLoading(document.getElementById('btn-purge-inner'));purgeTestEvents();toggleCleanupMenu()" id="btn-purge-inner" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:#f5d85c;font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Delete TEST-flagged events from Firebase.">🧹 Purge Test Events</button>
           <button onclick="btnLoading(document.getElementById('btn-nuke-inner'));showNuclearReset();toggleCleanupMenu()" id="btn-nuke-inner" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:#f55c5c;font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Full Firebase event manager. Select and delete events.">☢️ Nuclear Reset</button>
         </div>
       </div>
+      </div><!-- end Danger btn-group -->
     </div>
   </div>
 
@@ -240,20 +260,21 @@
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" id="card-roster">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <h2 class="card-title" style="margin:0;">
-            3. Attendance <span id="attending-count" style="font-size:14px; color:var(--muted); font-family:Inter, sans-serif;">0 total</span>
+          <h2 class="card-title collapsible-title" style="margin:0;" onclick="toggleCardCollapse('card-roster')">
+            <span><span class="collapse-chev">▾</span>3. Attendance <span id="attending-count" style="font-size:14px; color:var(--muted); font-family:Inter, sans-serif;">0 total</span></span>
           </h2>
           <button class="small ghost" style="border: 1px dashed var(--gold2); color: var(--gold2);" onclick="openAddPlayer()">+ Add Player</button>
         </div>
-        
-        <div style="display:flex; gap: 8px; margin-bottom: 12px;">
-          <button class="small ghost" onclick="selectAllAttendance()" style="flex:1">Set All to 'Both'</button>
-          <button class="small danger" onclick="clearAttendance()" style="flex:1">Clear All</button>
-        </div>
-        <div class="roster-list" id="roster-container">
+        <div class="collapsible-body">
+          <div style="display:flex; gap: 8px; margin-bottom: 12px;">
+            <button class="small ghost" onclick="selectAllAttendance()" style="flex:1">Set All to 'Both'</button>
+            <button class="small danger" onclick="clearAttendance()" style="flex:1">Clear All</button>
           </div>
+          <div class="roster-list" id="roster-container">
+          </div>
+        </div>
       </div>
     </div>
 
@@ -360,29 +381,53 @@
 
         <div class="section-divider"></div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <h3 style="margin:0; font-size:14px; color:var(--gold2)">Stableford Groups (Drag & Drop)</h3>
-          <div>
-            <button class="small primary" onclick="smartShuffleStableford()">🎲 Smart Shuffle Pairings</button>
-            <button class="small ghost" onclick="addStablefordGroup()">+ Add Blank Group</button>
+        <div id="stableford-groups-wrap">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 class="collapsible-title" style="margin:0; font-size:14px; color:var(--gold2)" onclick="toggleCardCollapse('stableford-groups-wrap')"><span class="collapse-chev">▾</span>Stableford Groups (Drag & Drop)</h3>
+            <div>
+              <button class="small primary" onclick="smartShuffleStableford()">🎲 Smart Shuffle Pairings</button>
+              <button class="small ghost" onclick="addStablefordGroup()">+ Add Blank Group</button>
+            </div>
+          </div>
+          <div class="collapsible-body">
+            <label>Unassigned Stableford Players</label>
+            <div class="drop-zone unassigned-pool" id="stableford-unassigned"
+                 ondragover="handleDragOver(event, 'stableford')"
+                 ondragleave="handleDragLeave(event)"
+                 ondrop="handleDrop(event, 'stableford', -1)">
+            </div>
+
+            <div class="team-grid" id="stableford-groups-container">
+            </div>
           </div>
         </div>
-
-        <label>Unassigned Stableford Players</label>
-        <div class="drop-zone unassigned-pool" id="stableford-unassigned"
-             ondragover="handleDragOver(event, 'stableford')" 
-             ondragleave="handleDragLeave(event)" 
-             ondrop="handleDrop(event, 'stableford', -1)">
-        </div>
-
-        <div class="team-grid" id="stableford-groups-container">
-          </div>
       </div>
 
     </div>
   </div>
 
 <script>
+// --- Collapsible card sections (persists state per card id) ---
+const COLLAPSE_KEY = 'chubbs_admin_collapsed_v1';
+function loadCollapsed(){ try { return JSON.parse(localStorage.getItem(COLLAPSE_KEY) || '{}'); } catch(e){ return {}; } }
+function saveCollapsed(m){ try { localStorage.setItem(COLLAPSE_KEY, JSON.stringify(m)); } catch(e){} }
+function toggleCardCollapse(id){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.classList.toggle('collapsed');
+  const m = loadCollapsed();
+  m[id] = el.classList.contains('collapsed');
+  saveCollapsed(m);
+}
+function applyCollapsedStates(){
+  const m = loadCollapsed();
+  Object.keys(m).forEach(id => {
+    const el = document.getElementById(id);
+    if(el && m[id]) el.classList.add('collapsed');
+  });
+}
+document.addEventListener('DOMContentLoaded', applyCollapsedStates);
+
 // --- DATA STUBS ---
 const COURSE_LIBRARY = {
   palmIsland: { name: 'Palm Island' }, birdsNest: { name: "Bird's Nest" },
@@ -1598,6 +1643,10 @@ function applyConfigPayload(config){
     state = config.state;
     saveAdminState();
   }
+  // Run init() FIRST so the course <select> dropdowns are populated with
+  // options and default dates/times are cleared. Then overwrite with the
+  // config values. Prior order called init() at the end and wiped them.
+  init();
   const f = config.form || {};
   if(f.eventName) document.getElementById('ev-name').value = f.eventName;
   if(f.displayName) document.getElementById('ev-display').value = f.displayName;
@@ -1623,7 +1672,6 @@ function applyConfigPayload(config){
     (config.challenges.scramble || []).forEach(ch => { const sel = document.getElementById('ch-scramble-'+ch.id); if(sel) sel.value = ch.hole; });
     (config.challenges.stableford || []).forEach(ch => { const sel = document.getElementById('ch-stableford-'+ch.id); if(sel) sel.value = ch.hole; });
   }
-  init();
   alert('Config applied. Review the setup and update dates/event name for the new event.');
 }
 
