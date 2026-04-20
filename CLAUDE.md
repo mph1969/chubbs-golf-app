@@ -60,14 +60,14 @@ Admin builds event config ──push──► Firebase /events/{eventId}/bundle
 
 | § | Rule | Status |
 |---|---|---|
-| 3.2 | Handicap auto-adjust (>45→−3, 41-45→−2, 36-40→−1, 27-35→0, 16-26→+1, <15→+2) | ⏳ not yet implemented |
+| 3.2 | Handicap auto-adjust (>45→−3, 41-45→−2, 36-40→−1, 27-35→0, 16-26→+1, <15→+2) | ✅ v5.40 (suggestions card on Leaderboard tab, one-tap apply) |
 | 5.2 | Spenny pickup convention (par-3→gross 7, par-4→8, par-5→10) | ⏳ informational only |
 | 5.8 | Tiebreaker hierarchy (birthday > new parent > marriage > countback > handicap) | ⏳ not implemented; app uses gross-countback |
 | 6.1 | Stableford table | ✅ v5.35 |
 | 8.1-8.4 | Gold jacket, clown jacket, 3-time winner golden underwear | ⏳ not tracked |
 | 10.2 | Season points: best 7 + 3★ perfect-10 bonus, rank points [13,11,10,9,8,7,6,5,4,3,2,1] | ✅ v5.39 |
 | 11 | Playoffs: top 16 after 8 rounds, min 3 rounds to qualify | ✅ v5.39 (prediction only — bracket UI not built) |
-| 12 | Shooter Cup October Ryder Cup format | ⏳ not built |
+| 12 | Shooter Cup October Ryder Cup format | 🟡 data hook shipped (event.players[i].overrideSeasonPts) — admin UI deferred until October |
 
 ## Season Infrastructure
 
