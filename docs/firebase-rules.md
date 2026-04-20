@@ -9,14 +9,26 @@ documentation, Firebase enforces what's in the console.
 
 ## Current full ruleset (Phase A — includes honeypot paths)
 
-Paste this entire block into the rules editor, replacing whatever's there:
+**DO NOT add `.read: true` or `.write: true` at the root of `"rules"`.** Firebase
+rule cascades: granting access at the root nullifies every stricter child rule
+below — specifically, it'd break the press-ratchet rule that prevents malicious
+writes bigger than +1.
+
+The shape is path-specific all the way down. Paste this as the full ruleset:
 
 ```json
 {
   "rules": {
-    ".read": true,
-    ".write": true,
-
+    "events": {
+      ".read": true,
+      "$eventId": {
+        ".write": true
+      }
+    },
+    "admin": {
+      ".read": true,
+      ".write": true
+    },
     "chubbs": {
       "presses": {
         "$player": {
@@ -33,9 +45,11 @@ Paste this entire block into the rules editor, replacing whatever's there:
 }
 ```
 
-> If your current rules already have something at the root like `"events": {...}`,
-> keep those children — just add the `"chubbs": { ... }` block alongside them
-> inside the `"rules"` object. Don't nest `"chubbs"` inside `"events"`.
+### Merging into your existing rules
+
+If `"events"` and `"admin"` already exist with your own tweaks, keep them as
+they are and **add the `"chubbs": { ... }` block alongside** them. Don't nest
+`"chubbs"` inside `"events"`. Don't wrap the whole thing in a root `.read/.write`.
 
 ### What each path does
 
