@@ -75,6 +75,12 @@
     details[open] summary .card{border-radius:22px 22px 0 0;border-bottom-color:transparent}
     details[open]>:not(summary){margin-top:-1px}
     .section-title{font-size:18px;color:var(--gold2);font-family:Georgia,serif}
+    /* Collapsible sections — click header to toggle, persists via state.ui */
+    .collapsible-hdr{cursor:pointer;user-select:none}
+    .collapsible-hdr:hover{opacity:0.85}
+    .collapse-chev{display:inline-block;font-size:14px;transition:transform 0.2s ease;margin-right:6px;color:var(--gold2)}
+    .collapsed .collapse-chev{transform:rotate(-90deg)}
+    .collapsed .collapsible-body{display:none}
     .small{font-size:12px;color:var(--muted);line-height:1.45}
     .event-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
     .focus{margin-top:10px;padding:10px 12px;border-radius:16px;background:rgba(121,176,227,0.08);border:1px solid rgba(121,176,227,0.2);color:#dfeeff;font-size:13px}
@@ -1533,23 +1539,26 @@ function renderRosterCard(){
           ${editing ? rosterFormHtml(p, false) : `<div class="small" style="color:var(--muted);margin-top:2px">${escHtml(p.fullName||'')}${p.wechatName ? ' · ' + escHtml(p.wechatName) : ''}</div>${renderJacketBadges(p, false)}`}
         </div>`;
       }).join('');
+  const collapsed = isCollapsed('roster');
   return `
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <div class="section-title" style="margin:0">Roster</div>
+    <div class="card ${collapsed?'collapsed':''}">
+      <div class="collapsible-hdr" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px" onclick="toggleCollapsed('roster')">
+        <div class="section-title" style="margin:0"><span class="collapse-chev">▾</span>Roster</div>
         <span class="small" style="color:var(--muted)">${roster.length} player${roster.length===1?'':'s'}</span>
       </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="sortRoster();renderAll()">A–Z</button>
-        <button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="downloadRosterJson()">📥 Export JSON</button>
-        <label class="btn ghost" style="padding:4px 10px;font-size:12px;cursor:pointer">
-          📤 Import JSON<input type="file" accept=".json,application/json" style="display:none" onchange="importRosterJsonFile(this)">
-        </label>
+      <div class="collapsible-body">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px" onclick="event.stopPropagation()">
+          <button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="sortRoster();renderAll()">A–Z</button>
+          <button class="btn ghost" style="padding:4px 10px;font-size:12px" onclick="downloadRosterJson()">📥 Export JSON</button>
+          <label class="btn ghost" style="padding:4px 10px;font-size:12px;cursor:pointer">
+            📤 Import JSON<input type="file" accept=".json,application/json" style="display:none" onchange="importRosterJsonFile(this)">
+          </label>
+        </div>
+        ${rows}
+        ${rosterNewMode
+          ? rosterFormHtml({displayName:'',fullName:'',shortName:'',playingHandicap:'',defaultTee:'Blue',wechatName:''}, true)
+          : `<button class="btn ghost" style="width:100%;margin-top:6px" onclick="setRosterNew(true)">+ Add new player</button>`}
       </div>
-      ${rows}
-      ${rosterNewMode
-        ? rosterFormHtml({displayName:'',fullName:'',shortName:'',playingHandicap:'',defaultTee:'Blue',wechatName:''}, true)
-        : `<button class="btn ghost" style="width:100%;margin-top:6px" onclick="setRosterNew(true)">+ Add new player</button>`}
     </div>`;
 }
 function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
@@ -1762,8 +1771,8 @@ function deleteSnapshot(idx){
 // the just-saved event into the active-season bucket. Switching seasons
 // is a UI action via the dropdown on the Season tab.
 const SEASONS_KEY = 'chubbs_seasons_v1';
-const ACTIVE_SEASON_ID = 'season-5';     // bump to 'season-6' at season rollover
-const ACTIVE_SEASON_NAME = 'Chubbs Season 5';
+const ACTIVE_SEASON_ID = 'season-4';     // bump to 'season-5' when S4 ends (~June 2026)
+const ACTIVE_SEASON_NAME = 'Chubbs Season 4';
 const DEFAULT_RANK_POINTS = [13,11,10,9,8,7,6,5,4,3,2,1];
 
 function loadSeasonStore(){
@@ -1781,6 +1790,11 @@ function ensureActiveSeason(){
   const store = loadSeasonStore();
   if(!store.seasons) store.seasons = {};
   if(!store.seasons[ACTIVE_SEASON_ID]) store.seasons[ACTIVE_SEASON_ID] = blankActiveSeason();
+  // Flip status to 'active' in case the JSON shipped it as 'completed' (prior build had
+  // season-5 as active, so season-4 was historical). Keeps old-cache devices coherent.
+  if(store.seasons[ACTIVE_SEASON_ID].status !== 'active'){
+    store.seasons[ACTIVE_SEASON_ID].status = 'active';
+  }
   if(!store.viewingSeasonId) store.viewingSeasonId = ACTIVE_SEASON_ID;
   saveSeasonStore(store);
   return store;
@@ -2003,6 +2017,15 @@ function toggleSeasonRow(name){
   state.ui.seasonExpanded = (state.ui.seasonExpanded === name) ? '' : name;
   saveState();
   renderSeason();
+}
+
+// Collapsible sections on Setup tab (Roster, Stableford groups, etc.)
+function isCollapsed(key){ return !!(state.ui.collapsed && state.ui.collapsed[key]); }
+function toggleCollapsed(key){
+  state.ui.collapsed = state.ui.collapsed || {};
+  state.ui.collapsed[key] = !state.ui.collapsed[key];
+  saveState();
+  renderAll();
 }
 // ── End season store ─────────────────────────────────────────────────────
 // ── End admin support ─────────────────────────────────────────────────────
@@ -3981,15 +4004,21 @@ function renderSetup(){
     </div>`;
   }).join('');
 
+  const teamsCollapsed = isCollapsed('scrambleTeams');
+  const groupsCollapsed = isCollapsed('sbGroups');
   const playerSection = imported ? `
-    <div class="card">
-      <div class="section-title">Scramble teams</div>
-      ${allTeams.length ? lineupEditorRows(allTeams,'team') : '<div class="empty-note">No scramble teams in event file.</div>'}
+    <div class="card ${teamsCollapsed?'collapsed':''}">
+      <div class="collapsible-hdr section-title" onclick="toggleCollapsed('scrambleTeams')"><span class="collapse-chev">▾</span>Scramble teams</div>
+      <div class="collapsible-body">
+        ${allTeams.length ? lineupEditorRows(allTeams,'team') : '<div class="empty-note">No scramble teams in event file.</div>'}
+      </div>
     </div>
-    <div class="card">
-      <div class="section-title">Stableford groups</div>
-      ${allGroups.length ? lineupEditorRows(allGroups,'group') : '<div class="empty-note">No Stableford groups in event file.</div>'}
-      <div class="inline-note" style="margin-top:6px">Changing scorer reorders the player list — scorer always goes last.</div>
+    <div class="card ${groupsCollapsed?'collapsed':''}">
+      <div class="collapsible-hdr section-title" onclick="toggleCollapsed('sbGroups')"><span class="collapse-chev">▾</span>Stableford groups</div>
+      <div class="collapsible-body">
+        ${allGroups.length ? lineupEditorRows(allGroups,'group') : '<div class="empty-note">No Stableford groups in event file.</div>'}
+        <div class="inline-note" style="margin-top:6px">Changing scorer reorders the player list — scorer always goes last.</div>
+      </div>
     </div>` : `
     <div class="card">
       <div class="section-title">Players</div>
@@ -5533,7 +5562,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.2';
+  const APP_VERSION = '5.3';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
