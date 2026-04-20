@@ -87,6 +87,86 @@
     .hcp-sug-apply{width:100%;padding:10px;background:linear-gradient(180deg,rgba(214,176,90,0.18),rgba(214,176,90,0.08));border:1px solid rgba(214,176,90,0.4);border-radius:10px;color:var(--gold2);font-weight:800;font-size:13px;cursor:pointer}
     .hcp-sug-apply:hover{background:linear-gradient(180deg,rgba(214,176,90,0.25),rgba(214,176,90,0.12))}
     .hcp-sug-applied{padding:8px 10px;background:rgba(74,176,100,0.08);border:1px solid rgba(74,176,100,0.3);border-radius:8px;color:#9ad9a8;font-size:11px;text-align:center}
+    /* ═════ HONEYPOT — gate + prank + throne + admin bar ═════ */
+    .gate-wrap{text-align:center;padding:40px 22px 30px;background:linear-gradient(180deg,rgba(10,30,20,0.96),rgba(5,18,12,0.98));border:1px solid rgba(255,215,0,0.25);border-radius:20px;margin:12px 0 16px;position:relative;overflow:hidden}
+    .gate-wrap::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#b8960a,#FFD700,#b8960a)}
+    .gate-lock{font-size:52px;margin-bottom:12px;filter:drop-shadow(0 4px 12px rgba(255,215,0,0.3))}
+    .gate-title{font-family:Georgia,serif;font-size:20px;font-weight:800;letter-spacing:.14em;color:#FFD700;margin-bottom:8px}
+    .gate-sub{font-size:13px;color:var(--muted);line-height:1.5;max-width:320px;margin:0 auto 22px}
+    .gate-btn{display:inline-block;padding:13px 26px;background:linear-gradient(180deg,#d9b34c,#a0821e);border:1px solid #FFD700;border-radius:12px;color:#1a1410;font-weight:800;font-size:14px;letter-spacing:.03em;cursor:pointer;box-shadow:0 4px 14px rgba(255,215,0,0.2);-webkit-tap-highlight-color:transparent}
+    .gate-btn:active{transform:translateY(1px)}
+    .gate-fine{margin-top:16px;font-size:10px;color:rgba(240,234,216,0.4);letter-spacing:.08em;text-transform:uppercase;font-style:italic}
+    /* Throne card */
+    .throne-card{margin:0 0 12px;padding:16px 18px;background:linear-gradient(135deg,rgba(184,150,10,0.2),rgba(255,215,0,0.08));border:1px solid rgba(255,215,0,0.4);border-radius:16px;position:relative;overflow:hidden}
+    .throne-card.throne-empty{background:rgba(255,255,255,0.02)}
+    .throne-top{font-size:10px;font-weight:900;letter-spacing:.18em;color:#FFD700;margin-bottom:8px;text-align:left}
+    .throne-name{font-family:Georgia,serif;font-size:22px;font-weight:800;color:#fff;letter-spacing:.04em}
+    .throne-count{margin-top:3px;font-size:13px;color:rgba(255,215,0,0.85);font-weight:700;font-family:'DM Mono',monospace}
+    .throne-sub{margin-top:6px;font-size:10px;color:rgba(240,234,216,0.4);font-style:italic}
+    /* Warning modal */
+    .gate-warn-wrap{position:fixed;inset:0;z-index:9500;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,0.7);backdrop-filter:blur(3px)}
+    .gate-warn-wrap.active{display:flex}
+    .gate-warn-card{max-width:400px;width:100%;padding:28px 24px 22px;background:linear-gradient(180deg,#1a1410,#0d0a07);border:1px solid rgba(217,50,50,0.5);border-radius:20px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,0.8)}
+    .gate-warn-emoji{font-size:44px;margin-bottom:10px}
+    .gate-warn-title{font-family:Georgia,serif;font-size:22px;font-weight:800;color:#FFD700;margin-bottom:10px}
+    .gate-warn-body{font-size:14px;color:var(--ink);line-height:1.5;margin-bottom:8px}
+    .gate-warn-strong{font-size:14px;font-weight:800;color:#ff9a6a;font-style:italic;margin-bottom:14px;line-height:1.4}
+    .gate-warn-fine{font-size:11px;color:rgba(240,234,216,0.45);font-style:italic;margin-bottom:18px}
+    .gate-warn-btns{display:flex;flex-direction:column;gap:8px}
+    .gate-warn-back{padding:11px;background:transparent;border:1px solid rgba(240,234,216,0.2);border-radius:10px;color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent}
+    .gate-warn-back:active{background:rgba(255,255,255,0.04)}
+    .gate-warn-proceed{padding:13px;background:linear-gradient(180deg,#d62020,#7a0000);border:1px solid #b91c1c;border-radius:10px;color:#fff;font-size:14px;font-weight:800;letter-spacing:.02em;cursor:pointer;-webkit-tap-highlight-color:transparent;box-shadow:0 4px 14px rgba(217,32,32,0.3)}
+    .gate-warn-proceed:active{transform:translateY(1px)}
+    /* Prank overlay */
+    .prank-overlay{position:fixed;inset:0;z-index:9800;display:none;overflow:hidden;background:transparent;pointer-events:none}
+    .prank-overlay.active{display:block;pointer-events:auto}
+    .prank-stage{position:absolute;inset:0;animation:none}
+    .prank-shake{animation:prank-shake 0.4s cubic-bezier(0.36,0.07,0.19,0.97) both}
+    @keyframes prank-shake{10%,90%{transform:translate(-1px,0)}20%,80%{transform:translate(2px,0)}30%,50%,70%{transform:translate(-4px,0)}40%,60%{transform:translate(4px,0)}}
+    .prank-gator{position:absolute;top:50%;left:100vw;transform:translate(0,-50%);width:200px;height:200px;object-fit:contain;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.5))}
+    .prank-gator.go{animation:prank-chomp 1.0s cubic-bezier(0.4,0,0.2,1) 0.15s forwards}
+    @keyframes prank-chomp{
+      0%  {left:110vw;transform:translate(0,-50%) rotate(0deg) scale(1);}
+      40% {left:50vw; transform:translate(-50%,-50%) rotate(-18deg) scale(1.4);}
+      100%{left:-20vw;transform:translate(0,-50%) rotate(-30deg) scale(1.1);opacity:0.4;}
+    }
+    .prank-blackout{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 0.25s ease}
+    .prank-overlay.black .prank-blackout{opacity:1}
+    .prank-notice{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:30px;opacity:0;transition:opacity 0.4s ease;pointer-events:none}
+    .prank-overlay.notice .prank-notice{opacity:1}
+    .prank-overlay.reveal .prank-notice{opacity:0;transition:opacity 0.3s ease}
+    .prank-notice > *{max-width:420px;width:100%}
+    .prank-notice{font-family:Georgia,'Times New Roman',serif;color:#2a2018}
+    .prank-notice{background:transparent}
+    .prank-notice > *{background:#f4f0e6;padding:28px 26px;border-radius:4px;box-shadow:0 12px 40px rgba(0,0,0,0.6)}
+    .prank-notice-hdr{font-size:10px;font-weight:700;letter-spacing:.2em;color:#6b6257;text-transform:uppercase;text-align:center;margin-bottom:18px;border-bottom:1px solid #c9beab;padding-bottom:10px}
+    .prank-stamp{display:block;font-family:'Courier New',monospace;font-size:32px;font-weight:900;color:#b91c1c;text-align:center;letter-spacing:.04em;transform:rotate(-6deg);border:4px solid #b91c1c;padding:6px 18px;margin:18px auto;max-width:fit-content;opacity:0.88}
+    .prank-notice-body{font-size:15px;line-height:1.6;text-align:center;margin:18px 0}
+    .prank-notice-body strong{color:#2a2018}
+    .prank-notice-body em{color:#6b6257;font-size:13px}
+    .prank-meta{font-family:'Courier New',monospace;font-size:11px;color:#6b6257;background:#ebe5d5;border-left:3px solid #b91c1c;padding:10px 12px;margin:18px 0;line-height:1.7}
+    .prank-meta strong{color:#2a2018}
+    .prank-notice-foot{font-size:11px;color:#8a8073;font-style:italic;text-align:center;margin-top:16px;padding-top:10px;border-top:1px solid #c9beab;line-height:1.6}
+    .prank-reveal{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:30px;gap:8px;opacity:0;transition:opacity 0.3s ease;background:linear-gradient(180deg,#0a1f10,#1a2e1a);text-align:center}
+    .prank-overlay.reveal .prank-reveal{opacity:1}
+    .prank-reveal-emoji{font-size:48px;margin-bottom:6px}
+    .prank-reveal-gotcha{font-family:Georgia,serif;font-size:28px;font-weight:800;color:#FFD700;margin-bottom:6px}
+    .prank-reveal-line{font-size:14px;color:#e8dcc4;font-style:italic;margin-bottom:16px;max-width:320px}
+    .prank-reveal-count{font-family:'DM Mono',monospace;font-size:72px;font-weight:900;color:#d62020;line-height:1;text-shadow:0 0 24px rgba(217,32,32,0.4)}
+    .prank-reveal-unit{font-size:13px;color:rgba(240,234,216,0.7);margin-top:4px}
+    .prank-reveal-tap{position:absolute;bottom:28px;left:0;right:0;text-align:center;font-size:10px;font-weight:600;letter-spacing:.2em;color:rgba(240,234,216,0.4);text-transform:uppercase}
+    /* Admin toolbar */
+    .hp-admin-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:10px 12px;background:rgba(121,176,227,0.08);border:1px solid rgba(121,176,227,0.3);border-radius:12px;margin-bottom:10px}
+    .hp-admin-lbl{font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#79b0e3;margin-right:4px}
+    .hp-admin-btn{padding:7px 11px;background:rgba(255,255,255,0.05);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:11px;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+    .hp-admin-btn:active{transform:translateY(1px)}
+    .hp-admin-btn.danger{border-color:rgba(217,50,50,0.4);color:#ff9a6a}
+    .hp-admin-btn.ghost{border-color:transparent;color:var(--muted)}
+    @media (prefers-reduced-motion: reduce){
+      .prank-shake,.prank-gator.go{animation:none !important}
+      .prank-gator{left:-200vw !important}
+      .prank-notice,.prank-reveal{transition:none !important}
+    }
     .tab-btn{padding:10px 8px;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--muted);
       border-radius:14px;font-weight:700;font-size:12px;cursor:pointer}
     .tab-btn.active{background:rgba(214,176,90,0.14);border-color:var(--gold);color:var(--gold2)}
@@ -5476,7 +5556,279 @@ function renderSponsorTile(){
     ${sponsorTile('./dxgolf_icon.jpg','🏌️','DX! Golf','Live golf scoring app',"window.open('https://dx-golf.netlify.app/','_blank')","Open ↗")}
   </div>`;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// LEADERBOARD HONEYPOT — gate + gator prank + "Most Pressed" throne
+// ═══════════════════════════════════════════════════════════════════════════
+// Gate lives in front of the Leaderboard tab when /chubbs/leaderboardPublished
+// is falsy and the viewer hasn't unlocked admin via ?admin=<SECRET>. Tapping
+// the gate opens a warning modal; tapping Proceed commits a +1 to /chubbs/
+// presses/{PLAYER_KEY}, plays the gator-chomp + parchment + "Gotcha" sequence,
+// and reveals the current press count. UNKNOWN bucket still collects presses
+// (for the gag) but is disqualified from the throne.
+//
+// Data model (Firebase Realtime DB — rules ratchet +1 only, cap 9999):
+//   /chubbs/leaderboardPublished : boolean
+//   /chubbs/presses/{KEY}        : integer
+const HONEYPOT = {
+  ADMIN_SECRET: 'CHUBBSGATOR2026',
+  ADMIN_FLAG_KEY: 'chubbs_admin_unlock_v1',
+  PRESS_CAP: 9999,
+  state: {
+    published: false,
+    presses: {},
+    playerKey: 'UNKNOWN',
+    subscribed: false,
+    prankRunning: false
+  }
+};
+
+function honeypotReadUrlParams(){
+  const p = new URLSearchParams(location.search);
+  const admin = p.get('admin');
+  const player = (p.get('player') || '').trim();
+  if(admin && admin === HONEYPOT.ADMIN_SECRET){
+    try { localStorage.setItem(HONEYPOT.ADMIN_FLAG_KEY, '1'); } catch(e){}
+    // Strip the secret from the URL so it doesn't sit in history / shared links
+    p.delete('admin');
+    const q = p.toString();
+    try { history.replaceState({}, '', location.pathname + (q ? '?' + q : '') + location.hash); } catch(e){}
+  }
+  return { player };
+}
+function honeypotIsAdmin(){
+  try { return localStorage.getItem(HONEYPOT.ADMIN_FLAG_KEY) === '1'; } catch(e) { return false; }
+}
+function honeypotExitAdmin(){
+  try { localStorage.removeItem(HONEYPOT.ADMIN_FLAG_KEY); } catch(e){}
+  showToast('Admin mode off', 'info');
+  renderAll();
+}
+function honeypotResolvePlayerKey(urlPlayer){
+  if(urlPlayer) return urlPlayer.toUpperCase();
+  try {
+    const ep = currentEventPlayer && currentEventPlayer();
+    if(ep){
+      const nm = ep.displayName || ep.shortName || ep.fullName || ep.playerId || '';
+      if(nm) return String(nm).toUpperCase();
+    }
+  } catch(e){}
+  return 'UNKNOWN';
+}
+function honeypotSubscribe(){
+  if(HONEYPOT.state.subscribed) return;
+  if(!SYNC.enabled || !SYNC.db) return;
+  HONEYPOT.state.subscribed = true;
+  SYNC.db.ref('chubbs/leaderboardPublished').on('value', snap => {
+    HONEYPOT.state.published = !!snap.val();
+    if(state.ui.tab === 'leaderboard') renderLeaderboard();
+  });
+  SYNC.db.ref('chubbs/presses').on('value', snap => {
+    HONEYPOT.state.presses = snap.val() || {};
+    if(state.ui.tab === 'leaderboard') renderLeaderboard();
+  });
+}
+function honeypotRecordPress(){
+  if(!SYNC.enabled || !SYNC.db) return Promise.resolve();
+  const key = HONEYPOT.state.playerKey;
+  return SYNC.db.ref('chubbs/presses/' + key).transaction(cur => {
+    const next = (cur || 0) + 1;
+    if(next > HONEYPOT.PRESS_CAP) return;   // abort transaction at cap
+    return next;
+  }).catch(()=>{});
+}
+function honeypotTogglePublished(){
+  if(!SYNC.enabled || !SYNC.db){ showToast('Firebase offline', 'err'); return; }
+  const next = !HONEYPOT.state.published;
+  SYNC.db.ref('chubbs/leaderboardPublished').set(next)
+    .then(() => showToast(next ? '✅ Leaderboard published' : '🔒 Leaderboard gated', 'ok'))
+    .catch(e => showToast('Write failed: ' + e.message, 'err'));
+}
+function honeypotResetPresses(){
+  showConfirm('Reset all press counts to zero? The throne will clear for everyone.', () => {
+    if(!SYNC.enabled || !SYNC.db) return;
+    SYNC.db.ref('chubbs/presses').set(null)
+      .then(() => showToast('Press counts reset', 'ok'))
+      .catch(e => showToast('Reset failed: ' + e.message, 'err'));
+  });
+}
+
+// ── Throne card ─ UNKNOWN is disqualified from winning ────────────────────
+function renderThroneCard(){
+  const p = HONEYPOT.state.presses || {};
+  const entries = Object.entries(p)
+    .filter(([k, v]) => k !== 'UNKNOWN' && typeof v === 'number' && v > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const unknownCount = (typeof p.UNKNOWN === 'number' && p.UNKNOWN > 0) ? p.UNKNOWN : 0;
+  if(!entries.length){
+    const unknownLine = unknownCount ? `<div class="throne-sub">Plus ${unknownCount} anonymous press${unknownCount===1?'':'es'} — ineligible.</div>` : '';
+    return `<div class="throne-card throne-empty">
+      <div class="throne-top">👑 MOST PRESSED</div>
+      <div class="throne-name" style="font-size:13px;font-weight:600;color:var(--muted)">Nobody's been caught yet.</div>
+      ${unknownLine}
+    </div>`;
+  }
+  const [name, count] = entries[0];
+  const unknownLine = unknownCount ? `<div class="throne-sub">+ ${unknownCount} anonymous — ineligible</div>` : '';
+  return `<div class="throne-card">
+    <div class="throne-top">👑 MOST PRESSED</div>
+    <div class="throne-name">${name}</div>
+    <div class="throne-count">${count} press${count===1?'':'es'}</div>
+    ${unknownLine}
+  </div>`;
+}
+
+// ── Gate render ────────────────────────────────────────────────────────────
+function renderLeaderboardGate(){
+  return `
+    <div class="gate-wrap">
+      <div class="gate-lock">🔒</div>
+      <div class="gate-title">LEADERBOARD RESTRICTED</div>
+      <div class="gate-sub">Administrator access required to view live scores during active play.</div>
+      <button class="gate-btn" onclick="showGateWarning()">🔐 Enter Admin Access</button>
+      <div class="gate-fine">Authorized personnel · audit logged</div>
+    </div>`;
+}
+
+// ── Admin toolbar (visible when honeypotIsAdmin()) ────────────────────────
+function renderHoneypotAdminBar(){
+  if(!honeypotIsAdmin()) return '';
+  const published = HONEYPOT.state.published;
+  return `
+    <div class="hp-admin-bar">
+      <div class="hp-admin-lbl">🛡 Admin mode</div>
+      <button class="hp-admin-btn" onclick="honeypotTogglePublished()">
+        ${published ? '🔒 Unpublish Leaderboard' : '✅ Publish Leaderboard'}
+      </button>
+      <button class="hp-admin-btn danger" onclick="honeypotResetPresses()">🧹 Reset Press Counts</button>
+      <button class="hp-admin-btn ghost" onclick="honeypotExitAdmin()">Exit admin</button>
+    </div>`;
+}
+
+// ── Warning modal ─────────────────────────────────────────────────────────
+function ensureGateWarningModal(){
+  if(document.getElementById('gate-warning-modal')) return;
+  const div = document.createElement('div');
+  div.id = 'gate-warning-modal';
+  div.className = 'gate-warn-wrap';
+  div.innerHTML = `
+    <div class="gate-warn-card" role="dialog" aria-modal="true" aria-labelledby="gate-warn-title">
+      <div class="gate-warn-emoji">🐊⚠️</div>
+      <div class="gate-warn-title" id="gate-warn-title">Hold up there, partner.</div>
+      <div class="gate-warn-body">This area's for tournament admins only.</div>
+      <div class="gate-warn-strong">If you ain't one, scurry back before the gator notices.</div>
+      <div class="gate-warn-fine">Last chance. Unauthorized access is logged.</div>
+      <div class="gate-warn-btns">
+        <button class="gate-warn-back" onclick="hideGateWarning()">Nah, my bad — go back</button>
+        <button class="gate-warn-proceed" onclick="triggerHoneypotProceed()">I'm an admin — proceed</button>
+      </div>
+    </div>`;
+  document.body.appendChild(div);
+  div.addEventListener('click', e => { if(e.target === div) hideGateWarning(); });
+  document.addEventListener('keydown', e => {
+    if(e.key === 'Escape' && div.classList.contains('active')) hideGateWarning();
+  });
+}
+function showGateWarning(){
+  ensureGateWarningModal();
+  const modal = document.getElementById('gate-warning-modal');
+  if(!modal) return;
+  modal.classList.add('active');
+  const proceed = modal.querySelector('.gate-warn-proceed');
+  if(proceed) setTimeout(() => proceed.focus(), 50);
+}
+function hideGateWarning(){
+  const modal = document.getElementById('gate-warning-modal');
+  if(modal) modal.classList.remove('active');
+}
+
+// ── Prank sequence ────────────────────────────────────────────────────────
+function prefersReducedMotion(){
+  try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  catch(e){ return false; }
+}
+async function triggerHoneypotProceed(){
+  if(HONEYPOT.state.prankRunning) return;
+  HONEYPOT.state.prankRunning = true;
+  hideGateWarning();
+  if(navigator.vibrate) try { navigator.vibrate([50, 30, 100]); } catch(e){}
+  honeypotRecordPress();   // fire-and-forget atomic bump
+  await runPrankSequence();
+  HONEYPOT.state.prankRunning = false;
+}
+function runPrankSequence(){
+  return new Promise(resolve => {
+    let overlay = document.getElementById('prank-overlay');
+    if(!overlay){
+      overlay = document.createElement('div');
+      overlay.id = 'prank-overlay';
+      overlay.className = 'prank-overlay';
+      document.body.appendChild(overlay);
+    }
+    const playerName = HONEYPOT.state.playerKey;
+    const rmvId = 'RMV-2026-' + String(1000 + Math.floor(Math.random()*9000));
+    const d = new Date();
+    const utc = d.toISOString().slice(0,10) + ' ' + d.toISOString().slice(11,19) + ' UTC';
+    const current = (HONEYPOT.state.presses && HONEYPOT.state.presses[playerName]) || 0;
+    const pressCount = current + 1;   // optimistic — transaction may not have echoed yet
+    const reduce = prefersReducedMotion();
+    overlay.innerHTML = `
+      <div class="prank-stage ${reduce?'':'prank-shake'}">
+        <img src="./ChubbsGatorIcon.png" class="prank-gator${reduce?'':' go'}" alt=""/>
+      </div>
+      <div class="prank-blackout"></div>
+      <div class="prank-notice">
+        <div class="prank-notice-hdr">TOURNAMENT ADMINISTRATION</div>
+        <div class="prank-stamp">SCORE REMOVED</div>
+        <div class="prank-notice-body">
+          Your score has been successfully removed from the<br/>
+          <strong>Chubbs Peterson Invitational.</strong><br/>
+          <em>This action cannot be undone.</em>
+        </div>
+        <div class="prank-meta">
+          <div>Confirmation ID: <strong>${rmvId}</strong></div>
+          <div>Player: <strong>${playerName}</strong></div>
+          <div>Timestamp: <strong>${utc}</strong></div>
+        </div>
+        <div class="prank-notice-foot">
+          Thank you for your participation.<br/>
+          <em>— Tournament Committee</em>
+        </div>
+      </div>
+      <div class="prank-reveal">
+        <div class="prank-reveal-emoji">🐊😂</div>
+        <div class="prank-reveal-gotcha">Gotcha, ${playerName}!</div>
+        <div class="prank-reveal-line">Your actions have consequences.</div>
+        <div class="prank-reveal-count">${pressCount}</div>
+        <div class="prank-reveal-unit">press${pressCount===1?'':'es'} on the restricted button.</div>
+        <div class="prank-reveal-tap">tap anywhere to dismiss</div>
+      </div>`;
+    overlay.classList.add('active');
+    setTimeout(() => overlay.classList.add('black'),  reduce ?   0 :  850);
+    setTimeout(() => overlay.classList.add('notice'), reduce ? 200 : 1150);
+    setTimeout(() => overlay.classList.add('reveal'), reduce ?1500 : 4100);
+    const onTap = () => {
+      if(!overlay.classList.contains('reveal')) return;
+      overlay.classList.remove('active','black','notice','reveal');
+      overlay.removeEventListener('click', onTap);
+      resolve();
+    };
+    overlay.addEventListener('click', onTap);
+  });
+}
+// ─── End honeypot module ──────────────────────────────────────────────────
+
 function renderLeaderboard(){
+  // Honeypot gate: when /chubbs/leaderboardPublished is false and the viewer
+  // hasn't unlocked admin via ?admin=<SECRET>, replace the leaderboard body
+  // with the gate + throne card. Real scores are NOT included in the DOM —
+  // blurring via CSS leaves the data in source-view.
+  ensureGateWarningModal();
+  const host = document.getElementById('leaderboard');
+  if(host && !HONEYPOT.state.published && !honeypotIsAdmin()){
+    host.innerHTML = `${renderLeaderboardGate()}${renderThroneCard()}`;
+    return;
+  }
   const scramblePlayers = currentPlayers('scramble');
   const day1Course = activeCourse('day1');
   const day2Course = activeCourse('day2');
@@ -5674,6 +6026,9 @@ function renderLeaderboard(){
   })();
 
   document.getElementById('leaderboard').innerHTML = `
+    ${renderHoneypotAdminBar()}
+    ${honeypotIsAdmin() ? renderThroneCard() : ''}
+
     ${scrambleCard}
 
     ${stablefordCard}
@@ -5805,7 +6160,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.6';
+  const APP_VERSION = '5.7';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
@@ -6036,6 +6391,23 @@ renderAll();
 checkLivePaywall();
 checkPendingEvent(); // show import notification if admin sent an event from ChubbsAdmin
 fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first load
+// Honeypot boot — resolve player key from URL / state, then subscribe to live flags.
+(function honeypotBoot(){
+  try {
+    const { player } = honeypotReadUrlParams();
+    HONEYPOT.state.playerKey = honeypotResolvePlayerKey(player);
+    if(SYNC.enabled) honeypotSubscribe();
+    else {
+      // Defer subscription until Firebase is up — try once per second for 10s
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries++;
+        if(SYNC.enabled){ clearInterval(iv); honeypotSubscribe(); }
+        else if(tries > 10) clearInterval(iv);
+      }, 1000);
+    }
+  } catch(e){ console.warn('[Honeypot boot]', e); }
+})();
 
 // ── Service Worker: registration + update prompt ──
 (function(){
