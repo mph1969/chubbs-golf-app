@@ -62,6 +62,15 @@
     .season-header .s-name{text-align:left}
     .season-header .s-rank{text-align:center}
     .season-header .s-pts,.season-header .s-pld,.season-header .s-avg,.season-header .s-dp,.season-header .s-ne,.season-header .s-nb{text-align:right}
+    /* Playoff cut lines + eligibility badges */
+    .season-sep{display:block;padding:6px 10px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;text-align:center;background:rgba(214,176,90,0.08);border-top:1px dashed rgba(214,176,90,0.4);border-bottom:1px dashed rgba(214,176,90,0.4);color:var(--gold2)}
+    .season-sep.season-sep-qual{background:rgba(74,176,100,0.08);border-color:rgba(74,176,100,0.45);color:#9ad9a8}
+    .season-row.qual{background:rgba(74,176,100,0.03)}
+    .season-row.dnq .s-name{color:rgba(240,234,216,0.55)}
+    .s-dnq{font-size:9px;font-weight:700;color:#d9a14a;background:rgba(217,161,74,0.12);border:1px solid rgba(217,161,74,0.4);border-radius:5px;padding:1px 5px;margin-left:6px;letter-spacing:.02em;white-space:nowrap}
+    .s-bonus{font-size:9px;font-weight:800;color:#f5d85c;background:rgba(245,216,92,0.14);border:1px solid rgba(245,216,92,0.4);border-radius:5px;padding:1px 5px;margin-left:4px;white-space:nowrap}
+    .season-playoff-note{font-size:11px;line-height:1.4;color:var(--muted);padding:8px 10px;background:rgba(74,176,100,0.06);border:1px solid rgba(74,176,100,0.18);border-radius:10px;margin-bottom:10px}
+    .season-playoff-note strong{color:#9ad9a8}
     .tab-btn{padding:10px 8px;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--muted);
       border-radius:14px;font-weight:700;font-size:12px;cursor:pointer}
     .tab-btn.active{background:rgba(214,176,90,0.14);border-color:var(--gold);color:var(--gold2)}
@@ -1884,11 +1893,10 @@ function aggregateSeason(season){
     scored.sort((a,b) => (b.stableford - a.stableford) || (a.gross - b.gross));
     scored.forEach((row, rank) => {
       if(!agg[row.name]){
-        agg[row.name] = { name: row.name, points: 0, played: 0, stableford: 0, dblpar: 0, neagle: 0, nbirdie: 0 };
+        agg[row.name] = { name: row.name, played: 0, stableford: 0, dblpar: 0, neagle: 0, nbirdie: 0 };
         perPlayerEvents[row.name] = [];
       }
       const seasonPts = rank < rankPts.length ? rankPts[rank] : 0;
-      agg[row.name].points     += seasonPts;
       agg[row.name].played     += 1;
       agg[row.name].stableford += row.stableford;
       agg[row.name].dblpar     += row.dblpar;
@@ -1900,15 +1908,24 @@ function aggregateSeason(season){
       });
     });
   }
-  // Final rows with derived round average + best/worst course
+  // Final rows — per handbook §10.2: season points = best 7 round-pts + perfect-10 bonus.
+  const totalEvents = season.events.length;
+  const PLAYOFF_MIN = 3;
+  const PLAYOFF_SLOTS = 16;
   const rows = Object.values(agg).map(a => {
     const evs = perPlayerEvents[a.name] || [];
-    const roundAvg = a.played ? (a.points / a.played) : 0;
+    const best7 = evs.map(e => e.seasonPts).sort((x,y) => y - x).slice(0, 7).reduce((s,v) => s+v, 0);
+    const perfect10Bonus = (a.played === 10) ? 3 : 0;   // §10.2 bonus for full attendance
+    const points = best7 + perfect10Bonus;
+    const roundAvg = a.played ? (best7 / a.played) : 0;
     const sorted = evs.slice().sort((x,y) => y.stableford - x.stableford);
     const best = sorted[0] || null;
     const worst = sorted.length > 1 ? sorted[sorted.length-1] : null;
-    return { ...a, roundAvg, events: evs, best, worst };
+    const qualified = a.played >= PLAYOFF_MIN;
+    return { ...a, points, best7, perfect10Bonus, roundAvg, events: evs, best, worst, qualified };
   });
+  // expose computed context for the renderer
+  Object.defineProperty(rows, '_ctx', { value: { totalEvents, PLAYOFF_MIN, PLAYOFF_SLOTS }, enumerable: false });
   rows.sort((a,b) => (b.points - a.points) || (b.stableford - a.stableford));
   return rows;
 }
@@ -1982,6 +1999,20 @@ function renderSeason(){
   }
 
   const expandedName = state.ui.seasonExpanded || '';
+  const ctx = rows._ctx || { totalEvents: season.events.length, PLAYOFF_MIN: 3, PLAYOFF_SLOTS: 16 };
+  const showDnq = ctx.totalEvents >= ctx.PLAYOFF_MIN;
+  // Find the row index of the 16th qualified player (played ≥ min). Only surface
+  // a separator for this when it differs from the raw top-16 cut.
+  let qualifiedCount = 0, qualifiedCutIdx = -1;
+  for(let i=0; i<rows.length; i++){
+    if(rows[i].qualified){
+      qualifiedCount++;
+      if(qualifiedCount === ctx.PLAYOFF_SLOTS){ qualifiedCutIdx = i; break; }
+    }
+  }
+  const rawCutIdx = Math.min(ctx.PLAYOFF_SLOTS - 1, rows.length - 1);
+  const rawCutVisible = rows.length > ctx.PLAYOFF_SLOTS;
+  const qualifiedSeparateVisible = qualifiedCutIdx > rawCutIdx;   // only draw 2nd line when it's deeper
   const bodyRows = rows.map((r, i) => {
     const rank = i + 1;
     const medal = rank===1 ? '🥇' : rank===2 ? '🥈' : rank===3 ? '🥉' : '';
@@ -1996,10 +2027,23 @@ function renderSeason(){
         <div class="small tight" style="font-weight:700;color:var(--muted);margin-top:6px">All rounds</div>
         ${eventList}
       </div>` : '';
+    // DNQ annotation — only once the season has ≥ PLAYOFF_MIN events
+    const dnqBadge = (showDnq && !r.qualified)
+      ? `<span class="s-dnq" title="Min ${ctx.PLAYOFF_MIN} events to qualify for playoffs">⚠ DNQ ${r.played}/${ctx.PLAYOFF_MIN}</span>` : '';
+    const bonusBadge = r.perfect10Bonus > 0 ? `<span class="s-bonus" title="Perfect attendance bonus">+3★</span>` : '';
+    // Playoff separator lines
+    let sep = '';
+    if(rawCutVisible && i === rawCutIdx){
+      sep += `<div class="season-sep season-sep-raw">🏌️ Top ${ctx.PLAYOFF_SLOTS} · Season seeding line</div>`;
+    }
+    if(qualifiedSeparateVisible && i === qualifiedCutIdx){
+      sep += `<div class="season-sep season-sep-qual">🏆 Top ${ctx.PLAYOFF_SLOTS} Qualified for playoffs (min ${ctx.PLAYOFF_MIN} rounds)</div>`;
+    }
+    const rowClass = `season-row ${isOpen?'open':''}${showDnq && !r.qualified?' dnq':''}${showDnq && r.qualified && qualifiedCount>0 && i<=qualifiedCutIdx?' qual':''}`;
     return `
-      <div class="season-row ${isOpen?'open':''}" onclick="toggleSeasonRow('${r.name.replace(/'/g,"\\'")}')">
+      <div class="${rowClass}" onclick="toggleSeasonRow('${r.name.replace(/'/g,"\\'")}')">
         <div class="s-rank">${medal || rank}</div>
-        <div class="s-name">${r.name}</div>
+        <div class="s-name">${r.name}${dnqBadge}${bonusBadge}</div>
         <div class="s-pts">${r.points}</div>
         <div class="s-pld">${r.played}</div>
         <div class="s-avg">${r.roundAvg.toFixed(1)}</div>
@@ -2007,8 +2051,14 @@ function renderSeason(){
         <div class="s-ne">${r.neagle}</div>
         <div class="s-nb">${r.nbirdie}</div>
         ${expand}
-      </div>`;
+      </div>${sep}`;
   }).join('');
+
+  const playoffNote = `
+    <div class="season-playoff-note">
+      <strong>🏆 Playoff qualification</strong> · Top ${ctx.PLAYOFF_SLOTS} in the standings advance to match play after 8 rounds (handbook §11). Minimum ${ctx.PLAYOFF_MIN} rounds required to qualify — players below that threshold are flagged ⚠ DNQ.
+      Season points = best 7 round finishes; full attendance earns a +3★ bonus (handbook §10.2).
+    </div>`;
 
   host.innerHTML = `
     <div class="card">
@@ -2017,6 +2067,7 @@ function renderSeason(){
         ${selector}
       </div>
       <div style="margin:4px 0 12px">${badge}</div>
+      ${playoffNote}
       <div class="season-table">
         <div class="season-header">
           <div class="s-rank">#</div>
@@ -2032,7 +2083,7 @@ function renderSeason(){
       </div>
       <div class="small tight" style="margin-top:10px;color:var(--muted)">
         Tap a row for best/worst course and per-event breakdown.<br/>
-        Pts = season points (1st=13, 2nd=11, 3rd=10, 4th=9…12th=1). DblP = gross ≥ 2×par holes. NEag/NBir = net eagles / net birdies.
+        Pts = best 7 round finishes (1st=13, 2nd=11, 3rd=10…12th=1) + 3★ perfect-attendance bonus. DP = gross ≥ 2×par holes. NE/NB = net eagles / net birdies.
       </div>
     </div>`;
 }
@@ -5591,7 +5642,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.4';
+  const APP_VERSION = '5.5';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
