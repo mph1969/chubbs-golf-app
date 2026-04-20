@@ -123,12 +123,28 @@
     .prank-stage{position:absolute;inset:0;animation:none}
     .prank-shake{animation:prank-shake 0.4s cubic-bezier(0.36,0.07,0.19,0.97) both}
     @keyframes prank-shake{10%,90%{transform:translate(-1px,0)}20%,80%{transform:translate(2px,0)}30%,50%,70%{transform:translate(-4px,0)}40%,60%{transform:translate(4px,0)}}
-    .prank-gator{position:absolute;top:50%;left:100vw;transform:translate(0,-50%);width:200px;height:200px;object-fit:contain;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.5))}
-    .prank-gator.go{animation:prank-chomp 1.0s cubic-bezier(0.4,0,0.2,1) 0.15s forwards}
+    .prank-gator{position:absolute;top:50%;left:110vw;transform:translate(0,-50%);width:220px;height:220px;object-fit:contain;filter:drop-shadow(0 10px 30px rgba(0,0,0,0.6)) drop-shadow(0 0 12px rgba(74,176,100,0.3))}
+    .prank-gator.go{animation:prank-chomp 1.8s cubic-bezier(0.42,0,0.58,1) 0.15s forwards}
+    /* Slower, more menacing chomp — lunges at midpoint, pauses briefly on the bite, then exits. */
     @keyframes prank-chomp{
-      0%  {left:110vw;transform:translate(0,-50%) rotate(0deg) scale(1);}
-      40% {left:50vw; transform:translate(-50%,-50%) rotate(-18deg) scale(1.4);}
-      100%{left:-20vw;transform:translate(0,-50%) rotate(-30deg) scale(1.1);opacity:0.4;}
+      0%   {left:115vw; transform:translate(0,-50%) rotate(0deg) scale(0.9);}
+      35%  {left:55vw;  transform:translate(-50%,-50%) rotate(-14deg) scale(1.5);}
+      48%  {left:48vw;  transform:translate(-50%,-50%) rotate(-22deg) scale(1.7);}
+      58%  {left:40vw;  transform:translate(-50%,-50%) rotate(-18deg) scale(1.55);}
+      100% {left:-25vw; transform:translate(0,-50%) rotate(-32deg) scale(1.1); opacity:0.25;}
+    }
+    /* Fake leaderboard getting eaten — CSS-rendered so no image asset needed. */
+    .prank-scorecard-wrap{position:absolute;top:50%;left:50%;width:240px;transform:translate(-50%,-50%);animation:prank-eaten 1.8s cubic-bezier(0.42,0,0.58,1) 0.15s forwards;pointer-events:none}
+    .prank-scorecard{background:#f4f0e6;color:#2a2018;padding:14px 16px;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,0.5),0 2px 6px rgba(0,0,0,0.3);transform:rotate(-4deg);font-family:Georgia,"Times New Roman",serif}
+    .ps-title{font-size:10px;font-weight:800;letter-spacing:0.14em;color:#6b6257;text-align:center;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #c9beab;text-transform:uppercase}
+    .ps-row{display:flex;justify-content:space-between;font-family:'Courier New',monospace;font-size:12px;font-weight:700;padding:2px 0;color:#2a2018}
+    .ps-row span:last-child{color:#b91c1c}
+    @keyframes prank-eaten{
+      0%,30%  {transform:translate(-50%,-50%) rotate(-4deg) scale(1); opacity:1;}
+      48%     {transform:translate(-40%,-50%) rotate(-8deg) scale(0.95); opacity:1;}
+      55%     {transform:translate(-28%,-50%) rotate(-22deg) scale(0.75); opacity:0.9;}
+      65%     {transform:translate(-18%,-40%) rotate(-42deg) scale(0.4); opacity:0.55;}
+      78%,100%{transform:translate(-10%,-30%) rotate(-60deg) scale(0.1); opacity:0;}
     }
     .prank-blackout{position:absolute;inset:0;background:#000;opacity:0;transition:opacity 0.25s ease}
     .prank-overlay.black .prank-blackout{opacity:1}
@@ -5774,6 +5790,17 @@ function runPrankSequence(){
     const reduce = prefersReducedMotion();
     overlay.innerHTML = `
       <div class="prank-stage ${reduce?'':'prank-shake'}">
+        ${reduce?'':`
+          <div class="prank-scorecard-wrap">
+            <div class="prank-scorecard">
+              <div class="ps-title">CPI Leaderboard</div>
+              <div class="ps-row"><span>1. HANSON</span><span>42</span></div>
+              <div class="ps-row"><span>2. LEIGH</span><span>42</span></div>
+              <div class="ps-row"><span>3. JORDAN</span><span>41</span></div>
+              <div class="ps-row"><span>4. NICK</span><span>34</span></div>
+              <div class="ps-row"><span>5. PAUL</span><span>33</span></div>
+            </div>
+          </div>`}
         <img src="./ChubbsGatorIcon.png" class="prank-gator${reduce?'':' go'}" alt=""/>
       </div>
       <div class="prank-blackout"></div>
@@ -5804,9 +5831,10 @@ function runPrankSequence(){
         <div class="prank-reveal-tap">tap anywhere to dismiss</div>
       </div>`;
     overlay.classList.add('active');
-    setTimeout(() => overlay.classList.add('black'),  reduce ?   0 :  850);
-    setTimeout(() => overlay.classList.add('notice'), reduce ? 200 : 1150);
-    setTimeout(() => overlay.classList.add('reveal'), reduce ?1500 : 4100);
+    // Timeline (non-reduce): gator 0.15→1.95s chomp · blackout 1.7s · parchment 2.1s · gotcha 5.2s
+    setTimeout(() => overlay.classList.add('black'),  reduce ?   0 : 1700);
+    setTimeout(() => overlay.classList.add('notice'), reduce ? 200 : 2100);
+    setTimeout(() => overlay.classList.add('reveal'), reduce ?1500 : 5200);
     const onTap = () => {
       if(!overlay.classList.contains('reveal')) return;
       overlay.classList.remove('active','black','notice','reveal');
@@ -6160,7 +6188,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.7';
+  const APP_VERSION = '5.8';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
