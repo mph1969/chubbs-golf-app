@@ -69,6 +69,8 @@ Admin builds event config ──push──► Firebase /events/{eventId}/bundle
 | 11 | Playoffs: top 16 after 8 rounds, min 3 rounds to qualify | ✅ v5.39 (prediction only — bracket UI not built) |
 | 12 | Shooter Cup October Ryder Cup format | 🟡 data hook shipped (event.players[i].overrideSeasonPts) — admin UI deferred until October |
 
+**Honeypot (Phase A, v5.41):** Gate + gator prank + "Most Pressed" throne on Leaderboard tab. See `project_chubbs_honeypot.md` memory. Controlled by `/chubbs/leaderboardPublished` + `/chubbs/presses/{KEY}`. Admin bypass via `?admin=CHUBBSGATOR2026` URL param (rotate by editing `HONEYPOT.ADMIN_SECRET` in index.html).
+
 ## Season Infrastructure
 
 The mobile app has a durable "seasons" concept:
@@ -99,6 +101,7 @@ The mobile app has a durable "seasons" concept:
 | `chubbs_admin_collapsed_v1` | Admin card collapse preferences |
 | `chubbs_fontsize` | UI font-size preference (std/large/xl) |
 | `dc_pro_v1` | Pro unlock (unused on Chubbs — DX! Golf only) |
+| `chubbs_admin_unlock_v1` | Honeypot admin bypass flag (set by `?admin=CHUBBSGATOR2026`) |
 
 ## Untracked In-Repo Files (local-only)
 
