@@ -47,7 +47,21 @@
     #tagline-text{transition:opacity 0.5s ease;}
     .hero h1{margin:0;font-size:27px;line-height:1.02;font-family:Georgia,serif;color:var(--gold2)}
     .hero .sub{margin-top:6px;font-size:12px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
-    .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+    .tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0}
+    /* Season tab table */
+    .season-table{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:8px;background:rgba(255,255,255,0.01)}
+    .season-header,.season-row{display:grid;grid-template-columns:28px minmax(72px,1fr) 38px 30px 38px 34px 34px 34px;gap:3px;align-items:center;padding:7px 5px;font-size:11px}
+    .season-header{background:rgba(214,176,90,0.08);color:var(--gold2);font-weight:800;letter-spacing:.04em;border-bottom:1px solid var(--line)}
+    .season-row{border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;color:var(--ink)}
+    .season-row:hover{background:rgba(255,255,255,0.025)}
+    .season-row.open{background:rgba(214,176,90,0.05)}
+    .season-row .s-rank{font-weight:800;text-align:center;color:var(--gold2)}
+    .season-row .s-name{font-weight:700}
+    .season-row .s-pts{text-align:right;font-weight:900;font-family:monospace;color:var(--gold2)}
+    .season-row .s-pld,.season-row .s-avg,.season-row .s-dp,.season-row .s-ne,.season-row .s-nb{text-align:right;font-family:monospace;color:var(--muted)}
+    .season-header .s-name{text-align:left}
+    .season-header .s-rank{text-align:center}
+    .season-header .s-pts,.season-header .s-pld,.season-header .s-avg,.season-header .s-dp,.season-header .s-ne,.season-header .s-nb{text-align:right}
     .tab-btn{padding:10px 8px;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--muted);
       border-radius:14px;font-weight:700;font-size:12px;cursor:pointer}
     .tab-btn.active{background:rgba(214,176,90,0.14);border-color:var(--gold);color:var(--gold2)}
@@ -171,7 +185,7 @@
 
     @media (max-width:460px){
       .hero h1{font-size:24px}
-      .tabs{grid-template-columns:repeat(2,1fr)}
+      .tabs{grid-template-columns:repeat(3,1fr)}
       .grid-2,.grid-3,.event-grid,.meta-grid,.meta-grid-4{grid-template-columns:1fr}
       .driver-grid{grid-template-columns:1fr}
     }
@@ -328,6 +342,7 @@
     <section id="day1" class="section"></section>
     <section id="day2" class="section"></section>
     <section id="leaderboard" class="section"></section>
+    <section id="season" class="section"></section>
     <section id="about" class="section"></section>
     <footer id="app-footer" style="text-align:center;padding:18px 0 10px;border-top:1px solid var(--line);margin-top:8px"></footer>
   <!-- Live view paywall overlay -->
@@ -1697,6 +1712,7 @@ function saveEventSnapshot(){
   history.push(snap);
   if(history.length > 12) history.splice(0, history.length - 12);
   saveHistory(history);
+  appendCurrentEventToActiveSeason();   // Phase 2 — auto-accumulate into active season
   showToast(`Snapshot saved — ${snap.eventName}`, 'ok');
   renderAll();
 }
@@ -1739,6 +1755,256 @@ function deleteSnapshot(idx){
     renderAll();
   });
 }
+
+// ── Season store ─────────────────────────────────────────────────────────
+// Phase 1: static Season 4 fetched from ./season-4.json on first load.
+// Phase 2: current season auto-accumulates — saveEventSnapshot() appends
+// the just-saved event into the active-season bucket. Switching seasons
+// is a UI action via the dropdown on the Season tab.
+const SEASONS_KEY = 'chubbs_seasons_v1';
+const ACTIVE_SEASON_ID = 'season-5';     // bump to 'season-6' at season rollover
+const ACTIVE_SEASON_NAME = 'Chubbs Season 5';
+const DEFAULT_RANK_POINTS = [13,11,10,9,8,7,6,5,4,3,2,1];
+
+function loadSeasonStore(){
+  try { return JSON.parse(localStorage.getItem(SEASONS_KEY) || '{}'); } catch(e){ return {}; }
+}
+function saveSeasonStore(s){ localStorage.setItem(SEASONS_KEY, JSON.stringify(s)); }
+function blankActiveSeason(){
+  return {
+    version: 1, id: ACTIVE_SEASON_ID, name: ACTIVE_SEASON_NAME, status: 'active',
+    rankPoints: DEFAULT_RANK_POINTS.slice(),
+    events: []
+  };
+}
+function ensureActiveSeason(){
+  const store = loadSeasonStore();
+  if(!store.seasons) store.seasons = {};
+  if(!store.seasons[ACTIVE_SEASON_ID]) store.seasons[ACTIVE_SEASON_ID] = blankActiveSeason();
+  if(!store.viewingSeasonId) store.viewingSeasonId = ACTIVE_SEASON_ID;
+  saveSeasonStore(store);
+  return store;
+}
+
+// Fire-and-forget on boot: fetch season-4.json if we don't already have it cached.
+async function fetchSeason4IfMissing(){
+  const store = ensureActiveSeason();
+  if(store.seasons['season-4']) return;
+  try {
+    const res = await fetch('./season-4.json', { cache: 'no-cache' });
+    if(!res.ok) return;
+    const data = await res.json();
+    store.seasons['season-4'] = data;
+    saveSeasonStore(store);
+    if(state.ui.tab === 'season') renderSeason();
+  } catch(e){ console.warn('[Season] fetch season-4.json failed', e); }
+}
+
+function setViewingSeason(id){
+  const store = ensureActiveSeason();
+  if(!store.seasons[id]) return;
+  store.viewingSeasonId = id;
+  saveSeasonStore(store);
+  renderSeason();
+}
+
+// Canonical name normalization — collapse whitespace.
+function canonName(n){
+  if(!n || typeof n !== 'string') return n || '';
+  return n.split(/\s+/).join(' ').trim();
+}
+
+// Compute standings from raw event data. Returns rows sorted by season pts desc.
+// diff convention: net − par. Double par = gross ≥ 2×par literal. Net eagle = diff ≤ −2.
+function aggregateSeason(season){
+  if(!season || !Array.isArray(season.events)) return [];
+  const rankPts = season.rankPoints || DEFAULT_RANK_POINTS;
+  const agg = {};   // keyed by canon name
+  const perPlayerEvents = {};   // keyed by canon name → array of per-event summary
+  for(const ev of season.events){
+    // Per-event Stableford totals
+    const scored = [];
+    for(const p of ev.players){
+      const nm = canonName(p.name);
+      let sb = 0, gross = 0, dblpar = 0, neagle = 0, nbirdie = 0;
+      for(let i=0; i<ev.holes.length; i++){
+        const g = p.gross[i];
+        if(g === null || g === undefined || g === '') continue;
+        const hole = ev.holes[i];
+        const shots = shotsReceived(p.hcp, hole.si);
+        const pts = stablefordPoints(g, hole.par, shots);
+        if(pts !== null) sb += pts;
+        gross += g;
+        const diff = (g - shots) - hole.par;
+        if(g >= 2*hole.par) dblpar += 1;
+        if(diff <= -2) neagle += 1;
+        if(diff === -1) nbirdie += 1;
+      }
+      scored.push({ name: nm, stableford: sb, gross, dblpar, neagle, nbirdie });
+    }
+    // Rank by Stableford desc, tiebreak by lower gross asc
+    scored.sort((a,b) => (b.stableford - a.stableford) || (a.gross - b.gross));
+    scored.forEach((row, rank) => {
+      if(!agg[row.name]){
+        agg[row.name] = { name: row.name, points: 0, played: 0, stableford: 0, dblpar: 0, neagle: 0, nbirdie: 0 };
+        perPlayerEvents[row.name] = [];
+      }
+      const seasonPts = rank < rankPts.length ? rankPts[rank] : 0;
+      agg[row.name].points     += seasonPts;
+      agg[row.name].played     += 1;
+      agg[row.name].stableford += row.stableford;
+      agg[row.name].dblpar     += row.dblpar;
+      agg[row.name].neagle     += row.neagle;
+      agg[row.name].nbirdie    += row.nbirdie;
+      perPlayerEvents[row.name].push({
+        eventId: ev.id, eventName: ev.name, courseName: ev.courseName,
+        stableford: row.stableford, gross: row.gross, rank: rank+1, seasonPts
+      });
+    });
+  }
+  // Final rows with derived round average + best/worst course
+  const rows = Object.values(agg).map(a => {
+    const evs = perPlayerEvents[a.name] || [];
+    const roundAvg = a.played ? (a.points / a.played) : 0;
+    const sorted = evs.slice().sort((x,y) => y.stableford - x.stableford);
+    const best = sorted[0] || null;
+    const worst = sorted.length > 1 ? sorted[sorted.length-1] : null;
+    return { ...a, roundAvg, events: evs, best, worst };
+  });
+  rows.sort((a,b) => (b.points - a.points) || (b.stableford - a.stableford));
+  return rows;
+}
+
+// Phase 2 — append current event to active season when user saves a snapshot.
+// Piggybacks on saveEventSnapshot so season accumulates without extra UX.
+function appendCurrentEventToActiveSeason(){
+  try {
+    const store = ensureActiveSeason();
+    const season = store.seasons[ACTIVE_SEASON_ID];
+    if(!season) return;
+    const sp = currentPlayers('stableford') || [];
+    const playedPlayers = sp
+      .map((p, idx) => ({p, idx}))
+      .filter(({p, idx}) => p && p.name && p.name.trim() && state.stableford.holes.some(h => typeof h.gross[idx] === 'number'));
+    if(!playedPlayers.length) return; // nothing to save
+    const course = activeCourse('day2');
+    const ev = state.eventBundle && state.eventBundle.event;
+    const eventName = (state.event && state.event.name) || (ev && (ev.displayName || ev.name)) || 'Event';
+    const eventId = (ev && ev.eventId) || slugify(eventName + '-' + new Date().toISOString().slice(0,10));
+    const record = {
+      id: eventId,
+      name: eventName,
+      courseName: (course && course.name) || '',
+      date: new Date().toISOString().slice(0,10),
+      holes: (course.holes || []).map(h => ({ par: h.par, si: h.si })),
+      players: playedPlayers.map(({p, idx}) => ({
+        name: canonName(p.name),
+        hcp: parseInt(p.hcp || 0, 10),
+        gross: state.stableford.holes.map(h => (typeof h.gross[idx] === 'number' ? h.gross[idx] : null))
+      }))
+    };
+    // Replace any existing record with the same id (re-save same event overwrites)
+    season.events = (season.events || []).filter(e => e.id !== record.id);
+    season.events.push(record);
+    saveSeasonStore(store);
+  } catch(e){ console.warn('[Season] append failed', e); }
+}
+
+function renderSeason(){
+  const host = document.getElementById('season');
+  if(!host) return;
+  const store = ensureActiveSeason();
+  const ids = Object.keys(store.seasons);
+  if(!ids.length){
+    host.innerHTML = `<div class="card"><div class="section-title">📅 Season</div><div class="small">Loading Season 4 data…</div></div>`;
+    return;
+  }
+  const viewingId = (store.seasons[store.viewingSeasonId] && store.viewingSeasonId) || ids[0];
+  const season = store.seasons[viewingId];
+  const rows = aggregateSeason(season);
+
+  const selector = ids.length > 1
+    ? `<select onchange="setViewingSeason(this.value)" style="background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 10px;font-size:13px;font-weight:700">
+         ${ids.map(id => `<option value="${id}"${id===viewingId?' selected':''}>${(store.seasons[id].name || id)}${store.seasons[id].status==='active'?' (Live)':''}</option>`).join('')}
+       </select>`
+    : `<div style="font-weight:800;font-size:15px;color:var(--gold2)">${season.name || viewingId}</div>`;
+
+  const badge = season.status === 'active'
+    ? `<span class="status ok tight" style="display:inline-block">Live · ${season.events.length} event${season.events.length===1?'':'s'} scored</span>`
+    : `<span class="small">Final · ${season.events.length} events</span>`;
+
+  if(!rows.length){
+    host.innerHTML = `
+      <div class="card">
+        <div class="toolbar tight" style="justify-content:space-between"><div class="section-title">📅 Season</div>${selector}</div>
+        ${badge}
+        <div class="small tight" style="margin-top:12px">No rounds scored yet. Finish a Stableford round and tap <strong>Save snapshot</strong> — it'll show up here automatically.</div>
+      </div>`;
+    return;
+  }
+
+  const expandedName = state.ui.seasonExpanded || '';
+  const bodyRows = rows.map((r, i) => {
+    const rank = i + 1;
+    const medal = rank===1 ? '🥇' : rank===2 ? '🥈' : rank===3 ? '🥉' : '';
+    const isOpen = expandedName === r.name;
+    const best = r.best ? `🟢 Best: <strong>${r.best.courseName || r.best.eventName}</strong> — ${r.best.stableford} Stableford (rank ${r.best.rank})` : '';
+    const worst = r.worst ? `🔴 Worst: <strong>${r.worst.courseName || r.worst.eventName}</strong> — ${r.worst.stableford} Stableford (rank ${r.worst.rank})` : '';
+    const eventList = r.events.map(e => `<div class="small tight" style="display:flex;justify-content:space-between;padding:2px 0"><span>${e.courseName || e.eventName}</span><span style="font-family:monospace">${e.stableford} pts · rank ${e.rank} · +${e.seasonPts}</span></div>`).join('');
+    const expand = isOpen ? `
+      <div style="grid-column:1/-1;padding:10px 8px 4px;border-top:1px solid var(--line);background:rgba(255,255,255,0.015)">
+        <div class="small tight" style="margin-bottom:6px">${best}</div>
+        <div class="small tight" style="margin-bottom:8px">${worst}</div>
+        <div class="small tight" style="font-weight:700;color:var(--muted);margin-top:6px">All rounds</div>
+        ${eventList}
+      </div>` : '';
+    return `
+      <div class="season-row ${isOpen?'open':''}" onclick="toggleSeasonRow('${r.name.replace(/'/g,"\\'")}')">
+        <div class="s-rank">${medal || rank}</div>
+        <div class="s-name">${r.name}</div>
+        <div class="s-pts">${r.points}</div>
+        <div class="s-pld">${r.played}</div>
+        <div class="s-avg">${r.roundAvg.toFixed(1)}</div>
+        <div class="s-dp">${r.dblpar}</div>
+        <div class="s-ne">${r.neagle}</div>
+        <div class="s-nb">${r.nbirdie}</div>
+        ${expand}
+      </div>`;
+  }).join('');
+
+  host.innerHTML = `
+    <div class="card">
+      <div class="toolbar tight" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+        <div class="section-title" style="margin:0">📅 Season Standings</div>
+        ${selector}
+      </div>
+      <div style="margin:4px 0 12px">${badge}</div>
+      <div class="season-table">
+        <div class="season-header">
+          <div class="s-rank">#</div>
+          <div class="s-name">Name</div>
+          <div class="s-pts">Pts</div>
+          <div class="s-pld">Pld</div>
+          <div class="s-avg">Avg</div>
+          <div class="s-dp">DP</div>
+          <div class="s-ne">NE</div>
+          <div class="s-nb">NB</div>
+        </div>
+        ${bodyRows}
+      </div>
+      <div class="small tight" style="margin-top:10px;color:var(--muted)">
+        Tap a row for best/worst course and per-event breakdown.<br/>
+        Pts = season points (1st=13, 2nd=11, 3rd=10, 4th=9…12th=1). DblP = gross ≥ 2×par holes. NEag/NBir = net eagles / net birdies.
+      </div>
+    </div>`;
+}
+
+function toggleSeasonRow(name){
+  state.ui.seasonExpanded = (state.ui.seasonExpanded === name) ? '' : name;
+  saveState();
+  renderSeason();
+}
+// ── End season store ─────────────────────────────────────────────────────
 // ── End admin support ─────────────────────────────────────────────────────
 
 function _doApplyBundle(bundle, requestedPlayerId){
@@ -3560,7 +3826,7 @@ function renderTabs(){
   const gameTabs = scrambleBeforeStableford()
     ? [['day1','Scramble'],['day2','Stableford']]
     : [['day2','Stableford'],['day1','Scramble']];
-  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],...gameTabs];
+  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],...gameTabs,['season','📅 Season']];
   document.getElementById('tabs').innerHTML = tabs.map(([id,label]) =>
     `<button class="tab-btn ${state.ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`
   ).join('\n');
@@ -5267,7 +5533,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.1';
+  const APP_VERSION = '5.2';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
@@ -5383,6 +5649,7 @@ function renderAll(){
   renderDay1();
   renderDay2();
   renderLeaderboard();
+  renderSeason();
   renderAbout();
   renderFooter();
   applyReadOnlyLocks();
@@ -5496,6 +5763,7 @@ function setChubbsFontSize(size){
 renderAll();
 checkLivePaywall();
 checkPendingEvent(); // show import notification if admin sent an event from ChubbsAdmin
+fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first load
 
 // ── Service Worker: registration + update prompt ──
 (function(){

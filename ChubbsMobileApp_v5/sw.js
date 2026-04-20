@@ -1,6 +1,6 @@
 // Chubbs Golf — Service Worker
 // Bump CACHE_VERSION on every deploy to trigger update prompt
-const CACHE_VERSION = 'chubbs-v5.35';
+const CACHE_VERSION = 'chubbs-v5.36';
 const ASSETS = [
   './',
   './index.html',
@@ -13,7 +13,8 @@ const ASSETS = [
   './nansha_logo.png',
   './dragonshot_icon.png',
   './dxgolf_icon.jpg',
-  './CPI Handbook.pdf'
+  './CPI Handbook.pdf',
+  './season-4.json'
 ];
 
 // Install: cache all core assets
