@@ -71,6 +71,22 @@
     .s-bonus{font-size:9px;font-weight:800;color:#f5d85c;background:rgba(245,216,92,0.14);border:1px solid rgba(245,216,92,0.4);border-radius:5px;padding:1px 5px;margin-left:4px;white-space:nowrap}
     .season-playoff-note{font-size:11px;line-height:1.4;color:var(--muted);padding:8px 10px;background:rgba(74,176,100,0.06);border:1px solid rgba(74,176,100,0.18);border-radius:10px;margin-bottom:10px}
     .season-playoff-note strong{color:#9ad9a8}
+    .season-show-all{width:100%;margin-top:8px;padding:8px;background:rgba(255,255,255,0.04);border:1px solid var(--line);border-radius:10px;color:var(--gold2);font-weight:700;font-size:12px;cursor:pointer;letter-spacing:.04em}
+    .season-show-all:hover{background:rgba(255,255,255,0.07)}
+    .season-qual-hint{margin-top:8px;padding:6px 10px;font-size:10px;color:var(--muted);background:rgba(74,176,100,0.04);border:1px dashed rgba(74,176,100,0.25);border-radius:8px;text-align:center}
+    /* HCP suggestions card (Leaderboard tab, handbook §3.2) */
+    .hcp-sug-table{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:4px 0 10px;background:rgba(255,255,255,0.01)}
+    .hcp-sug-hdr,.hcp-sug-row{display:grid;grid-template-columns:minmax(100px,1fr) 40px 70px 70px;gap:4px;padding:7px 10px;font-size:12px;align-items:center}
+    .hcp-sug-hdr{background:rgba(214,176,90,0.08);color:var(--gold2);font-weight:800;font-size:10px;letter-spacing:.06em;text-transform:uppercase;border-bottom:1px solid var(--line)}
+    .hcp-sug-hdr>:not(:first-child),.hcp-sug-row>:not(:first-child){text-align:right;font-family:monospace}
+    .hcp-sug-row{border-bottom:1px solid rgba(255,255,255,0.04)}
+    .hcp-sug-row:last-child{border-bottom:none}
+    .hcp-sug-name{font-weight:700;color:var(--ink)}
+    .hcp-sug-delta{font-weight:700;white-space:nowrap}
+    .hcp-sug-hcp{color:var(--gold2);font-weight:700;white-space:nowrap}
+    .hcp-sug-apply{width:100%;padding:10px;background:linear-gradient(180deg,rgba(214,176,90,0.18),rgba(214,176,90,0.08));border:1px solid rgba(214,176,90,0.4);border-radius:10px;color:var(--gold2);font-weight:800;font-size:13px;cursor:pointer}
+    .hcp-sug-apply:hover{background:linear-gradient(180deg,rgba(214,176,90,0.25),rgba(214,176,90,0.12))}
+    .hcp-sug-applied{padding:8px 10px;background:rgba(74,176,100,0.08);border:1px solid rgba(74,176,100,0.3);border-radius:8px;color:#9ad9a8;font-size:11px;text-align:center}
     .tab-btn{padding:10px 8px;border:1px solid var(--line);background:rgba(255,255,255,0.03);color:var(--muted);
       border-radius:14px;font-weight:700;font-size:12px;cursor:pointer}
     .tab-btn.active{background:rgba(214,176,90,0.14);border-color:var(--gold);color:var(--gold2)}
@@ -1709,6 +1725,24 @@ function loadHistory(){
   try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch(e){ return []; }
 }
 function saveHistory(arr){ localStorage.setItem(HISTORY_KEY, JSON.stringify(arr)); }
+// Auto-fire saveEventSnapshot once per event when the Stableford round is
+// complete — all active players have a gross on every hole. Uses state._autoSavedEventId
+// as a fuse so edits to an already-complete round don't keep re-firing.
+function maybeAutoSaveSnapshot(){
+  try {
+    const players = currentPlayers('stableford');
+    if(!players.length) return;
+    const complete = state.stableford.holes.every(h =>
+      players.every((_, i) => typeof h.gross[i] === 'number'));
+    if(!complete) return;
+    const ev = state.eventBundle && state.eventBundle.event;
+    const eventId = (ev && ev.eventId) || (state.event && state.event.name) || 'event-' + new Date().toISOString().slice(0,10);
+    if(state._autoSavedEventId === eventId) return;   // already auto-saved this round
+    state._autoSavedEventId = eventId;
+    saveState();
+    saveEventSnapshot();   // fires toast + appends to active season
+  } catch(e){ console.warn('[AutoSave]', e); }
+}
 function saveEventSnapshot(){
   const ev = state.eventBundle && state.eventBundle.event;
   const snap = {
@@ -1896,7 +1930,12 @@ function aggregateSeason(season){
         agg[row.name] = { name: row.name, played: 0, stableford: 0, dblpar: 0, neagle: 0, nbirdie: 0 };
         perPlayerEvents[row.name] = [];
       }
-      const seasonPts = rank < rankPts.length ? rankPts[rank] : 0;
+      // Per-player override for special events (e.g. §12 Shooter Cup — up to 3 pts
+      // per player from attending / winning team / personal 2.5+ pts). Falls back to
+      // the handbook §10.2 rank points when no override present.
+      const epRaw = ev.players.find(p => canonName(p.name) === row.name);
+      const override = (epRaw && Number.isFinite(epRaw.overrideSeasonPts)) ? epRaw.overrideSeasonPts : null;
+      const seasonPts = override !== null ? override : (rank < rankPts.length ? rankPts[rank] : 0);
       agg[row.name].played     += 1;
       agg[row.name].stableford += row.stableford;
       agg[row.name].dblpar     += row.dblpar;
@@ -2001,6 +2040,11 @@ function renderSeason(){
   const expandedName = state.ui.seasonExpanded || '';
   const ctx = rows._ctx || { totalEvents: season.events.length, PLAYOFF_MIN: 3, PLAYOFF_SLOTS: 16 };
   const showDnq = ctx.totalEvents >= ctx.PLAYOFF_MIN;
+  // Default view shows only the top 16 (the playoff-relevant window). Rows below
+  // can be expanded with a "Show all" toggle — state.ui.seasonShowAll persists it.
+  const showAll = !!state.ui.seasonShowAll;
+  const visibleRows = showAll ? rows : rows.slice(0, ctx.PLAYOFF_SLOTS);
+  const hiddenCount = rows.length - visibleRows.length;
   // Find the row index of the 16th qualified player (played ≥ min). Only surface
   // a separator for this when it differs from the raw top-16 cut.
   let qualifiedCount = 0, qualifiedCutIdx = -1;
@@ -2011,9 +2055,9 @@ function renderSeason(){
     }
   }
   const rawCutIdx = Math.min(ctx.PLAYOFF_SLOTS - 1, rows.length - 1);
-  const rawCutVisible = rows.length > ctx.PLAYOFF_SLOTS;
-  const qualifiedSeparateVisible = qualifiedCutIdx > rawCutIdx;   // only draw 2nd line when it's deeper
-  const bodyRows = rows.map((r, i) => {
+  const rawCutVisible = showAll && rows.length > ctx.PLAYOFF_SLOTS;
+  const qualifiedSeparateVisible = showAll && qualifiedCutIdx > rawCutIdx;   // only draw 2nd line when expanded AND deeper
+  const bodyRows = visibleRows.map((r, i) => {
     const rank = i + 1;
     const medal = rank===1 ? '🥇' : rank===2 ? '🥈' : rank===3 ? '🥉' : '';
     const isOpen = expandedName === r.name;
@@ -2060,6 +2104,17 @@ function renderSeason(){
       Season points = best 7 round finishes; full attendance earns a +3★ bonus (handbook §10.2).
     </div>`;
 
+  // Show-all toggle. Appears only when there are rows past top-16.
+  const canToggle = rows.length > ctx.PLAYOFF_SLOTS;
+  const toggleBtn = canToggle ? `
+    <button class="season-show-all" onclick="toggleSeasonShowAll()">
+      ${showAll ? `▴ Collapse to top ${ctx.PLAYOFF_SLOTS}` : `▾ Show all ${rows.length} players (+${hiddenCount} more)`}
+    </button>` : '';
+  // Hint when the qualified cut lives below the visible window
+  const qualifiedHiddenHint = (!showAll && qualifiedCount >= ctx.PLAYOFF_SLOTS && qualifiedCutIdx >= ctx.PLAYOFF_SLOTS)
+    ? `<div class="season-qual-hint">🏆 Qualified 16th seat goes to rank ${qualifiedCutIdx+1} — tap "Show all" to see the playoff bubble.</div>`
+    : '';
+
   host.innerHTML = `
     <div class="card">
       <div class="toolbar tight" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
@@ -2081,6 +2136,8 @@ function renderSeason(){
         </div>
         ${bodyRows}
       </div>
+      ${qualifiedHiddenHint}
+      ${toggleBtn}
       <div class="small tight" style="margin-top:10px;color:var(--muted)">
         Tap a row for best/worst course and per-event breakdown.<br/>
         Pts = best 7 round finishes (1st=13, 2nd=11, 3rd=10…12th=1) + 3★ perfect-attendance bonus. DP = gross ≥ 2×par holes. NE/NB = net eagles / net birdies.
@@ -2090,6 +2147,11 @@ function renderSeason(){
 
 function toggleSeasonRow(name){
   state.ui.seasonExpanded = (state.ui.seasonExpanded === name) ? '' : name;
+  saveState();
+  renderSeason();
+}
+function toggleSeasonShowAll(){
+  state.ui.seasonShowAll = !state.ui.seasonShowAll;
   saveState();
   renderSeason();
 }
@@ -2652,6 +2714,102 @@ function stablefordPoints(gross, par, shots){
   if(diff === 1) return 1;
   return 0;
 }
+// Numeric form — returns the integer delta per §3.2, or null when adjustment
+// is skipped (zero-points = lost scorecard, handbook §3.2 last bullet).
+function hcpAdjustDelta(points){
+  const p = +points;
+  if(!Number.isFinite(p) || p <= 0) return null;
+  if(p > 45) return -3;
+  if(p >= 41) return -2;
+  if(p >= 36) return -1;
+  if(p >= 27) return 0;
+  if(p >= 16) return 1;
+  return 2;
+}
+// Collect handicap-adjustment suggestions per §3.2 for the current Stableford
+// round. Returns [] if the round isn't complete or already applied.
+function collectHcpSuggestions(){
+  const players = currentPlayers('stableford');
+  if(!players.length) return [];
+  // Only compute when every active player has a gross on every hole
+  const complete = state.stableford.holes.every(h =>
+    players.every((_, i) => typeof h.gross[i] === 'number'));
+  if(!complete) return [];
+  const suggestions = [];
+  for(let i=0; i<players.length; i++){
+    const p = players[i];
+    if(!p || !p.name || !String(p.name).trim()) continue;
+    const totals = playerTotals(i);
+    const delta = hcpAdjustDelta(totals.points);
+    if(delta === null) continue;  // zero-points / lost-card case
+    const curHcp = parseInt(p.hcp || 0, 10);
+    const newHcp = Math.max(0, curHcp + delta);
+    suggestions.push({ playerIdx: i, name: String(p.name).trim(), curHcp, newHcp, delta, stableford: totals.points });
+  }
+  return suggestions;
+}
+function renderHcpSuggestionsCard(){
+  const suggestions = collectHcpSuggestions();
+  if(!suggestions.length) return '';
+  const ev = state.eventBundle && state.eventBundle.event;
+  const eventId = (ev && ev.eventId) || (state.event && state.event.name) || '';
+  const alreadyApplied = state.hcpAppliedForEventId === eventId;
+  const rows = suggestions.map(s => {
+    const arrow = s.delta < 0 ? '▼' : s.delta > 0 ? '▲' : '—';
+    const col = s.delta < 0 ? '#9ad9a8' : s.delta > 0 ? '#f5a84c' : 'var(--muted)';
+    const deltaTxt = s.delta === 0 ? 'No change' : (s.delta > 0 ? '+' + s.delta : String(s.delta).replace('-','−'));
+    return `<div class="hcp-sug-row">
+      <span class="hcp-sug-name">${fmtName(s.name, s.playerIdx)}</span>
+      <span class="hcp-sug-points">${s.stableford}</span>
+      <span class="hcp-sug-delta" style="color:${col}">${arrow} ${deltaTxt}</span>
+      <span class="hcp-sug-hcp">${s.curHcp}${s.delta===0?'':' → '+s.newHcp}</span>
+    </div>`;
+  }).join('');
+  const applyBtn = alreadyApplied
+    ? `<div class="hcp-sug-applied">✓ Applied for this event · adjusted on ${new Date(state.hcpAppliedAt || Date.now()).toLocaleDateString()}</div>`
+    : `<button class="hcp-sug-apply" onclick="applyHcpAdjustments()">🎯 Apply all to roster</button>`;
+  return `
+    <div class="card">
+      <div class="section-title" style="display:flex;align-items:center;justify-content:space-between">
+        <span>🎯 Handicap Adjustments</span>
+        <span class="small" style="font-weight:400;color:var(--muted)">§3.2</span>
+      </div>
+      <div class="small tight" style="margin-bottom:8px">Per the handbook: scores &gt;45 → −3, 41–45 → −2, 36–40 → −1, 27–35 → no change, 16–26 → +1, &lt;15 → +2. Zero-point rounds (lost scorecard) are skipped.</div>
+      <div class="hcp-sug-table">
+        <div class="hcp-sug-hdr">
+          <span>Player</span><span>SB</span><span>Δ</span><span>HCP</span>
+        </div>
+        ${rows}
+      </div>
+      ${applyBtn}
+    </div>`;
+}
+function applyHcpAdjustments(){
+  const suggestions = collectHcpSuggestions();
+  if(!suggestions.length) return;
+  const roster = loadRoster();
+  let updated = 0;
+  suggestions.forEach(s => {
+    if(s.delta === 0) return;   // don't touch no-change rows
+    // Match against displayName / fullName / shortName / name — trimmed, case-insensitive
+    const needle = s.name.toLowerCase();
+    const idx = roster.findIndex(r =>
+      [r.displayName, r.fullName, r.shortName, r.name].filter(Boolean)
+        .some(n => String(n).trim().toLowerCase() === needle));
+    if(idx < 0) return;
+    roster[idx].playingHandicap = s.newHcp;
+    updated += 1;
+  });
+  if(!updated){ showToast('No matching roster players found', 'err'); return; }
+  saveRoster(roster);
+  const ev = state.eventBundle && state.eventBundle.event;
+  const eventId = (ev && ev.eventId) || (state.event && state.event.name) || '';
+  state.hcpAppliedForEventId = eventId;
+  state.hcpAppliedAt = Date.now();
+  saveState();
+  showToast(`Updated ${updated} handicap${updated===1?'':'s'} — next event will use new values`, 'ok');
+  renderAll();
+}
 function handicapAdjustment(points){
   if(points > 45) return '−3';
   if(points >= 41) return '−2';
@@ -2991,6 +3149,7 @@ function stepScore(day, idx, delta, field='gross'){
     state.poker.digitalDeal = null;
   }
   saveState();
+  if(day === 'stableford') maybeAutoSaveSnapshot();
   renderAll();
 }
 function suggestPutts(holeIdx, playerIdx){
@@ -3018,6 +3177,7 @@ function setExact(day, idx, value, field='gross'){
     state.poker.digitalDeal = null;
   }
   saveState();
+  if(day === 'stableford') maybeAutoSaveSnapshot();
   renderAll();
 }
 function clearScore(day, idx=null, field='gross'){
@@ -3042,6 +3202,7 @@ function setBlob(idx){
   if(meta.par === 5) gross = 10;
   state.stableford.holes[state.stableford.hole].gross[idx] = gross;
   saveState();
+  maybeAutoSaveSnapshot();
   renderAll();
   // Fire the Spenny alert
   const players = currentPlayers('stableford');
@@ -5521,6 +5682,8 @@ function renderLeaderboard(){
 
     ${renderResultsSummary()}
 
+    ${renderHcpSuggestionsCard()}
+
     ${renderChallengesCard()}
 
     ${renderSponsorTile()}
@@ -5642,7 +5805,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.5';
+  const APP_VERSION = '5.6';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
