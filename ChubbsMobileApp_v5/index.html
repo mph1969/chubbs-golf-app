@@ -105,6 +105,16 @@
     .throne-sub{margin-top:6px;font-size:10px;color:rgba(240,234,216,0.4);font-style:italic}
     .throne-you{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(255,215,0,0.2);font-size:11px;color:rgba(255,215,0,0.75)}
     .throne-you strong{color:#FFD700;font-family:'DM Mono',monospace;font-size:13px}
+    .throne-chart{margin-top:10px;display:flex;flex-direction:column;gap:4px}
+    .throne-row{display:flex;align-items:center;gap:8px;padding:6px 8px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,215,0,0.12);border-radius:8px}
+    .throne-row.rank-1{background:linear-gradient(90deg,rgba(255,215,0,0.16),rgba(255,215,0,0.04));border-color:rgba(255,215,0,0.4)}
+    .throne-row.anon{background:rgba(121,176,227,0.05);border-color:rgba(121,176,227,0.18)}
+    .throne-row .rk{font-family:'DM Mono',monospace;font-size:11px;font-weight:800;color:rgba(255,215,0,0.7);min-width:22px}
+    .throne-row.rank-1 .rk{color:#FFD700}
+    .throne-row .nm{flex:1;min-width:0;font-size:13px;font-weight:700;color:#f0ead8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .throne-row.anon .nm{color:#9ecbf0;font-style:italic}
+    .throne-row .ct{font-family:'DM Mono',monospace;font-size:13px;font-weight:900;color:#FFD700;min-width:28px;text-align:right}
+    .throne-row .tag{font-size:9px;font-weight:800;letter-spacing:.08em;color:rgba(240,234,216,0.5);text-transform:uppercase}
     /* Warning modal */
     .gate-warn-wrap{position:fixed;inset:0;z-index:9500;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,0.7);backdrop-filter:blur(3px)}
     .gate-warn-wrap.active{display:flex}
@@ -5784,6 +5794,9 @@ function honeypotSubscribe(){
   SYNC.db.ref('chubbs/presses').on('value', snap => {
     HONEYPOT.state.presses = snap.val() || {};
     if(state.ui.tab === 'leaderboard') renderLeaderboard();
+  }, err => {
+    console.warn('[Honeypot] presses read failed:', err && err.message);
+    showToast('Honeypot: Firebase read blocked — check rules', 'err', 4000);
   });
 }
 function honeypotRecordPress(){
@@ -5824,35 +5837,47 @@ function honeypotResetPresses(){
   });
 }
 
-// ── Throne card ─ UNKNOWN is disqualified from winning ────────────────────
+// ── Throne chart ─ ranked named pressers + Anonymous tally ────────────────
+// UNKNOWN bucket is still ineligible for the throne (#1 crown), but its
+// aggregate count is always shown so testers/observers can see their presses
+// landed even when no player context is attached.
 function renderThroneCard(){
   const p = HONEYPOT.state.presses || {};
   const myKey = HONEYPOT.state.playerKey || 'UNKNOWN';
   const myCount = (typeof p[myKey] === 'number') ? p[myKey] : 0;
-  const entries = Object.entries(p)
+  const named = Object.entries(p)
     .filter(([k, v]) => k !== 'UNKNOWN' && typeof v === 'number' && v > 0)
-    .sort((a, b) => b[1] - a[1]);
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
   const unknownCount = (typeof p.UNKNOWN === 'number' && p.UNKNOWN > 0) ? p.UNKNOWN : 0;
-  // Always surface the viewer's own count (when > 0) so the tracking is visible
-  // — useful during testing, and gives anonymous viewers confirmation their press landed.
-  const yourLine = (myCount > 0 && (entries.length === 0 || entries[0][0] !== myKey))
-    ? `<div class="throne-you">Your presses (${myKey}): <strong>${myCount}</strong></div>` : '';
-  if(!entries.length){
-    const unknownLine = unknownCount && myKey !== 'UNKNOWN' ? `<div class="throne-sub">+ ${unknownCount} anonymous · ineligible</div>` : '';
+  const rows = named.map(([nm, ct], i) => `
+    <div class="throne-row ${i===0?'rank-1':''}">
+      <div class="rk">#${i+1}</div>
+      <div class="nm">${escHtml(nm)}</div>
+      <div class="ct">${ct}</div>
+    </div>`).join('');
+  const anonRow = unknownCount > 0 ? `
+    <div class="throne-row anon">
+      <div class="rk">—</div>
+      <div class="nm">Anonymous <span class="tag">ineligible</span></div>
+      <div class="ct">${unknownCount}</div>
+    </div>` : '';
+  const yourLine = (myCount > 0 && myKey !== 'UNKNOWN' && (!named.length || named[0][0] !== myKey))
+    ? `<div class="throne-you">Your presses (${escHtml(myKey)}): <strong>${myCount}</strong></div>` : '';
+  const empty = !named.length && !unknownCount;
+  if(empty){
     return `<div class="throne-card throne-empty">
       <div class="throne-top">👑 MOST PRESSED</div>
       <div class="throne-name" style="font-size:13px;font-weight:600;color:var(--muted)">Nobody's been caught yet.</div>
-      ${unknownLine}
       ${yourLine}
     </div>`;
   }
-  const [name, count] = entries[0];
-  const unknownLine = unknownCount && myKey !== 'UNKNOWN' ? `<div class="throne-sub">+ ${unknownCount} anonymous · ineligible</div>` : '';
   return `<div class="throne-card">
     <div class="throne-top">👑 MOST PRESSED</div>
-    <div class="throne-name">${name}</div>
-    <div class="throne-count">${count} press${count===1?'':'es'}</div>
-    ${unknownLine}
+    <div class="throne-chart">
+      ${rows}
+      ${anonRow}
+    </div>
     ${yourLine}
   </div>`;
 }
@@ -6355,7 +6380,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.10';
+  const APP_VERSION = '5.11';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
