@@ -5153,7 +5153,6 @@ function renderDay1(){
   const hole = state.scramble.holes[state.scramble.hole];
   const totals = scrambleTotals();
   const minD = getMinDrives();
-  const impossible = totals.drives.map(c => Math.max(0, minD - c) > (18 - state.scramble.hole));
   const importedTeam = activeEventDay1Team();
   const drivePills = scramblePlayers.map((p, idx) => {
     const count = totals.drives[idx];
@@ -5166,13 +5165,7 @@ function renderDay1(){
         : 'background:#3d1a1a;color:#f55c5c;border:1px solid #6b2020';
     return `<span style="display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap;${pillColor}">${fmtName(p.name, idx)} ${count}/${minD}</span>`;
   }).join(' ');
-  const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedTeam ? (importedTeam.teamName || importedTeam.teamId || 'Team') : 'Not assigned'} · ${scramblePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedTeam, state.eventBundle)}</span><span class="small"> · Course · ${course.name}${course.detail ? ' · ' + course.detail : ''}</span><br/><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${drivePills}</div></div>` : '';
-  const summary = scramblePlayers.map((p, idx) => {
-    const count = totals.drives[idx];
-    const needed = Math.max(0, minD - count);
-    const cls = needed === 0 ? 'ok' : (impossible[idx] ? 'warn' : 'info');
-    return `<div class="status ${cls}"><strong>${fmtName(p.name, idx)}</strong><br>${count}/${minD} drives used · ${needed} still needed</div>`;
-  }).join('\n');
+  const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedTeam ? (importedTeam.teamName || importedTeam.teamId || 'Team') : 'Not assigned'} · ${scramblePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedTeam, state.eventBundle)}</span><span class="small"> · Course · ${course.name}</span><br/><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">${drivePills}</div></div>` : '';
 
   const driverButtons = scramblePlayers.map((p, idx) =>
     `<button class="driver-btn ${hole.driver===idx?'on':''}" onclick="setDriver(${idx})">${fmtName(p.name, idx)}${jacketDots(p.name)}${hole.driver===idx?' · selected':''}</button>`
@@ -5249,29 +5242,6 @@ function renderDay1(){
       })()}
     </div>
 
-    <details style="margin-bottom:0">
-      <summary style="list-style:none;cursor:pointer">
-        <div class="card" style="margin-bottom:0;display:flex;align-items:center;justify-content:space-between">
-          <div class="section-title" style="margin:0">Drive tracker</div>
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="display:flex;flex-wrap:wrap;gap:4px">${drivePills}</div>
-            <span class="small" style="color:var(--muted)">▸</span>
-          </div>
-        </div>
-      </summary>
-      <div class="card" style="border-top:none;border-radius:0 0 22px 22px;margin-top:-1px">
-        <div class="small" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:8px">
-          <span>Min <strong>${minD}</strong> drives each</span>
-          <span style="display:flex;align-items:center;gap:4px;font-size:11px">
-            <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.max(1,getMinDrives()-1);saveState();renderAll()">−</button>
-            <strong>${minD}</strong>
-            <button class="btn slim ghost" style="padding:2px 8px;font-size:12px" onclick="state.scramble.minDrives=Math.min(9,getMinDrives()+1);saveState();renderAll()">+</button>
-          </span>
-        </div>
-        ${summary}
-      </div>
-    </details>
-
     ${renderScrambleScorecard()}
 
     ${scrambleAllScored ? `
@@ -5338,7 +5308,7 @@ function renderDay2(){
     return playPos < 17 ? String(order[playPos + 1] + 1) : '✓';
   })();
   const importedGroup = activeEventDay2Group();
-  const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedGroup ? ((importedGroup.groupName || importedGroup.groupId || 'Group') + (importedGroup.teeTime ? ' · ' + importedGroup.teeTime : '')) : 'Not assigned'} · ${stablePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedGroup, state.eventBundle)}</span><span class="small"> · Course · ${course.name}${course.detail ? ' · ' + course.detail : ''}</span></div>` : '';
+  const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedGroup ? ((importedGroup.groupName || importedGroup.groupId || 'Group') + (importedGroup.teeTime ? ' · ' + importedGroup.teeTime : '')) : 'Not assigned'} · ${stablePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedGroup, state.eventBundle)}</span><span class="small"> · Course · ${course.name}</span></div>` : '';
 
   const playerCards = stablePlayers.map((p, idx) => {
     const gross = hole.gross[idx];
@@ -6380,7 +6350,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.11';
+  const APP_VERSION = '5.12';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
