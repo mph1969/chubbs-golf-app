@@ -1093,7 +1093,48 @@ function initSync(eventId){
     state.challengeWinners = data || {};
     renderAll();
   });
+  // Listen for per-group/team starting-hole overrides pushed by admin pre-tee-off
+  listen(`/events/${eventId}/startingHoles`, data => {
+    applyRemoteStartingHoles(data || {});
+  });
   SYNC._eventId = eventId;
+}
+// Apply admin-pushed starting holes to the bundle + this device's own round (if not yet scored)
+function applyRemoteStartingHoles(sh){
+  if(!hasImportedEvent()) return;
+  const teams  = sh.teams  || {};
+  const groups = sh.groups || {};
+  let changed = false;
+  (state.eventBundle.day1ScrambleTeams || []).forEach(t => {
+    const v = teams[t.teamId];
+    if(Number.isFinite(v) && v >= 1 && v <= 18 && v !== t.startingHole){
+      t.startingHole = v; changed = true;
+    }
+  });
+  (state.eventBundle.day2Groups || []).forEach(g => {
+    const v = groups[g.groupId];
+    if(Number.isFinite(v) && v >= 1 && v <= 18 && v !== g.startingHole){
+      g.startingHole = v; changed = true;
+    }
+  });
+  if(!changed) return;
+  // If this device is the affected team/group AND no scores yet, reflect it locally
+  const myTeam  = activeEventDay1Team();
+  const myGroup = activeEventDay2Group();
+  const scrambleHasScores  = state.scramble.holes.some(h => typeof h.gross === 'number');
+  const stablefordHasScores = state.stableford.holes.some(h => h.gross.some(g => typeof g === 'number'));
+  if(myTeam && Number.isFinite(myTeam.startingHole) && !scrambleHasScores){
+    const idx = Math.max(0, Math.min(17, myTeam.startingHole - 1));
+    state.scramble.startingHole = idx;
+    state.scramble.hole = idx;
+  }
+  if(myGroup && Number.isFinite(myGroup.startingHole) && !stablefordHasScores){
+    const idx = Math.max(0, Math.min(17, myGroup.startingHole - 1));
+    state.stableford.startingHole = idx;
+    state.stableford.hole = idx;
+  }
+  saveState();
+  renderAll();
 }
 // ── Auto-cleanup: delete events older than 90 days ──
 function cleanupOldEvents(){
@@ -3501,6 +3542,60 @@ function setStartingHole(day, holeNum){
   renderAll();
   if(idx > 0) showToast(`Starting on hole ${idx + 1}`, 'ok');
 }
+// Admin: bump any team's (scramble) or group's (stableford) starting hole.
+// Writes to bundle + Firebase node so every device picks it up live.
+function adminSetStartingHole(kind, lid, holeNum){
+  if(!hasImportedEvent()) return;
+  const n = Math.max(1, Math.min(18, parseInt(holeNum, 10) || 1));
+  const key = kind === 'team' ? 'day1ScrambleTeams' : 'day2Groups';
+  const idField = kind === 'team' ? 'teamId' : 'groupId';
+  const list = state.eventBundle[key] || [];
+  const entity = list.find(e => String(e[idField]) === String(lid));
+  if(!entity) return;
+  entity.startingHole = n;
+  // If this device happens to be the affected team/group AND no scores yet, reflect locally
+  const myTeam  = activeEventDay1Team();
+  const myGroup = activeEventDay2Group();
+  if(kind === 'team' && myTeam && String(myTeam.teamId) === String(lid)){
+    const scrambleHasScores = state.scramble.holes.some(h => typeof h.gross === 'number');
+    if(!scrambleHasScores){
+      state.scramble.startingHole = n - 1;
+      state.scramble.hole = n - 1;
+    }
+  }
+  if(kind === 'group' && myGroup && String(myGroup.groupId) === String(lid)){
+    const stablefordHasScores = state.stableford.holes.some(h => h.gross.some(g => typeof g === 'number'));
+    if(!stablefordHasScores){
+      state.stableford.startingHole = n - 1;
+      state.stableford.hole = n - 1;
+    }
+  }
+  saveState();
+  // Broadcast to all devices
+  if(SYNC.enabled && SYNC.db && SYNC.eventId){
+    const eid = SYNC.eventId;
+    const path = kind === 'team' ? `teams/${lid}` : `groups/${lid}`;
+    SYNC.db.ref(`/events/${eid}/startingHoles/${path}`).set(n).catch(()=>{});
+    // Also update the authoritative bundle so fresh imports get the new value
+    SYNC.db.ref(`/events/${eid}/bundle/${key}`).set(list).catch(()=>{});
+  }
+  pushToFirebase();
+  renderAll();
+  const label = entity.teamName || entity.groupName || lid;
+  showToast(`${label} → H${n}`, 'ok');
+}
+function adminBumpStartingHole(kind, lid, delta){
+  if(!hasImportedEvent()) return;
+  const key = kind === 'team' ? 'day1ScrambleTeams' : 'day2Groups';
+  const idField = kind === 'team' ? 'teamId' : 'groupId';
+  const entity = (state.eventBundle[key] || []).find(e => String(e[idField]) === String(lid));
+  if(!entity) return;
+  const cur = Number.isFinite(entity.startingHole) ? entity.startingHole : 1;
+  let next = cur + delta;
+  if(next < 1) next = 18;
+  if(next > 18) next = 1;
+  adminSetStartingHole(kind, lid, next);
+}
 function setTab(tab){ state.ui.tab = tab; saveState(); renderAll(); }
 
 function applyRosterName(slot, value){
@@ -4552,6 +4647,49 @@ function renderSetup(){
     ${renderRosterCard()}
     ${playerSection}`;
 
+  const startingHolesCard = imported ? (() => {
+    const teamRow = t => {
+      const sh = Number.isFinite(t.startingHole) ? t.startingHole : 1;
+      const scored = SYNC.remoteTeams && SYNC.remoteTeams[t.teamId] && Array.isArray(SYNC.remoteTeams[t.teamId].holes) && SYNC.remoteTeams[t.teamId].holes.some(h => typeof h.gross === 'number');
+      const lock = scored ? `<span class="small" style="color:var(--muted)">locked · scoring started</span>` : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+        <div style="flex:1;min-width:0"><strong>${escHtml(t.teamName || t.teamId)}</strong>${lock?'<br/>'+lock:''}</div>
+        <button class="btn slim ghost" ${scored?'disabled':''} onclick="adminBumpStartingHole('team','${t.teamId}',-1)">−</button>
+        <div style="font-family:'DM Mono',monospace;font-weight:900;min-width:36px;text-align:center">H${sh}</div>
+        <button class="btn slim ghost" ${scored?'disabled':''} onclick="adminBumpStartingHole('team','${t.teamId}',1)">+</button>
+      </div>`;
+    };
+    const groupRow = g => {
+      const sh = Number.isFinite(g.startingHole) ? g.startingHole : 1;
+      const scored = SYNC.remoteGroups && SYNC.remoteGroups[g.groupId] && Array.isArray(SYNC.remoteGroups[g.groupId].holes) && SYNC.remoteGroups[g.groupId].holes.some(h => Array.isArray(h.gross) && h.gross.some(v => typeof v === 'number'));
+      const lock = scored ? `<span class="small" style="color:var(--muted)">locked · scoring started</span>` : '';
+      const tt = g.teeTime ? ` · ${g.teeTime}` : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)">
+        <div style="flex:1;min-width:0"><strong>${escHtml(g.groupName || g.groupId)}</strong>${tt?'<span class="small">'+tt+'</span>':''}${lock?'<br/>'+lock:''}</div>
+        <button class="btn slim ghost" ${scored?'disabled':''} onclick="adminBumpStartingHole('group','${g.groupId}',-1)">−</button>
+        <div style="font-family:'DM Mono',monospace;font-weight:900;min-width:36px;text-align:center">H${sh}</div>
+        <button class="btn slim ghost" ${scored?'disabled':''} onclick="adminBumpStartingHole('group','${g.groupId}',1)">+</button>
+      </div>`;
+    };
+    const tRows = allTeams.length ? allTeams.map(teamRow).join('') : `<div class="empty-note tight">No scramble teams in bundle.</div>`;
+    const gRows = allGroups.length ? allGroups.map(groupRow).join('') : `<div class="empty-note tight">No stableford groups in bundle.</div>`;
+    return `
+    <div class="card">
+      <div class="section-title">⛳ Starting holes <span class="small" style="color:var(--muted);font-weight:400">· shotgun override</span></div>
+      <div class="small tight">Adjust just before tee-off — pushes live to every scoring device. Rows lock once a team/group posts its first score.</div>
+      <div class="grid-2 tight" style="margin-top:10px">
+        <div>
+          <div class="small" style="font-weight:800;margin-bottom:4px">Saturday scramble</div>
+          ${tRows}
+        </div>
+        <div>
+          <div class="small" style="font-weight:800;margin-bottom:4px">Sunday stableford</div>
+          ${gRows}
+        </div>
+      </div>
+    </div>`;
+  })() : '';
+
   const eventTab = `
     <div class="card">
       <div class="section-title">Weekend event file</div>
@@ -4572,6 +4710,8 @@ function renderSetup(){
       </div>
       ${importedBlock}
     </div>
+
+    ${startingHolesCard}
 
     <div class="card">
       <div class="section-title">Event details</div>
@@ -6215,7 +6355,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.9';
+  const APP_VERSION = '5.10';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
