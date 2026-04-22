@@ -467,7 +467,7 @@
       </div>
       <button id="master-btn" onclick="toggleMasterMode()" title="Admin / master view" style="flex-shrink:0;background:transparent;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:6px;border-radius:10px;line-height:1;opacity:0.55;transition:opacity 0.2s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0.55'">⚙️</button>
       <div id="hole-chip-hero" style="display:none"></div>
-      <div id="sync-badge" class="sync-badge" style="display:none"></div>
+      <div id="sync-badge" class="sync-badge" style="display:none;cursor:pointer" title="Tap to reconnect" onclick="forceReconnect()"></div>
     </header>
 
     <div id="event-banner" style="display:none;background:linear-gradient(135deg,rgba(201,168,76,0.08),rgba(29,56,40,0.4));border-bottom:1px solid rgba(201,168,76,0.2);padding:8px 16px;text-align:center">
@@ -1108,6 +1108,7 @@ function initSync(eventId){
     applyRemoteStartingHoles(data || {});
   });
   SYNC._eventId = eventId;
+  subscribeConnectionStatus();
 }
 // Apply admin-pushed starting holes to the bundle + this device's own round (if not yet scored)
 function applyRemoteStartingHoles(sh){
@@ -1274,17 +1275,67 @@ function updateSyncBadge(){
   if(!el) return;
   if(!SYNC.enabled){ el.style.display='none'; return; }
   el.style.display = 'flex';
-  if(SYNC.status==='live'){
+  // Prefer Firebase's own connected flag — it's the source of truth
+  const live = SYNC._fbConnected === true || SYNC.status==='live';
+  const err  = SYNC._fbConnected === false || SYNC.status==='err';
+  if(live && SYNC.status!=='err'){
     el.className = 'sync-badge live';
     el.innerHTML = '<span class="sync-dot"></span>LIVE';
-  } else if(SYNC.status==='err'){
+  } else if(err){
     el.className = 'sync-badge err';
-    el.innerHTML = '<span class="sync-dot"></span>OFFLINE';
+    el.innerHTML = '<span class="sync-dot"></span>TAP TO RECONNECT';
   } else {
     el.className = 'sync-badge';
     el.innerHTML = '<span class="sync-dot"></span>…';
   }
 }
+// ── Reconnect hardening ──
+// Mobile OSes (especially iOS) kill WebSockets when the PWA is backgrounded.
+// When the user returns, we force re-subscription and flush any queued state.
+function forceReconnect(){
+  if(!SYNC.enabled || !SYNC.db){ showToast('Firebase unavailable', 'err'); return; }
+  const evId = hasImportedEvent() && state.eventBundle.event && state.eventBundle.event.eventId;
+  if(!evId){ showToast('No event loaded', 'info'); return; }
+  showToast('🔄 Reconnecting…', 'info', 1500);
+  // Tear down and rebuild listeners — initSync short-circuits otherwise.
+  syncTeardown();
+  SYNC.eventId = null;
+  initSync(evId);
+  pushToFirebase(); // flush any pending local state
+  subscribeConnectionStatus();
+}
+function subscribeConnectionStatus(){
+  if(!SYNC.enabled || !SYNC.db || SYNC._connSub) return;
+  SYNC._connSub = true;
+  SYNC.db.ref('.info/connected').on('value', snap => {
+    SYNC._fbConnected = !!snap.val();
+    updateSyncBadge();
+    if(SYNC._fbConnected){
+      // Connection just came back — flush anything queued locally
+      try { pushToFirebase(); } catch(e){}
+    }
+  });
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState !== 'visible') return;
+  if(!SYNC.enabled) return;
+  const evId = hasImportedEvent() && state.eventBundle.event && state.eventBundle.event.eventId;
+  if(!evId) return;
+  // Quietly re-verify listeners on every foreground return
+  forceReconnect();
+});
+window.addEventListener('online', () => {
+  if(!SYNC.enabled) return;
+  const evId = hasImportedEvent() && state.eventBundle.event && state.eventBundle.event.eventId;
+  if(evId) forceReconnect();
+});
+window.addEventListener('pageshow', e => {
+  // bfcache restores (Safari/Firefox back-button) — behave like a foreground return
+  if(e.persisted){
+    const evId = hasImportedEvent() && state.eventBundle.event && state.eventBundle.event.eventId;
+    if(evId && SYNC.enabled) forceReconnect();
+  }
+});
 function copyLiveViewLink(){
   const eventId = hasImportedEvent() && state.eventBundle.event && state.eventBundle.event.eventId;
   if(!eventId){ showToast('Import an event first.','warn'); return; }
@@ -6301,7 +6352,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.13';
+  const APP_VERSION = '5.14';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
