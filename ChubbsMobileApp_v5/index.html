@@ -3757,10 +3757,19 @@ function courseLocationInfo(course, lang){
     : (course.enAddress || [course.city,'China'].filter(Boolean).join(', '));
   return {lang:useLang, name, address};
 }
-function courseMapUrl(course, lang){
+function courseMapUrl(course, lang, service){
   const loc = courseLocationInfo(course, lang);
   const query = `${loc.name} ${loc.address}`.trim();
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+  const enc = encodeURIComponent(query);
+  switch(service){
+    case 'amap':
+      return `https://uri.amap.com/search?keyword=${enc}&src=chubbs&callnative=1`;
+    case 'baidu':
+      return `https://api.map.baidu.com/geocoder?address=${enc}&output=html&src=chubbs`;
+    case 'google':
+    default:
+      return `https://www.google.com/maps/search/?api=1&query=${enc}`;
+  }
 }
 function copyText(text){
   if(navigator.clipboard && window.isSecureContext){
@@ -4395,7 +4404,9 @@ function renderSetup(){
   const complete = courseComplete(editorCourse);
   const locationLang = currentLocationLang();
   const locationInfo = courseLocationInfo(editorCourse, locationLang);
-  const mapUrl = courseMapUrl(editorCourse, locationLang);
+  const mapUrlAmap = courseMapUrl(editorCourse, locationLang, 'amap');
+  const mapUrlBaidu = courseMapUrl(editorCourse, locationLang, 'baidu');
+  const mapUrlGoogle = courseMapUrl(editorCourse, locationLang, 'google');
 
   const courseOptionsFor = selectedId => COURSE_GROUPS.map(g =>
     `<optgroup label="${g.label}">${g.ids.map(id => {
@@ -4567,8 +4578,6 @@ function renderSetup(){
 
     const c1 = activeCourse('day1');
     const c2 = activeCourse('day2');
-    const mapUrl1 = courseMapUrl(c1, currentLocationLang());
-    const mapUrl2 = courseMapUrl(c2, currentLocationLang());
     const courseCard = (course, dayKey, dateLabel, timeStr, lineupLabel, players, scorer) => `
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
@@ -4582,8 +4591,9 @@ function renderSetup(){
         <div class="small" style="color:var(--muted);margin-bottom:8px">${players}</div>
         <div class="small" style="color:var(--muted);margin-bottom:10px">Scorer · ${scorer}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <a class="btn blue slim" href="${courseMapUrl(course,'zh')}" target="_blank" rel="noopener">🗺 地图</a>
-          <a class="btn blue slim" href="${courseMapUrl(course,'en')}" target="_blank" rel="noopener">🗺 Map</a>
+          <a class="btn gold slim" href="${courseMapUrl(course,'zh','amap')}" target="_blank" rel="noopener">🗺 高德 AMap</a>
+          <a class="btn ghost slim" href="${courseMapUrl(course,'zh','baidu')}" target="_blank" rel="noopener">百度</a>
+          <a class="btn ghost slim" href="${courseMapUrl(course,'en','google')}" target="_blank" rel="noopener">Google</a>
           <button class="btn ghost slim" onclick="copyCourseAddress('zh','${dayKey}')">Copy CN address</button>
           <button class="btn ghost slim" onclick="copyCourseAddress('en','${dayKey}')">Copy EN address</button>
         </div>
@@ -4601,8 +4611,9 @@ function renderSetup(){
             <span class="small">${c1.club||''}${c1.city?' · '+c1.city:''}</span>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <a class="btn blue slim" href="${courseMapUrl(c1,'zh')}" target="_blank" rel="noopener">🗺 地图</a>
-            <a class="btn blue slim" href="${courseMapUrl(c1,'en')}" target="_blank" rel="noopener">🗺 Map</a>
+            <a class="btn gold slim" href="${courseMapUrl(c1,'zh','amap')}" target="_blank" rel="noopener">🗺 高德 AMap</a>
+            <a class="btn ghost slim" href="${courseMapUrl(c1,'zh','baidu')}" target="_blank" rel="noopener">百度</a>
+            <a class="btn ghost slim" href="${courseMapUrl(c1,'en','google')}" target="_blank" rel="noopener">Google</a>
             <button class="btn ghost slim" onclick="copyCourseAddress('zh','day1')">Copy CN address</button>
             <button class="btn ghost slim" onclick="copyCourseAddress('en','day1')">Copy EN address</button>
           </div>
@@ -4849,9 +4860,11 @@ function renderSetup(){
         </div>
         <div>
           <label>Navigation</label>
-          <div class="location-actions">
+          <div class="location-actions" style="flex-wrap:wrap;gap:6px">
+            <a class="btn gold slim" href="${mapUrlAmap}" target="_blank" rel="noopener">高德 AMap</a>
+            <a class="btn ghost slim" href="${mapUrlBaidu}" target="_blank" rel="noopener">百度</a>
+            <a class="btn ghost slim" href="${mapUrlGoogle}" target="_blank" rel="noopener">Google</a>
             <button class="btn slim" onclick="copyCourseAddress('zh','${editorTarget}')">Copy CN address</button>
-            <a class="btn blue slim" href="${mapUrl}" target="_blank" rel="noopener">Map</a>
           </div>
         </div>
       </div>
@@ -4956,6 +4969,28 @@ function renderSetup(){
         <button class="btn slim ${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'gold':'ghost'}" onclick="if(typeof toggleLiveAlerts==='function')toggleLiveAlerts();renderAll();">${typeof areLiveAlertsOn==='function'&&areLiveAlertsOn()?'Turn off':'Turn on'}</button>
       </div>
       <div class="inline-note" style="margin-top:8px">Only fires for other groups (not your own). Max 1 alert per 30 seconds. Per-device setting.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">📡 Force Reload Broadcast</div>
+      <div class="small tight">Push a reload prompt to every connected device immediately. Use after deploying an in-round fix when you don't want to wait for SW polling.</div>
+      <div class="toolbar tight" style="margin-top:10px">
+        <button class="btn gold slim" onclick="(function(){var m=prompt('Optional message for players:','New build pushed — reload to update');if(m===null)return;window.broadcastReload(m);})()">Broadcast reload to all</button>
+      </div>
+      <div class="inline-note" style="margin-top:8px">Polling also runs every 60s on each device while the app is visible — this is just the immediate kick.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title">🐊 Honeypot Leaderboard <span style="color:${honeypotIsAdmin()?'var(--gold2)':'var(--muted)'}">· ${honeypotIsAdmin()?'ADMIN UNLOCKED':'GATED'}</span></div>
+      <div class="small tight">When the honeypot is active, regular players see the gator gate on the Leaderboard tab. Admin unlock lets you toggle published state and reset press counts from the Leaderboard tab toolbar.</div>
+      <div class="toolbar tight" style="margin-top:10px">
+        ${honeypotIsAdmin()
+          ? `<button class="btn slim" onclick="honeypotDisableAdmin()">Lock honeypot admin</button>
+             <button class="btn gold slim" onclick="honeypotTogglePublished()">${HONEYPOT.state.published?'🔒 Gate leaderboard':'✅ Publish leaderboard'}</button>
+             <button class="btn slim" style="color:#ffb5ae" onclick="honeypotResetPresses()">🧹 Reset presses</button>`
+          : `<button class="btn gold slim" onclick="honeypotEnableAdmin()">🔓 Unlock honeypot admin</button>`}
+      </div>
+      <div class="inline-note" style="margin-top:8px">Per-device flag. Re-lock when you hand the phone to a player.</div>
     </div>
 
     ${renderChallengeWinnersAdmin()}`;
@@ -5263,7 +5298,7 @@ function renderDay1(){
                           : `<div class="val empty needs-entry" style="font-size:32px;min-width:60px">—</div>`)}
             <button onclick="stepScore('scramble',0,1)" style="font-size:20px;padding:12px 16px">+</button>
           </div>
-          ${typeof hole.gross==='number' ? `<button class="stepper-clr" onclick="clearScore('scramble')" title="Clear score" style="font-size:16px">✕</button>` : ''}
+          <button class="stepper-clr" onclick="clearScore('scramble')" title="Clear score" style="font-size:16px;visibility:${typeof hole.gross==='number'?'visible':'hidden'}" aria-hidden="${typeof hole.gross==='number'?'false':'true'}">✕</button>
         </div>
         ${typeof hole.gross==='number' && typeof meta.par==='number' ? `<div style="text-align:center;margin-top:6px;font-size:13px;font-weight:700;color:${hole.gross-meta.par<0?'#a5f0c5':hole.gross-meta.par>0?'#ffb5ae':'var(--gold2)'}">vs par: ${fmtToPar(hole.gross - meta.par)}</div>` : `<div style="text-align:center;margin-top:6px;font-size:11px;color:var(--muted)">Tap the number to enter par</div>`}
       </div>
@@ -5302,18 +5337,6 @@ function renderDay1(){
     </div>` : ''}
   `;
 }
-
-function quickPuttButtons(idx){
-  return `
-    <div class="pills tight">
-      <button class="btn slim" onclick="setExact('stableford',${idx},0,'putts')">0</button>
-      <button class="btn slim" onclick="setExact('stableford',${idx},1,'putts')">1</button>
-      <button class="btn slim" onclick="setExact('stableford',${idx},2,'putts')">2</button>
-      <button class="btn slim warn" onclick="setExact('stableford',${idx},3,'putts')">3</button>
-      <button class="btn slim warn" onclick="setExact('stableford',${idx},4,'putts')">4+</button>
-    </div>`;
-}
-
 
 function renderPokerSetupCard(){
   const on = state.options.threePuttPoker;
@@ -5384,9 +5407,8 @@ function renderDay2(){
              <div class="val ${hasPutts ? 'entered' : 'empty'+(hasGross&&!hasPutts?' needs-putts':'')}">${hasPutts ? (putts >= 4 ? '4+' : putts) : '—'}</div>
              <button onclick="stepScore('stableford',${idx},1,'putts')">+</button>
            </div>
-           ${hasPutts ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
-         </div>
-         ${quickPuttButtons(idx)}`
+           <button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear" style="visibility:${hasPutts?'visible':'hidden'}" aria-hidden="${hasPutts?'false':'true'}">✕</button>
+         </div>`
       : '';
     const fullyScored = hasGross && (!needsPutts || hasPutts);
     const partialScored = hasGross && needsPutts && !hasPutts;
@@ -5410,7 +5432,7 @@ function renderDay2(){
                           : `<div class="val empty needs-entry">—</div>`)}
             <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
           </div>
-          ${hasGross ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear">✕</button>` : ''}
+          <button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear" style="visibility:${hasGross?'visible':'hidden'}" aria-hidden="${hasGross?'false':'true'}">✕</button>
           ${typeof gross==='number' && typeof meta.par==='number' ? `<span style="font-size:12px;font-weight:700;color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'};min-width:50px;text-align:right">${fmtToPar(gross - meta.par)}</span>` : ''}
         </div>
         ${needsPutts ? `<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--line)">
@@ -5420,9 +5442,8 @@ function renderDay2(){
             <div class="val ${hasPutts ? 'entered' : 'empty'}">${hasPutts ? (putts >= 4 ? '4+' : putts) : '—'}</div>
             <button onclick="stepScore('stableford',${idx},1,'putts')">+</button>
           </div>
-          ${hasPutts ? `<button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear">✕</button>` : ''}
-        </div>
-        ${quickPuttButtons(idx)}` : ''}
+          <button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear" style="visibility:${hasPutts?'visible':'hidden'}" aria-hidden="${hasPutts?'false':'true'}">✕</button>
+        </div>` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:11px;color:var(--muted)">
           <span>${hasGross ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${shots?' · +'+shots+' shots':''}` : ''}</span>
           <button class="btn slim" style="font-size:11px;padding:6px 12px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter double-par (max allowed score per Chubbs rules) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
@@ -5854,6 +5875,17 @@ function honeypotResetPresses(){
       .catch(e => showToast('Reset failed: ' + e.message, 'err'));
   });
 }
+function honeypotEnableAdmin(){
+  try { localStorage.setItem(HONEYPOT.ADMIN_FLAG_KEY, '1'); } catch(e){}
+  showToast('🐊 Honeypot admin unlocked', 'ok');
+  honeypotSubscribe();
+  if(typeof renderAll === 'function') renderAll();
+}
+function honeypotDisableAdmin(){
+  honeypotExitAdmin();
+  showToast('Honeypot admin off', 'info');
+  if(typeof renderAll === 'function') renderAll();
+}
 
 // ── Gate render ────────────────────────────────────────────────────────────
 function renderLeaderboardGate(){
@@ -6200,14 +6232,25 @@ function renderLeaderboard(){
   // ── 3-PUTT POKER SECTION (last, collapsed until putts) ───────────
   const poker = pokerSummary();
   const hasPokerActivity = state.options.threePuttPoker && poker.pot > (poker.players.length * state.options.ante);
+  const stablePlayersForPoker = currentPlayers('stableford');
+  const stablefordRoundComplete = stablePlayersForPoker.length > 0 && state.stableford.holes.every(h => stablePlayersForPoker.every((_, i) => typeof h.gross[i] === 'number' && (!state.options.threePuttPoker || typeof h.putts[i] === 'number')));
   const pokerSection = !state.options.threePuttPoker ? '' : (() => {
+    const dealReady = state.options.pokerMode === 'digital' && !state.poker.digitalDeal;
+    const showAutoPrompt = stablefordRoundComplete && hasPokerActivity && dealReady && isCurrentPlayerScorer('stableford');
+    const promptBanner = showAutoPrompt
+      ? `<div class="card" style="margin-bottom:8px;border:2px solid var(--gold2);background:linear-gradient(135deg,rgba(214,176,90,0.12),rgba(42,163,106,0.06))">
+           <div class="section-title" style="margin:0 0 6px 0">🃏 Round complete — deal the cards</div>
+           <div class="small tight" style="margin-bottom:8px">All putts are in. Hit deal to reveal hands and the poker winner.</div>
+           <button class="btn gold full" style="font-size:14px;padding:12px" onclick="dealPoker()">Deal digital cards now</button>
+         </div>`
+      : '';
     if(!hasPokerActivity){
-      return `<details style="margin-bottom:12px">
+      return `${promptBanner}<details style="margin-bottom:12px"${stablefordRoundComplete?' open':''}>
         <summary style="list-style:none;cursor:pointer">
           <div class="card" style="margin-bottom:0">
             <div style="display:flex;align-items:center;justify-content:space-between">
               <div class="section-title" style="margin:0">3-putt poker</div>
-              <span class="small" style="color:var(--muted)">No putts yet ▸</span>
+              <span class="small" style="color:var(--muted)">${stablefordRoundComplete?'Round complete ▾':'No putts yet ▸'}</span>
             </div>
             <div class="small" style="color:var(--muted);margin-top:4px">Pot starts at · RMB ${poker.pot} · ${poker.players.length} players</div>
           </div>
@@ -6215,7 +6258,7 @@ function renderLeaderboard(){
         ${renderPokerDeal()}
       </details>`;
     }
-    return renderPokerDeal();
+    return `${promptBanner}${renderPokerDeal()}`;
   })();
 
   document.getElementById('leaderboard').innerHTML = `
@@ -6352,7 +6395,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.14';
+  const APP_VERSION = '5.15';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
@@ -6604,7 +6647,9 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
 // ── Service Worker: registration + update prompt ──
 (function(){
   if(!('serviceWorker' in navigator)) return;
+  let regRef = null;
   navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg => {
+    regRef = reg;
     reg.addEventListener('updatefound', () => {
       const newSW = reg.installing;
       newSW.addEventListener('statechange', () => {
@@ -6613,6 +6658,42 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
         }
       });
     });
+    // Aggressive update polling — checks for new SW every 60s while the tab is visible.
+    // Handles phones that stay in foreground all round and never trigger a manual reload.
+    setInterval(() => {
+      if(document.visibilityState === 'visible'){
+        try { reg.update(); } catch(e){}
+      }
+    }, 60000);
+    // Also check when the tab regains focus / visibility
+    document.addEventListener('visibilitychange', () => {
+      if(document.visibilityState === 'visible'){ try { reg.update(); } catch(e){} }
+    });
+    window.addEventListener('focus', () => { try { reg.update(); } catch(e){} });
+    // Firebase-driven force-reload: admin can flip /chubbs/forceReload to push the
+    // banner to every connected device immediately (no need to wait for SW poll).
+    const subscribeForceReload = () => {
+      if(!window.SYNC || !SYNC.db) { setTimeout(subscribeForceReload, 1500); return; }
+      try {
+        SYNC.db.ref('chubbs/forceReload').on('value', snap => {
+          const v = snap.val();
+          if(!v || !v.ts) return;
+          const seen = Number(localStorage.getItem('chubbs_force_reload_ts') || 0);
+          if(Number(v.ts) > seen){
+            try { localStorage.setItem('chubbs_force_reload_ts', String(v.ts)); } catch(e){}
+            // Trigger SW update; if a new version exists the banner appears,
+            // otherwise show a soft prompt anyway.
+            try { reg.update(); } catch(e){}
+            setTimeout(() => {
+              if(!document.querySelector('[data-sw-banner="1"]')){
+                showSoftReload(v.message || 'Latest version available');
+              }
+            }, 2000);
+          }
+        });
+      } catch(e){ console.warn('[forceReload sub]', e); }
+    };
+    subscribeForceReload();
   }).catch(err => console.warn('SW registration failed:', err));
 
   // If the controller changes (new SW took over), reload to get fresh code
@@ -6622,7 +6703,9 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
   });
 
   function showUpdateBanner(waitingSW){
+    if(document.querySelector('[data-sw-banner="1"]')) return;
     const bar = document.createElement('div');
+    bar.dataset.swBanner = '1';
     bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#1a3d2b,#0f2a1d);border-bottom:2px solid var(--gold,#d6b05a);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;animation:toastIn 0.22s ease';
     bar.innerHTML = `
       <span style="font-size:13px;font-weight:700;color:#f4efe2">⛳ New version available</span>
@@ -6637,6 +6720,28 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
     };
     document.getElementById('sw-dismiss-btn').onclick = () => bar.remove();
   }
+  function showSoftReload(msg){
+    if(document.querySelector('[data-sw-banner="1"]')) return;
+    const bar = document.createElement('div');
+    bar.dataset.swBanner = '1';
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:linear-gradient(90deg,#1a3d2b,#0f2a1d);border-bottom:2px solid var(--gold,#d6b05a);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;animation:toastIn 0.22s ease';
+    bar.innerHTML = `
+      <span style="font-size:13px;font-weight:700;color:#f4efe2">⛳ ${msg}</span>
+      <div style="display:flex;gap:8px">
+        <button id="sw-soft-reload-btn" style="padding:7px 14px;border-radius:10px;border:none;background:var(--gold2,#f2dd97);color:#251800;font-size:12px;font-weight:800;cursor:pointer">Reload</button>
+        <button id="sw-soft-dismiss-btn" style="padding:7px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:#a8b8ad;font-size:12px;cursor:pointer">Later</button>
+      </div>`;
+    document.body.appendChild(bar);
+    document.getElementById('sw-soft-reload-btn').onclick = () => window.location.reload();
+    document.getElementById('sw-soft-dismiss-btn').onclick = () => bar.remove();
+  }
+  // Expose for admin: window.broadcastReload('optional msg')
+  window.broadcastReload = function(message){
+    if(!window.SYNC || !SYNC.db){ alert('Firebase offline'); return; }
+    SYNC.db.ref('chubbs/forceReload').set({ts: Date.now(), message: message || 'New build pushed — reload to update'})
+      .then(() => { try{ showToast && showToast('Reload broadcast sent', 'ok'); }catch(e){} })
+      .catch(e => alert('Broadcast failed: ' + e.message));
+  };
 })();
 
 // ── Rotating tagline ──
