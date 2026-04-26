@@ -2385,6 +2385,13 @@ function _doApplyBundle(bundle, requestedPlayerId){
   const day1Team = normalized.day1ScrambleTeams.find(t => Array.isArray(t.playerIds) && t.playerIds.includes(selectedPlayerId)) || normalized.day1ScrambleTeams[0] || null;
   const day2Group = normalized.day2Groups.find(g => Array.isArray(g.playerIds) && g.playerIds.includes(selectedPlayerId)) || normalized.day2Groups[0] || null;
 
+  // Reset event-scoped challenge winners — Firebase listener will repopulate
+  // from /events/{newEventId}/challengeWinners if any exist.
+  const incomingEventId = (normalized.event && normalized.event.eventId) || null;
+  const previousEventId = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId) || null;
+  if(incomingEventId !== previousEventId){
+    state.challengeWinners = {};
+  }
   state.eventBundle = normalized;
   state.eventPlayerId = String(selectedPlayerId || '');
   state.day1TeamId = day1Team ? String(day1Team.teamId || '') : '';
@@ -2804,12 +2811,11 @@ function jacketDots(name){
   if(gold) badges += `<span title="${gold} Gold Jacket${gold>1?'s':''}" style="font-size:11px;margin-left:2px">${'🧥'.repeat(Math.min(gold,4))}</span>`;
   if(clown) badges += `<span title="${clown} Clown Jacket${clown>1?'s':''}" style="font-size:11px;margin-left:2px">${'🤡'.repeat(Math.min(clown,3))}</span>`;
   // Event challenge winner badges (temporary — only this event)
-  const w = getChallengeWinners();
   const nameUpper = (name||'').toUpperCase();
   const allChallenges = [...(state.eventBundle.day1Challenges||[]).map(c=>({...c,dk:'day1'})), ...(state.eventBundle.day2Challenges||[]).map(c=>({...c,dk:'day2'}))];
   allChallenges.forEach(ch => {
-    const winner = (w[ch.dk+'_'+ch.id]||'').toUpperCase();
-    if(winner && winner === nameUpper){
+    const winners = getChallengeWinnerList(ch.dk, ch.id).map(s => (s||'').toUpperCase());
+    if(winners.length && winners.includes(nameUpper)){
       const icon = CHALLENGE_ICONS[ch.id]||'🏆';
       badges += `<span title="${ch.name} winner" style="font-size:11px;margin-left:2px">${icon}</span>`;
     }
@@ -3049,18 +3055,53 @@ function challengeBadgeHtml(holeIdx, day){
   return chs.map(ch=>`<span style="display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:12px;background:rgba(214,176,90,0.15);border:1px solid rgba(214,176,90,0.3);font-size:10px;font-weight:700;color:var(--gold2);margin-left:4px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span>`).join('');
 }
 // ── Challenge Winners ──
+// Some challenges (Buddy Balls) award multiple winners in one shot.
+// Storage is a string OR an array of strings. Always normalize via getChallengeWinnerList().
+const CHALLENGE_WINNER_SLOTS = { buddyballs: 2 };
+function challengeWinnerSlots(challengeId){
+  return CHALLENGE_WINNER_SLOTS[challengeId] || 1;
+}
 function getChallengeWinners(){
   return state.challengeWinners || {};
 }
-function setChallengeWinner(dayKey, challengeId, winner){
-  if(!state.challengeWinners) state.challengeWinners={};
-  state.challengeWinners[dayKey+'_'+challengeId]=winner;
+function getChallengeWinnerList(dayKey, challengeId){
+  const v = (state.challengeWinners || {})[dayKey + '_' + challengeId];
+  if(!v) return [];
+  if(Array.isArray(v)) return v.filter(Boolean);
+  return [v];
+}
+function eventPlayerOptions(){
+  if(!hasImportedEvent() || !state.eventBundle || !Array.isArray(state.eventBundle.players)) return [];
+  return state.eventBundle.players
+    .map(p => (p.displayName || p.fullName || p.playerId || '').trim())
+    .filter(Boolean)
+    .sort((a,b) => a.localeCompare(b));
+}
+function pushChallengeWinners(){
   saveState();
-  // Push to Firebase if synced
-  if(SYNC.enabled&&SYNC.db&&SYNC._eventId){
+  if(SYNC.enabled && SYNC.db && SYNC._eventId){
     SYNC.db.ref(`/events/${SYNC._eventId}/challengeWinners`).set(state.challengeWinners).catch(()=>{});
   }
   renderAll();
+}
+function setChallengeWinnerSlot(dayKey, challengeId, slotIdx, winner){
+  if(!state.challengeWinners) state.challengeWinners = {};
+  const key = dayKey + '_' + challengeId;
+  const slots = challengeWinnerSlots(challengeId);
+  if(slots <= 1){
+    state.challengeWinners[key] = winner || '';
+  } else {
+    const existing = state.challengeWinners[key];
+    const arr = Array.isArray(existing) ? existing.slice() : (existing ? [existing] : []);
+    while(arr.length < slots) arr.push('');
+    arr[slotIdx] = winner || '';
+    state.challengeWinners[key] = arr.slice(0, slots);
+  }
+  pushChallengeWinners();
+}
+// Back-compat shim — used by older code paths / pasted state
+function setChallengeWinner(dayKey, challengeId, winner){
+  setChallengeWinnerSlot(dayKey, challengeId, 0, winner);
 }
 function setMoneyHolePot(val){
   if(!state.challengeWinners) state.challengeWinners={};
@@ -3077,21 +3118,42 @@ function renderChallengeWinnersAdmin(){
   if(!d1ch.length&&!d2ch.length) return '';
   const w=getChallengeWinners();
   const currency=(state.eventBundle.event&&state.eventBundle.event.currency)||'RMB';
+  const playerNames = eventPlayerOptions();
+  const renderWinnerRow = (ch, dayKey) => {
+    const slots = challengeWinnerSlots(ch.id);
+    const list = getChallengeWinnerList(dayKey, ch.id);
+    const slotInputs = [];
+    for(let i=0;i<slots;i++){
+      const val = list[i] || '';
+      const opts = ['<option value="">— select winner —</option>']
+        .concat(playerNames.map(n => `<option value="${n.replace(/"/g,'&quot;')}"${(val||'').toUpperCase()===n.toUpperCase()?' selected':''}>${n}</option>`))
+        .join('');
+      slotInputs.push(`<select onchange="setChallengeWinnerSlot('${dayKey}','${ch.id}',${i},this.value)" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:#0b1b14;color:var(--text)">${opts}</select>`);
+    }
+    const slotLabel = slots > 1 ? `<span style="font-size:9px;color:var(--muted);margin-top:4px">${slots} winners</span>` : '';
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--line)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:${slots>1?'6px':'0'}">
+        <span style="font-size:12px;min-width:100px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span>
+        <span style="font-size:10px;color:var(--muted)">${ch.hole}</span>
+        ${slots===1 ? slotInputs[0] : ''}
+        ${slotLabel}
+      </div>
+      ${slots>1 ? `<div style="display:flex;flex-direction:column;gap:6px">${slotInputs.join('')}</div>` : ''}
+    </div>`;
+  };
   let html='<div class="card"><div class="section-title">🏆 Challenge Winners</div><div class="small tight">Assign winners as challenges are decided. Results show on the leaderboard for all players.</div>';
+  if(!playerNames.length){
+    html+=`<div class="status warn tight" style="margin-top:8px">No event roster loaded — import an event bundle to enable the winner picker.</div>`;
+  }
   if(d1ch.length){
     html+='<div style="font-size:11px;font-weight:800;color:var(--gold2);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.08em">Scramble</div>';
-    d1ch.forEach(ch=>{
-      const val=w['day1_'+ch.id]||'';
-      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12px;min-width:100px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span><span style="font-size:10px;color:var(--muted)">${ch.hole}</span><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="Winner" onchange="setChallengeWinner('day1','${ch.id}',this.value)" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:#0b1b14;color:var(--text)"/></div>`;
-    });
+    d1ch.forEach(ch=>{ html += renderWinnerRow(ch, 'day1'); });
   }
   if(d2ch.length){
     html+='<div style="font-size:11px;font-weight:800;color:var(--gold2);margin:12px 0 6px;text-transform:uppercase;letter-spacing:.08em">Stableford</div>';
     d2ch.forEach(ch=>{
-      const val=w['day2_'+ch.id]||'';
-      const isMoneyHole=ch.id==='moneyhole';
-      html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)"><span style="font-size:12px;min-width:100px">${CHALLENGE_ICONS[ch.id]||'🏆'} ${ch.name}</span><span style="font-size:10px;color:var(--muted)">${ch.hole}</span><input type="text" value="${val.replace(/"/g,'&quot;')}" placeholder="Winner" onchange="setChallengeWinner('day2','${ch.id}',this.value)" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:#0b1b14;color:var(--text)"/></div>`;
-      if(isMoneyHole){
+      html += renderWinnerRow(ch, 'day2');
+      if(ch.id==='moneyhole'){
         const pot=w._moneyHolePot||'';
         html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0"><span style="font-size:10px;color:var(--muted);min-width:100px">💰 Money Hole Pot</span><input type="number" value="${pot}" placeholder="Total pot (${currency})" onchange="setMoneyHolePot(this.value)" style="flex:1;padding:8px;font-size:12px;border-radius:8px;border:1px solid var(--line);background:#0b1b14;color:var(--text)"/><span style="font-size:11px;color:var(--muted)">${currency}</span></div>`;
       }
@@ -3111,15 +3173,17 @@ function renderChallengesCard(){
   const hasD2Scores=state.stableford.holes.some(h=>h.gross&&h.gross.some(g=>typeof g==='number'));
   if(!hasD1Scores&&!hasD2Scores) return ''; // no scores yet — don't show
   // Check if winners are entered per day
-  const d1HasWinners=d1ch.some(ch=>w['day1_'+ch.id]);
-  const d2HasWinners=d2ch.some(ch=>w['day2_'+ch.id]);
-  const anyWinners=d1HasWinners||d2HasWinners;
+  const dayHasWinners = (chs, dayKey) => chs.some(ch => getChallengeWinnerList(dayKey, ch.id).length > 0);
+  const d1HasWinners = dayHasWinners(d1ch, 'day1');
+  const d2HasWinners = dayHasWinners(d2ch, 'day2');
+  const anyWinners = d1HasWinners || d2HasWinners;
   function renderList(chs,dayKey){
     return chs.map(ch=>{
-      const winner=w[dayKey+'_'+ch.id];
-      const icon=CHALLENGE_ICONS[ch.id]||'🏆';
-      const potLine=ch.id==='moneyhole'&&w._moneyHolePot?` · <span style="color:var(--gold2)">${w._moneyHolePot} ${currency}</span>`:'';
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><div><span style="margin-right:4px">${icon}</span><strong style="font-size:12px">${ch.name}</strong><span style="color:var(--muted);font-size:10px;margin-left:5px">${ch.hole}</span>${potLine}</div><div style="font-weight:700;color:${winner?'var(--gold2)':'var(--muted)'};font-size:12px">${winner||'—'}</div></div>`;
+      const list = getChallengeWinnerList(dayKey, ch.id);
+      const icon = CHALLENGE_ICONS[ch.id]||'🏆';
+      const potLine = ch.id==='moneyhole' && w._moneyHolePot ? ` · <span style="color:var(--gold2)">${w._moneyHolePot} ${currency}</span>` : '';
+      const display = list.length ? list.join(' & ') : '—';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--line)"><div><span style="margin-right:4px">${icon}</span><strong style="font-size:12px">${ch.name}</strong><span style="color:var(--muted);font-size:10px;margin-left:5px">${ch.hole}</span>${potLine}</div><div style="font-weight:700;color:${list.length?'var(--gold2)':'var(--muted)'};font-size:12px">${display}</div></div>`;
     }).join('');
   }
   // Build sub-sections
@@ -3128,7 +3192,7 @@ function renderChallengesCard(){
     const d1Content=renderList(d1ch,'day1');
     if(d1HasWinners){
       // Scramble has winners — show expanded
-      inner+=`<details open><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:.08em"><span>Scramble ${d1ch.filter(c=>w['day1_'+c.id]).length}/${d1ch.length} decided</span><span style="font-size:9px;color:var(--muted)">▾</span></summary>${d1Content}</details>`;
+      inner+=`<details open><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:.08em"><span>Scramble ${d1ch.filter(c=>getChallengeWinnerList('day1',c.id).length).length}/${d1ch.length} decided</span><span style="font-size:9px;color:var(--muted)">▾</span></summary>${d1Content}</details>`;
     } else {
       inner+=`<details><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><span>Scramble · awaiting winners</span><span style="font-size:9px">▸</span></summary>${d1Content}</details>`;
     }
@@ -3136,7 +3200,7 @@ function renderChallengesCard(){
   if(d2ch.length&&hasD2Scores){
     const d2Content=renderList(d2ch,'day2');
     if(d2HasWinners){
-      inner+=`<details open><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:.08em"><span>Stableford ${d2ch.filter(c=>w['day2_'+c.id]).length}/${d2ch.length} decided</span><span style="font-size:9px;color:var(--muted)">▾</span></summary>${d2Content}</details>`;
+      inner+=`<details open><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:.08em"><span>Stableford ${d2ch.filter(c=>getChallengeWinnerList('day2',c.id).length).length}/${d2ch.length} decided</span><span style="font-size:9px;color:var(--muted)">▾</span></summary>${d2Content}</details>`;
     } else {
       inner+=`<details><summary style="list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;padding:6px 0;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.08em"><span>Stableford · awaiting winners</span><span style="font-size:9px">▸</span></summary>${d2Content}</details>`;
     }
@@ -4102,6 +4166,62 @@ function exportFullEvent(){
   const filename = `${slugify(ev.name || 'chubbs')}-full-results.csv`;
   downloadText(filename, lines.join('\n'), 'text/csv;charset=utf-8');
   showToast('Full event export downloaded!', 'ok');
+}
+
+// ── Raw scores CSV — Terry's spreadsheet feed ──
+// One row per player. Columns: Player | HCP | H1..H18 | Gross | Net | Pts | Back9.
+// Pulls hole-by-hole gross from local state for in-group players and from
+// SYNC.remoteGroups for everyone else, so admin gets the full event in one file.
+// TODO: replace this format with Terry's exact xlsx layout once he shares it.
+function exportRawScoresCsv(){
+  const course = activeCourse('day2');
+  const ev = state.eventBundle && state.eventBundle.event || {};
+  const eventName = ev.displayName || ev.name || state.event.name || 'Chubbs Event';
+  const players = leaderboardPlayers();
+  const localGroupPlayers = currentPlayers('stableford');
+
+  function findHoleScores(playerObj){
+    if(playerObj.source === 'local' && playerObj.groupIdx >= 0){
+      return state.stableford.holes.map(h => {
+        const g = h.gross[playerObj.groupIdx];
+        return typeof g === 'number' ? g : '';
+      });
+    }
+    if(playerObj.source === 'remote'){
+      const ep = (state.eventBundle && state.eventBundle.players || []).find(p => (p.displayName || p.fullName || p.playerId) === playerObj.name);
+      if(!ep) return new Array(18).fill('');
+      for(const gd of Object.values(SYNC.remoteGroups || {})){
+        const pidx = (gd.players || []).findIndex(p => String(p.playerId || p.name || '') === String(ep.playerId));
+        if(pidx >= 0){
+          return (gd.holes || []).map(h => {
+            const g = Array.isArray(h.gross) ? h.gross[pidx] : null;
+            return typeof g === 'number' ? g : '';
+          });
+        }
+      }
+    }
+    return new Array(18).fill('');
+  }
+
+  const header = ['Player','HCP'];
+  for(let i=1;i<=18;i++) header.push('H'+i);
+  header.push('Gross','Net','Points','Back9');
+  const rows = [header];
+  rows.push(['# Course', course.name, ...new Array(20).fill('')]);
+  rows.push(['# Pars', '', ...course.holes.map(h => h.par != null ? h.par : ''), '', '', '', '']);
+  rows.push(['# SI',   '', ...course.holes.map(h => h.si  != null ? h.si  : ''), '', '', '', '']);
+
+  const sorted = players.slice().sort((a,b) => (b.points||0) - (a.points||0) || (b.back9||0) - (a.back9||0));
+  sorted.forEach(p => {
+    const scores = findHoleScores(p);
+    const gross = scores.reduce((s,v) => typeof v === 'number' ? s + v : s, 0);
+    const net = (typeof gross === 'number' && gross > 0) ? gross - p.hcp : '';
+    rows.push([p.name, p.hcp, ...scores, gross || '', net, p.points || 0, p.back9 || 0]);
+  });
+
+  const filename = `${slugify(eventName)}-raw-scores.csv`;
+  downloadText(filename, rows.map(r => r.map(csvCell).join(',')).join('\n'), 'text/csv;charset=utf-8');
+  showToast('Raw scores CSV downloaded — for Terry\'s spreadsheet.', 'ok', 3500);
 }
 
 // ── Awards card export (formatted for WeChat/sharing) ──
@@ -5208,6 +5328,9 @@ function renderResultsSummary(){
       ${masterMode ? `<div style="display:flex;gap:6px">
         <button class="btn blue full" onclick="exportFullEvent()">📊 Full event CSV</button>
         <button class="btn full" onclick="showConfirm('Award Gold Jacket to ${gold?gold.name:'?'} and Clown Jacket to ${clown&&clown!==gold?clown.name:'?'}?',awardJackets)">🧥 Award Jackets</button>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn gold full" onclick="exportRawScoresCsv()">📋 Raw scores (Terry)</button>
       </div>` : ''}
     </div>
   </div>`;
@@ -6395,7 +6518,7 @@ function renderAbout(){
   if(!el) return;
 
   // Version derived from storage key — bump manually when needed
-  const APP_VERSION = '5.15';
+  const APP_VERSION = '5.16';
   const BUILD_DATE  = '2026';
 
   // ── WeChat Pay QR ────────────────────────────────────────────────────────
