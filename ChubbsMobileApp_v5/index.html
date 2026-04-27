@@ -2061,21 +2061,26 @@ function ensureActiveSeason(){
   return store;
 }
 
-// Fire-and-forget on boot: fetch season-4.json if we don't already have it loaded.
-// Treat an empty season-4 shell (zero events) the same as missing — the shell
-// may have been created by ensureActiveSeason before the baked-in JSON landed.
+// Fire-and-forget on boot: fetch season-4.json if local cache is missing OR
+// the bundled JSON has a higher version than what's in localStorage. Locally-
+// appended events from saveEventSnapshot() are preserved across the refresh by
+// merging them back in by event id (bundled wins on collision).
 async function fetchSeason4IfMissing(){
   const store = ensureActiveSeason();
   const s = store.seasons['season-4'];
-  if(s && Array.isArray(s.events) && s.events.length > 0) return;
+  const localVer = (s && Number.isFinite(s.version)) ? s.version : 0;
+  const hasEvents = !!(s && Array.isArray(s.events) && s.events.length > 0);
   try {
     const res = await fetch('./season-4.json', { cache: 'no-cache' });
     if(!res.ok) return;
     const data = await res.json();
-    // Preserve any locally-appended events if the shell happened to have any
+    const remoteVer = Number.isFinite(data.version) ? data.version : 0;
+    // Skip the refresh only when we already have events AND remote isn't newer
+    if(hasEvents && remoteVer <= localVer) return;
+    // Preserve locally-appended events (from live snapshots) the bundle doesn't have
     const localEvents = (s && Array.isArray(s.events)) ? s.events : [];
     if(localEvents.length){
-      const ids = new Set(localEvents.map(e => e.id));
+      const ids = new Set((data.events || []).map(e => e.id));
       data.events = (data.events || []).concat(localEvents.filter(e => !ids.has(e.id)));
     }
     // Force active status so the Season tab labels it Live
@@ -6519,8 +6524,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.52) — bump both together on every deploy
-const APP_VERSION = '5.18';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.53) — bump both together on every deploy
+const APP_VERSION = '5.19';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
