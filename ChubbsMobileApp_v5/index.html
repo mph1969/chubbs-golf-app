@@ -2118,6 +2118,9 @@ function aggregateSeason(season){
     for(const p of ev.players){
       const nm = canonName(p.name);
       let sb = 0, gross = 0, dblpar = 0, neagle = 0, nbirdie = 0;
+      // cb[k] = sum of gross over the last (k+1) holes — used for tie-break countback
+      const cb = [];
+      let cbTot = 0;
       for(let i=0; i<ev.holes.length; i++){
         const g = p.gross[i];
         if(g === null || g === undefined || g === '') continue;
@@ -2131,10 +2134,22 @@ function aggregateSeason(season){
         if(diff <= -2) neagle += 1;
         if(diff === -1) nbirdie += 1;
       }
-      scored.push({ name: nm, stableford: sb, gross, dblpar, neagle, nbirdie });
+      for(let i=ev.holes.length-1; i>=0; i--){
+        const g = p.gross[i];
+        cbTot += (typeof g === 'number') ? g : 0;
+        cb.push(cbTot);
+      }
+      scored.push({ name: nm, stableford: sb, gross, dblpar, neagle, nbirdie, cb });
     }
-    // Rank by Stableford desc, tiebreak by lower gross asc
-    scored.sort((a,b) => (b.stableford - a.stableford) || (a.gross - b.gross));
+    // Rank by Stableford desc, then gross-countback from final hole backwards
+    // (h18, h17+18, h16+17+18 …) per Terry's rule — no handicap applied.
+    scored.sort((a,b) => {
+      if(b.stableford !== a.stableford) return b.stableford - a.stableford;
+      for(let i=0; i<a.cb.length; i++){
+        if(a.cb[i] !== b.cb[i]) return a.cb[i] - b.cb[i];
+      }
+      return 0;
+    });
     scored.forEach((row, rank) => {
       if(!agg[row.name]){
         agg[row.name] = { name: row.name, played: 0, stableford: 0, dblpar: 0, neagle: 0, nbirdie: 0 };
@@ -6524,8 +6539,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.54) — bump both together on every deploy
-const APP_VERSION = '5.20';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.55) — bump both together on every deploy
+const APP_VERSION = '5.21';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
