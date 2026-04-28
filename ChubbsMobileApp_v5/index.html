@@ -101,6 +101,19 @@
     .po-vs{font-size:10px;color:var(--muted);text-align:center}
     .po-result-badge{font-size:10px;color:#9ad9a8;font-family:monospace;white-space:nowrap;text-align:right}
     .po-entry{padding:10px 12px 10px;background:rgba(255,255,255,0.02);border-top:1px solid var(--line)}
+    .po-roster-grid{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:6px 0}
+    .po-roster-row{display:grid;grid-template-columns:32px 28px 1fr auto;gap:6px;align-items:center;padding:7px 10px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;user-select:none}
+    .po-roster-row:last-child{border-bottom:none}
+    .po-roster-row:nth-child(even){background:rgba(255,255,255,0.012)}
+    .po-roster-row.out{opacity:0.45;background:rgba(255,75,75,0.04)}
+    .po-roster-row.out .po-rs-name{text-decoration:line-through}
+    .po-rs-check{font-size:14px;text-align:center;font-weight:700}
+    .po-rs-rank{font-size:11px;font-family:monospace;color:var(--gold2);font-weight:800;text-align:center}
+    .po-rs-rank.out{color:var(--muted);font-weight:600}
+    .po-rs-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .po-rs-pts{font-size:10px;color:var(--muted);font-family:monospace;white-space:nowrap}
+    .po-roster-meta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;font-size:11px;margin:4px 0 6px}
+    .po-roster-count{font-weight:800;color:var(--gold2)}
     /* HCP suggestions card (Leaderboard tab, handbook §3.2) */
     .hcp-sug-table{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:4px 0 10px;background:rgba(255,255,255,0.01)}
     .hcp-sug-hdr,.hcp-sug-row{display:grid;grid-template-columns:minmax(100px,1fr) 40px 70px 70px;gap:4px;padding:7px 10px;font-size:12px;align-items:center}
@@ -2427,9 +2440,11 @@ function _poCtx(){
 function _poTop16(season){
   if(!season) return [];
   const rows = aggregateSeason(season);
-  return rows.filter(r => r.qualified).slice().sort((a,b) =>
-    (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
-  ).slice(0, 16);
+  return rows.filter(r => r.qualified)
+    .filter(r => _poRosterStatus(season, r.name))
+    .slice().sort((a,b) =>
+      (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
+    ).slice(0, 16);
 }
 
 function lockPlayoffSeeds(){
@@ -2485,6 +2500,48 @@ function clearPoResult(round, idx){
   renderPlayoffs();
 }
 
+// Roster: which qualified players are confirmed for May Chubbs.
+// Default = confirmed (true) for any qualified player not explicitly toggled off.
+// Bracket pulls top-16 by seedPoints filtered by confirmed set, so a top-seed
+// no-show automatically promotes the next-eligible player.
+function _poRosterStatus(season, name){
+  const r = season && season.playoffs && season.playoffs.roster;
+  if(!r || !(name in r)) return true;
+  return !!r[name];
+}
+
+function togglePoRoster(name){
+  if(!masterMode) return;
+  const {store, season} = _poCtx();
+  if(!season) return;
+  if(!season.playoffs) season.playoffs = {};
+  if(!season.playoffs.roster) season.playoffs.roster = {};
+  season.playoffs.roster[name] = !_poRosterStatus(season, name);
+  saveSeasonStore(store);
+  renderPlayoffs();
+}
+
+function resetPoRoster(){
+  if(!masterMode) return;
+  if(!confirm('Reset roster to all qualified players confirmed?')) return;
+  const {store, season} = _poCtx();
+  if(!season || !season.playoffs) return;
+  delete season.playoffs.roster;
+  saveSeasonStore(store);
+  renderPlayoffs();
+}
+
+function unlockPoSeeds(){
+  if(!masterMode) return;
+  if(!confirm('Unlock seeds? You can then edit the roster and re-lock. Match results are kept.')) return;
+  const {store, season} = _poCtx();
+  if(!season || !season.playoffs) return;
+  delete season.playoffs.seeds;
+  delete season.playoffs.seededAt;
+  saveSeasonStore(store);
+  renderPlayoffs();
+}
+
 function renderPlayoffs(){
   const host = document.getElementById('playoffs');
   if(!host) return;
@@ -2496,9 +2553,14 @@ function renderPlayoffs(){
 
   const rows = aggregateSeason(season);
   const ctx = rows._ctx || { PLAYOFF_MIN: 3, PLAYOFF_SLOTS: 16 };
-  const top16Live = rows.filter(r => r.qualified).slice().sort((a,b) =>
+  // All qualified players (≥3 rounds), sorted by seedPoints — full roster pool
+  const allQual = rows.filter(r => r.qualified).slice().sort((a,b) =>
     (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
-  ).slice(0, 16);
+  );
+  // Confirmed for May Chubbs (default true; explicit false = no-show)
+  const confirmedQual = allQual.filter(r => _poRosterStatus(season, r.name));
+  const top16Live = confirmedQual.slice(0, 16);
+  const droppedFromTop16 = allQual.slice(0, 16).filter(r => !_poRosterStatus(season, r.name));
 
   const pd = season.playoffs || {};
   const isLocked = !!(pd.seeds && pd.seeds.length > 0);
@@ -2631,15 +2693,54 @@ function renderPlayoffs(){
 
   const lockBtn = (masterMode && !isLocked && top16Live.length >= 2)
     ? `<button class="btn gold slim" style="margin:8px 0 2px" onclick="lockPlayoffSeeds()">🔒 Lock Seeds for Bracket</button>`
-    : (isLocked ? `<div class="small tight" style="color:var(--muted);margin:2px 0">Seeds locked ${pd.seededAt||''}</div>` : '');
+    : (isLocked
+        ? `<div class="toolbar tight" style="margin:2px 0;justify-content:space-between;align-items:center;flex-wrap:wrap">
+            <div class="small tight" style="color:var(--muted)">Seeds locked ${pd.seededAt||''}</div>
+            ${masterMode ? `<button class="btn ghost slim" style="font-size:10px" onclick="unlockPoSeeds()">🔓 Unlock</button>` : ''}
+          </div>`
+        : '');
 
   const unlockHint = !isLocked
-    ? `<div class="small tight" style="color:#d9a14a;margin-bottom:6px">⚠ Seeds not yet locked — will update as rounds are scored. Lock before May Chubbs.</div>`
+    ? `<div class="small tight" style="color:#d9a14a;margin-bottom:6px">⚠ Seeds not yet locked — will update as rounds are scored or roster changes. Lock before May Chubbs.</div>`
     : '';
 
   const qualWarn = top16Live.length < 16
-    ? `<div class="small tight" style="color:#d9a14a;margin-bottom:6px">⚠ Only ${top16Live.length} of 16 playoff spots filled (need min ${ctx.PLAYOFF_MIN} rounds each). ${16-top16Live.length} spot${16-top16Live.length>1?'s':''} TBD.</div>`
+    ? `<div class="small tight" style="color:#d9a14a;margin-bottom:6px">⚠ Only ${top16Live.length} of 16 playoff spots filled (need min ${ctx.PLAYOFF_MIN} rounds + confirmed for May). ${16-top16Live.length} spot${16-top16Live.length>1?'s':''} TBD.</div>`
     : '';
+
+  // ── Roster panel: master-mode editor for who's confirmed for May Chubbs ──
+  // Shown only when seeds are NOT locked. Tap a row to toggle in/out.
+  let rosterPanel = '';
+  if(masterMode && !isLocked && allQual.length){
+    const confirmedCount = confirmedQual.length;
+    const fillCount = Math.min(confirmedCount, 16);
+    const rosterRowsHtml = allQual.map(r => {
+      const confirmed = _poRosterStatus(season, r.name);
+      const seedIdx = confirmedQual.findIndex(c => c.name === r.name);
+      const isSeed = confirmed && seedIdx >= 0 && seedIdx < 16;
+      const rankLabel = !confirmed ? '—' : (seedIdx >= 0 && seedIdx < 16 ? `#${seedIdx+1}` : '·');
+      const safeName = r.name.replace(/'/g,"\\'");
+      return `<div class="po-roster-row ${confirmed?'':'out'}" onclick="togglePoRoster('${safeName}')">
+        <div class="po-rs-check">${confirmed ? '✓' : '✗'}</div>
+        <div class="po-rs-rank ${confirmed?'':'out'}">${rankLabel}</div>
+        <div class="po-rs-name">${r.name}${isSeed?'':''}</div>
+        <div class="po-rs-pts">${r.seedPoints}pts · ${r.played}ev</div>
+      </div>`;
+    }).join('');
+    const droppedNote = droppedFromTop16.length > 0
+      ? `<div class="small tight" style="color:#d9a14a;margin:4px 0 6px">↻ Reseeded — ${droppedFromTop16.length} top-16 player${droppedFromTop16.length>1?'s':''} dropped: ${droppedFromTop16.map(r=>r.name).join(', ')}</div>`
+      : '';
+    const hasOverrides = pd.roster && Object.values(pd.roster).some(v => v === false);
+    rosterPanel = `
+      <div class="po-section-hdr" style="border-top:none;margin-top:0">📋 May Chubbs Roster</div>
+      <div class="small tight" style="color:var(--muted);margin-bottom:4px">Tap any player to toggle in/out. Bracket reseeds automatically — no-shows promote the next eligible player.</div>
+      <div class="po-roster-meta">
+        <div><span class="po-roster-count">${fillCount}/16</span> playoff spots filled · ${confirmedCount}/${allQual.length} qualified players confirmed</div>
+        ${hasOverrides ? `<button class="btn ghost slim" style="font-size:10px" onclick="resetPoRoster()">Reset all</button>` : ''}
+      </div>
+      ${droppedNote}
+      <div class="po-roster-grid">${rosterRowsHtml}</div>`;
+  }
 
   // R16 HTML — Cup half (M1-M4) then Plate half (M5-M8)
   const cupHalf = [0,1,2,3].map(i => r16Row(i)).join('');
@@ -2675,8 +2776,10 @@ function renderPlayoffs(){
       <div class="section-title" style="margin-bottom:2px">🏆 Season 4 Playoffs</div>
       <div class="small" style="color:var(--muted);margin-bottom:10px">§11 · Match play · 9 holes · Min ${ctx.PLAYOFF_MIN} rounds to qualify · R16 + QF at May Chubbs · SF + Final at June Chubbs</div>
 
-      <div class="po-section-hdr" style="border-top:none;margin-top:0">Playoff Seedings</div>
-      <div class="small tight" style="color:var(--muted);margin-bottom:4px">Ranked by total season points (all rounds, not best-7)</div>
+      ${rosterPanel}
+
+      <div class="po-section-hdr"${rosterPanel ? '' : ' style="border-top:none;margin-top:0"'}>Playoff Seedings</div>
+      <div class="small tight" style="color:var(--muted);margin-bottom:4px">${isLocked ? 'Locked seedings for the May bracket' : 'Top 16 confirmed players ranked by total season points'}</div>
       ${unlockHint}${qualWarn}
       <div class="po-seeds-grid">${seedRows}</div>
       ${lockBtn}
@@ -6853,8 +6956,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.57) — bump both together on every deploy
-const APP_VERSION = '5.23';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.58) — bump both together on every deploy
+const APP_VERSION = '5.24';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
