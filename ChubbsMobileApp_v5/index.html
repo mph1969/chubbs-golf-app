@@ -102,6 +102,9 @@
     .po-vs{font-size:10px;color:var(--muted);text-align:center}
     .po-result-badge{font-size:10px;color:#9ad9a8;font-family:monospace;white-space:nowrap;text-align:right}
     .po-entry{padding:10px 12px 10px;background:rgba(255,255,255,0.02);border-top:1px solid var(--line)}
+    .po-trophy-row{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+    .po-trophy{font-size:11px;padding:5px 10px;border-radius:999px;background:rgba(214,176,90,0.1);border:1px solid rgba(214,176,90,0.4);color:var(--gold2);font-weight:700}
+    .po-trophy strong{color:var(--ink);font-weight:800}
     .po-roster-grid{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:6px 0}
     .po-roster-row{display:grid;grid-template-columns:32px 28px 1fr auto;gap:6px;align-items:center;padding:7px 10px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04);cursor:pointer;user-select:none}
     .po-roster-row:last-child{border-bottom:none}
@@ -2580,110 +2583,90 @@ function renderPlayoffs(){
   const isLocked = !!(pd.seeds && pd.seeds.length > 0);
   // Live seeds when not locked; locked seeds otherwise
   const seeds = isLocked ? pd.seeds : top16Live.map(r => r.name);
-  const r16 = pd.r16 || [];
 
-  // R16 pairings: seed[0]v[15], [1]v[14], [2]v[13], [3]v[12], [4]v[11], [5]v[10], [6]v[9], [7]v[8]
-  const r16Pairs = [[0,15],[1,14],[2,13],[3,12],[4,11],[5,10],[6,9],[7,8]];
+  // Standard 16-bracket positions — chalk path for #1: M1(1v16) → CQ1(8) → CS1(4or5) → CF(2)
+  const r16Pairs = [[0,15],[7,8],[4,11],[3,12],[2,13],[5,10],[6,9],[1,14]];
   const pe = state.ui.playoffEntry || {};
-  const r16Done = r16.filter(m => m && m.winner).length;
 
-  // Returns the player on a given side of an R16 match
-  function r16Player(matchIdx, side){ // side = 0 or 1
-    return seeds[r16Pairs[matchIdx][side]] || `Seed ${r16Pairs[matchIdx][side]+1}`;
+  // Round-graph: each round derives players from a prior round + role (winner/loser).
+  // R16 has no parent — its players come from `seeds` directly.
+  const ROUND_FROM = {
+    cup_qf:       { from: 'r16',      role: 'winner' },
+    cup_sf:       { from: 'cup_qf',   role: 'winner' },
+    cup_final:    { from: 'cup_sf',   role: 'winner' },
+    plate_qf:     { from: 'r16',      role: 'loser'  },
+    plate_sf:     { from: 'plate_qf', role: 'winner' },
+    plate_final:  { from: 'plate_sf', role: 'winner' },
+    shield_sf:    { from: 'cup_qf',   role: 'loser'  },
+    shield_final: { from: 'shield_sf',role: 'winner' },
+    spoon_sf:     { from: 'plate_qf', role: 'loser'  },
+    spoon_final:  { from: 'spoon_sf', role: 'winner' }
+  };
+
+  function _m(round, idx){ const a = pd[round] || []; return a[idx] || { winner: null, result: null }; }
+
+  // Returns the two player names at a given match — recursively resolves from prior rounds
+  function _players(round, idx){
+    if(round === 'r16'){
+      const [a,b] = r16Pairs[idx] || [-1,-1];
+      return [seeds[a] || null, seeds[b] || null];
+    }
+    const src = ROUND_FROM[round]; if(!src) return [null, null];
+    return [_resolve(src.from, idx*2, src.role), _resolve(src.from, idx*2+1, src.role)];
   }
 
-  // Winner/loser of a completed R16 match
-  function r16Winner(matchIdx){ return (r16[matchIdx] && r16[matchIdx].winner) || null; }
-  function r16Loser(matchIdx){
-    const m = r16[matchIdx]; if(!m || !m.winner) return null;
-    const p0 = r16Player(matchIdx, 0), p1 = r16Player(matchIdx, 1);
-    return m.winner === p0 ? p1 : p0;
+  function _resolve(round, idx, role){
+    const m = _m(round, idx);
+    if(!m.winner) return null;
+    if(role === 'winner') return m.winner;
+    const [p1, p2] = _players(round, idx);
+    return m.winner === p1 ? p2 : (m.winner === p2 ? p1 : null);
   }
 
-  // Renders a single R16 match row
-  function r16Row(matchIdx){
-    const [s1i, s2i] = r16Pairs[matchIdx];
-    const p1 = seeds[s1i] || `Seed ${s1i+1}`;
-    const p2 = seeds[s2i] || `Seed ${s2i+1}`;
-    const m = r16[matchIdx] || { winner: null, result: null };
+  // Generic match-row renderer — works for any round
+  function matchRow(round, idx, label){
+    const [p1Raw, p2Raw] = _players(round, idx);
+    const m = _m(round, idx);
+    const isOpen = pe.round === round && pe.idx === idx;
+    const tbd = !p1Raw || !p2Raw;
+    const p1 = p1Raw || 'TBD';
+    const p2 = p2Raw || 'TBD';
     const w = m.winner;
     const p1cls = w ? (w===p1 ? 'winner' : 'loser') : '';
     const p2cls = w ? (w===p2 ? 'winner' : 'loser') : '';
     const resultBadge = w ? `<span class="po-result-badge">${m.result||'W/O'}</span>` : '';
-    const isOpen = pe.round === 'r16' && pe.idx === matchIdx;
-    const clickable = masterMode && !isOpen ? 'clickable' : '';
-    const onClick = masterMode ? `onclick="openPoEntry('r16',${matchIdx})"` : '';
-
-    const entryPanel = (masterMode && isOpen) ? `
-      <div class="po-entry">
-        <div class="toolbar tight" style="flex-wrap:wrap;gap:6px">
-          <select id="po-winner-sel" style="flex:1;min-width:120px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px">
-            <option value="">— Winner —</option>
-            <option value="${p1}"${w===p1?' selected':''}>${p1} (#${s1i+1})</option>
-            <option value="${p2}"${w===p2?' selected':''}>${p2} (#${s2i+1})</option>
-          </select>
-          <input id="po-result-inp" type="text" maxlength="10" placeholder="3&amp;2 / 1up / W/O"
-            value="${m.result||''}"
-            style="width:100px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px;font-family:monospace"
-            onkeydown="if(event.key==='Enter')savePoResult('r16',${matchIdx})"/>
-          <button class="btn gold slim" onclick="savePoResult('r16',${matchIdx})">Save</button>
-          <button class="btn ghost slim" onclick="closePoEntry()">✕</button>
-        </div>
-        ${w ? `<button class="btn ghost slim" style="margin-top:6px;font-size:10px" onclick="clearPoResult('r16',${matchIdx})">Clear result</button>` : ''}
-      </div>` : '';
-
-    return `<div class="po-match-wrap">
-      <div class="po-match ${clickable}" ${onClick}>
-        <div class="po-match-no">M${matchIdx+1}</div>
-        <div class="po-player ${p1cls}"><span class="po-sn">#${s1i+1}</span>${p1}</div>
-        <div class="po-vs">vs</div>
-        <div class="po-player right ${p2cls}">${p2}<span class="po-sn">#${s2i+1}</span></div>
-        <div>${resultBadge}</div>
-      </div>
-      ${entryPanel}
-    </div>`;
-  }
-
-  // Renders a QF or Shield match row (players derived from R16 outcomes)
-  function derivedRow(round, matchIdx, r16mA, r16mB, matchNum, role){
-    // role = 'winner' (QF) or 'loser' (Shield)
-    const fn = role === 'winner' ? r16Winner : r16Loser;
-    const p1 = fn(r16mA) || `${role==='winner'?'Winner':'Loser'} M${r16mA+1}`;
-    const p2 = fn(r16mB) || `${role==='winner'?'Winner':'Loser'} M${r16mB+1}`;
-    const tbd = !fn(r16mA) || !fn(r16mB);
-    const arr = pd[round] || [];
-    const m = arr[matchIdx] || { winner: null, result: null };
-    const w = m.winner;
-    const p1cls = w ? (w===p1 ? 'winner' : 'loser') : '';
-    const p2cls = w ? (w===p2 ? 'winner' : 'loser') : '';
-    const resultBadge = w ? `<span class="po-result-badge">${m.result||'W/O'}</span>` : '';
-    const isOpen = pe.round === round && pe.idx === matchIdx;
     const canClick = masterMode && !tbd && !isOpen;
-    const onClick = canClick ? `onclick="openPoEntry('${round}',${matchIdx})"` : '';
+    const onClick = canClick ? `onclick="openPoEntry('${round}',${idx})"` : '';
+
+    // R16 rows show the seed numbers; deeper rounds just show names
+    const showSeeds = round === 'r16';
+    const [s1i, s2i] = showSeeds ? r16Pairs[idx] : [null, null];
+    const p1Display = tbd ? `<span style="color:var(--muted);font-style:italic">TBD</span>`
+                          : (showSeeds ? `<span class="po-sn">#${s1i+1}</span>${p1}` : p1);
+    const p2Display = tbd ? `<span style="color:var(--muted);font-style:italic">TBD</span>`
+                          : (showSeeds ? `${p2}<span class="po-sn">#${s2i+1}</span>` : p2);
 
     const entryPanel = (masterMode && isOpen && !tbd) ? `
       <div class="po-entry">
         <div class="toolbar tight" style="flex-wrap:wrap;gap:6px">
           <select id="po-winner-sel" style="flex:1;min-width:120px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px">
             <option value="">— Winner —</option>
-            <option value="${p1}"${w===p1?' selected':''}>${p1}</option>
-            <option value="${p2}"${w===p2?' selected':''}>${p2}</option>
+            <option value="${p1}"${w===p1?' selected':''}>${p1}${showSeeds?` (#${s1i+1})`:''}</option>
+            <option value="${p2}"${w===p2?' selected':''}>${p2}${showSeeds?` (#${s2i+1})`:''}</option>
           </select>
           <input id="po-result-inp" type="text" maxlength="10" placeholder="3&amp;2 / 1up / W/O"
             value="${m.result||''}"
             style="width:100px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px;font-family:monospace"
-            onkeydown="if(event.key==='Enter')savePoResult('${round}',${matchIdx})"/>
-          <button class="btn gold slim" onclick="savePoResult('${round}',${matchIdx})">Save</button>
+            onkeydown="if(event.key==='Enter')savePoResult('${round}',${idx})"/>
+          <button class="btn gold slim" onclick="savePoResult('${round}',${idx})">Save</button>
           <button class="btn ghost slim" onclick="closePoEntry()">✕</button>
         </div>
-        ${w ? `<button class="btn ghost slim" style="margin-top:6px;font-size:10px" onclick="clearPoResult('${round}',${matchIdx})">Clear result</button>` : ''}
+        ${w ? `<button class="btn ghost slim" style="margin-top:6px;font-size:10px" onclick="clearPoResult('${round}',${idx})">Clear result</button>` : ''}
       </div>` : '';
 
-    const p1Display = tbd ? `<span style="color:var(--muted);font-style:italic">${p1}</span>` : p1;
-    const p2Display = tbd ? `<span style="color:var(--muted);font-style:italic">${p2}</span>` : p2;
     return `<div class="po-match-wrap">
       <div class="po-match ${canClick?'clickable':''}" ${onClick}>
-        <div class="po-match-no">M${matchNum}</div>
+        <div class="po-match-no">${label}</div>
         <div class="po-player ${p1cls}">${p1Display}</div>
         <div class="po-vs">vs</div>
         <div class="po-player right ${p2cls}">${p2Display}</div>
@@ -2692,6 +2675,14 @@ function renderPlayoffs(){
       ${entryPanel}
     </div>`;
   }
+
+  // Trophy holder helper — read the winner of a final, if any
+  function _trophy(round){ const m = _m(round, 0); return m && m.winner ? m.winner : null; }
+  function _hasAny(round, count){ for(let i=0;i<count;i++){ if((pd[round]||[])[i] && pd[round][i].winner) return true; } return false; }
+
+  const r16HasAny = _hasAny('r16', 8);
+  const cupQfHasAny = _hasAny('cup_qf', 4);
+  const plateQfHasAny = _hasAny('plate_qf', 4);
 
   // Seedings table
   const seedRows = seeds.map((name, i) => {
@@ -2756,40 +2747,68 @@ function renderPlayoffs(){
       <div class="po-roster-grid">${rosterRowsHtml}</div>`;
   }
 
-  // R16 HTML — Cup half (M1-M4) then Plate half (M5-M8)
-  const cupHalf = [0,1,2,3].map(i => r16Row(i)).join('');
-  const plateHalf = [4,5,6,7].map(i => r16Row(i)).join('');
+  // Trophy summary banner — surfaces winners as finals complete
+  const trophyChips = [];
+  const cupWinner = _trophy('cup_final');
+  const plateWinner = _trophy('plate_final');
+  const shieldWinner = _trophy('shield_final');
+  const spoonWinner = _trophy('spoon_final');
+  if(cupWinner) trophyChips.push(`<span class="po-trophy">🏆 Cup · <strong>${cupWinner}</strong></span>`);
+  if(plateWinner) trophyChips.push(`<span class="po-trophy">🍽️ Plate · <strong>${plateWinner}</strong></span>`);
+  if(shieldWinner) trophyChips.push(`<span class="po-trophy">🛡️ Shield · <strong>${shieldWinner}</strong></span>`);
+  if(spoonWinner) trophyChips.push(`<span class="po-trophy">🥄 Spoon · <strong>${spoonWinner}</strong></span>`);
+  const trophyBanner = trophyChips.length
+    ? `<div class="po-trophy-row">${trophyChips.join('')}</div>` : '';
 
-  // QF section (visible once ≥1 R16 result exists)
-  const qfSection = r16Done > 0 ? `
-    <div class="po-section-hdr">⚔️ Quarter Finals — May Chubbs</div>
-    <div class="po-sub-hdr">🏆 Cup</div>
-    <div class="po-bracket">
-      ${derivedRow('qf',0, 0,3, 9,'winner')}
-      ${derivedRow('qf',1, 1,2, 10,'winner')}
-    </div>
-    <div class="po-sub-hdr" style="margin-top:10px">🍽️ Plate</div>
-    <div class="po-bracket">
-      ${derivedRow('qf',2, 4,7, 11,'winner')}
-      ${derivedRow('qf',3, 5,6, 12,'winner')}
-    </div>
-    <div class="po-sub-hdr" style="margin-top:10px">🛡️ Shield — consolation (R16 losers)</div>
-    <div class="po-bracket">
-      ${derivedRow('shield',0, 0,3, 13,'loser')}
-      ${derivedRow('shield',1, 1,2, 14,'loser')}
-      ${derivedRow('shield',2, 4,7, 15,'loser')}
-      ${derivedRow('shield',3, 5,6, 16,'loser')}
-    </div>` : '';
+  // R16 — single bracket, all 8 matches
+  const r16Html = `<div class="po-bracket">${[0,1,2,3,4,5,6,7].map(i => matchRow('r16', i, `M${i+1}`)).join('')}</div>`;
+
+  // 🏆 Cup ladder — R16 winners → QF → SF → Final
+  const cupHtml = `
+    <div class="po-section-hdr">🏆 Cup Ladder · winners advance from R16</div>
+    <div class="po-sub-hdr">Quarter Finals · May</div>
+    <div class="po-bracket">${[0,1,2,3].map(i => matchRow('cup_qf', i, `Q${i+1}`)).join('')}</div>
+    <div class="po-sub-hdr" style="margin-top:10px">Semi Finals · June</div>
+    <div class="po-bracket">${[0,1].map(i => matchRow('cup_sf', i, `S${i+1}`)).join('')}</div>
+    <div class="po-sub-hdr" style="margin-top:10px">🏆 Cup Final · June</div>
+    <div class="po-bracket">${matchRow('cup_final', 0, 'F')}</div>`;
+
+  // 🍽️ Plate ladder — R16 losers → Plate QF → SF → Final
+  const plateHtml = r16HasAny ? `
+    <div class="po-section-hdr">🍽️ Plate Ladder · R16 losers</div>
+    <div class="po-sub-hdr">Plate QF · May</div>
+    <div class="po-bracket">${[0,1,2,3].map(i => matchRow('plate_qf', i, `PQ${i+1}`)).join('')}</div>
+    <div class="po-sub-hdr" style="margin-top:10px">Plate SF · June</div>
+    <div class="po-bracket">${[0,1].map(i => matchRow('plate_sf', i, `PS${i+1}`)).join('')}</div>
+    <div class="po-sub-hdr" style="margin-top:10px">🍽️ Plate Final · June</div>
+    <div class="po-bracket">${matchRow('plate_final', 0, 'PF')}</div>` : '';
+
+  // 🛡️ Shield ladder — Cup QF losers → Shield SF → Final
+  const shieldHtml = cupQfHasAny ? `
+    <div class="po-section-hdr">🛡️ Shield Ladder · Cup QF losers</div>
+    <div class="po-sub-hdr">Shield SF · June</div>
+    <div class="po-bracket">${[0,1].map(i => matchRow('shield_sf', i, `H${i+1}`)).join('')}</div>
+    <div class="po-sub-hdr" style="margin-top:10px">🛡️ Shield Final · June</div>
+    <div class="po-bracket">${matchRow('shield_final', 0, 'HF')}</div>` : '';
+
+  // 🥄 Spoon ladder — Plate QF losers → Spoon SF → Final
+  const spoonHtml = plateQfHasAny ? `
+    <div class="po-section-hdr">🥄 Spoon Ladder · Plate QF losers</div>
+    <div class="po-sub-hdr">Spoon SF · June</div>
+    <div class="po-bracket">${[0,1].map(i => matchRow('spoon_sf', i, `O${i+1}`)).join('')}</div>
+    <div class="po-sub-hdr" style="margin-top:10px">🥄 Spoon Final · June</div>
+    <div class="po-bracket">${matchRow('spoon_final', 0, 'OF')}</div>` : '';
 
   const adminHint = masterMode
-    ? `<div class="small tight" style="color:var(--muted);margin-top:10px">Tap any match to enter result (master mode)</div>`
+    ? `<div class="small tight" style="color:var(--muted);margin-top:10px">Tap any match to enter result (master mode). Later rounds unlock as upstream matches resolve.</div>`
     : '';
 
   host.innerHTML = `
     <div class="card">
       <div class="section-title" style="margin-bottom:2px">🏆 Season 4 Playoffs</div>
-      <div class="small" style="color:var(--muted);margin-bottom:10px">§11 · Match play · 9 holes · Min ${ctx.PLAYOFF_MIN} rounds to qualify · R16 + QF at May Chubbs · SF + Final at June Chubbs</div>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">§11 · 4-tier match play · 9 holes · Min ${ctx.PLAYOFF_MIN} rounds to qualify · R16 + QFs at May · SFs + Finals at June</div>
 
+      ${trophyBanner}
       ${rosterPanel}
 
       <div class="po-section-hdr"${rosterPanel ? '' : ' style="border-top:none;margin-top:0"'}>Playoff Seedings</div>
@@ -2798,13 +2817,15 @@ function renderPlayoffs(){
       <div class="po-seeds-grid">${seedRows}</div>
       ${lockBtn}
 
-      <div class="po-section-hdr">🎯 Round of 16 — May Chubbs</div>
-      <div class="po-sub-hdr">🏆 Cup half (seeds 1–4 vs 13–16)</div>
-      <div class="po-bracket">${cupHalf}</div>
-      <div class="po-sub-hdr" style="margin-top:10px">🍽️ Plate half (seeds 5–8 vs 9–12)</div>
-      <div class="po-bracket">${plateHalf}</div>
+      <div class="po-section-hdr">🎯 Round of 16 · May</div>
+      <div class="small tight" style="color:var(--muted);margin-bottom:4px">Pairings: 1v16, 8v9, 5v12, 4v13, 3v14, 6v11, 7v10, 2v15 · standard 16-bracket positions</div>
+      ${r16Html}
 
-      ${qfSection}
+      ${cupHtml}
+      ${plateHtml}
+      ${shieldHtml}
+      ${spoonHtml}
+
       ${adminHint}
       <div class="small tight" style="color:var(--muted);margin-top:12px;line-height:1.5">
         HCP strokes = diff between players · allocated to hardest holes (lowest SI first) · Tie → highest stableford → lower HCP · No-shows lose by walkover (§11)
@@ -6988,8 +7009,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.60) — bump both together on every deploy
-const APP_VERSION = '5.26';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.61) — bump both together on every deploy
+const APP_VERSION = '5.27';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

@@ -486,7 +486,7 @@
             </div>
 
             <div style="font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5">
-              §11 · Top 16 confirmed players seeded by total season points (sum-all-rounds) · Cup half = seeds 1–4 vs 13–16 · Plate half = seeds 5–8 vs 9–12 · R16 losers drop to Shield bracket · No-shows lose by walkover
+              §11 · Top 16 seeded by total season points (sum-all-rounds) · standard 16-bracket: 1v16, 8v9, 5v12, 4v13, 3v14, 6v11, 7v10, 2v15 · 4-tier cascade: 🏆 Cup (R16 winners) · 🍽️ Plate (R16 losers) · 🛡️ Shield (Cup QF losers) · 🥄 Spoon (Plate QF losers) · No-shows lose by walkover
             </div>
           </div>
         </div>
@@ -1796,7 +1796,8 @@ function renderPlayoffCard(){
   const bp = document.getElementById('po-bracket-preview');
   const bpc = document.getElementById('po-bp-content');
   if(top16.length >= 2 && poState.stage === 'r16'){
-    const pairs = [[0,15],[1,14],[2,13],[3,12],[4,11],[5,10],[6,9],[7,8]];
+    // Standard 16-bracket positions: 1's chalk path is M1(1v16) → 8(QF) → 4or5(SF) → 2(F)
+    const pairs = [[0,15],[7,8],[4,11],[3,12],[2,13],[5,10],[6,9],[1,14]];
     bpc.innerHTML = pairs.map(([a,b], i) => {
       const p1 = top16[a] ? top16[a].name : null;
       const p2 = top16[b] ? top16[b].name : null;
