@@ -74,6 +74,33 @@
     .season-show-all{width:100%;margin-top:8px;padding:8px;background:rgba(255,255,255,0.04);border:1px solid var(--line);border-radius:10px;color:var(--gold2);font-weight:700;font-size:12px;cursor:pointer;letter-spacing:.04em}
     .season-show-all:hover{background:rgba(255,255,255,0.07)}
     .season-qual-hint{margin-top:8px;padding:6px 10px;font-size:10px;color:var(--muted);background:rgba(74,176,100,0.04);border:1px dashed rgba(74,176,100,0.25);border-radius:8px;text-align:center}
+    /* ── Playoffs bracket (Phase 1 — §11) ─────────────────────────────────── */
+    .po-section-hdr{font-size:10px;font-weight:800;color:var(--gold2);letter-spacing:.08em;text-transform:uppercase;padding:10px 0 4px;margin-top:8px;border-top:1px solid var(--line)}
+    .po-section-hdr:first-of-type{border-top:none;margin-top:0}
+    .po-sub-hdr{font-size:11px;font-weight:700;color:var(--muted);margin:8px 0 2px}
+    .po-seeds-grid{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:6px 0}
+    .po-seed-row{display:grid;grid-template-columns:28px 1fr auto;gap:4px;align-items:center;padding:6px 10px;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04)}
+    .po-seed-row:last-child{border-bottom:none}
+    .po-seed-row:nth-child(even){background:rgba(255,255,255,0.01)}
+    .po-seed-rank{color:var(--gold2);font-weight:800;font-family:monospace;font-size:11px}
+    .po-seed-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .po-seed-pts{font-size:10px;color:var(--muted);font-family:monospace;text-align:right;white-space:nowrap}
+    .po-bracket{border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:6px 0}
+    .po-match-wrap{border-bottom:1px solid rgba(255,255,255,0.04)}
+    .po-match-wrap:last-child{border-bottom:none}
+    .po-match{display:grid;grid-template-columns:26px 1fr 28px 1fr auto;align-items:center;gap:4px;padding:10px 12px}
+    .po-match.clickable{cursor:pointer}
+    .po-match.clickable:active{background:rgba(255,255,255,0.03)}
+    .po-match-no{font-size:10px;color:var(--muted);font-family:monospace;text-align:center}
+    .po-player{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .po-player .po-sn{font-size:9px;color:var(--muted);margin-right:3px}
+    .po-player.winner{color:var(--gold2);font-weight:800}
+    .po-player.loser{color:rgba(240,234,216,0.35);text-decoration:line-through}
+    .po-player.right{text-align:right}
+    .po-player.right .po-sn{margin-right:0;margin-left:3px}
+    .po-vs{font-size:10px;color:var(--muted);text-align:center}
+    .po-result-badge{font-size:10px;color:#9ad9a8;font-family:monospace;white-space:nowrap;text-align:right}
+    .po-entry{padding:10px 12px 10px;background:rgba(255,255,255,0.02);border-top:1px solid var(--line)}
     /* HCP suggestions card (Leaderboard tab, handbook §3.2) */
     .hcp-sug-table{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin:4px 0 10px;background:rgba(255,255,255,0.01)}
     .hcp-sug-hdr,.hcp-sug-row{display:grid;grid-template-columns:minmax(100px,1fr) 40px 70px 70px;gap:4px;padding:7px 10px;font-size:12px;align-items:center}
@@ -487,6 +514,7 @@
     <section id="day2" class="section"></section>
     <section id="leaderboard" class="section"></section>
     <section id="season" class="section"></section>
+    <section id="playoffs" class="section"></section>
     <section id="about" class="section"></section>
     <footer id="app-footer" style="text-align:center;padding:18px 0 10px;border-top:1px solid var(--line);margin-top:8px"></footer>
   <!-- Live view paywall overlay -->
@@ -2382,6 +2410,289 @@ function toggleSeasonShowAll(){
   state.ui.seasonShowAll = !state.ui.seasonShowAll;
   saveState();
   renderSeason();
+}
+
+// ── Playoffs — Phase 1: Bracket viewer + admin result entry ──────────────
+// §11: Top 16 seeded by sum-of-all-rounds (seedPoints). R16 + QF at May Chubbs.
+// R16 losers drop to Shield consolation bracket (confirmed Terry 2026-04-28).
+// Results stored in season.playoffs within chubbs_seasons_v1.
+
+function _poCtx(){
+  const store = ensureActiveSeason();
+  const viewId = (store.viewingSeasonId && store.seasons[store.viewingSeasonId]) ? store.viewingSeasonId : ACTIVE_SEASON_ID;
+  const season = store.seasons[viewId] || store.seasons[ACTIVE_SEASON_ID];
+  return { store, season };
+}
+
+function _poTop16(season){
+  if(!season) return [];
+  const rows = aggregateSeason(season);
+  return rows.filter(r => r.qualified).slice().sort((a,b) =>
+    (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
+  ).slice(0, 16);
+}
+
+function lockPlayoffSeeds(){
+  if(!masterMode) return;
+  const {store, season} = _poCtx();
+  if(!season) return;
+  const top16 = _poTop16(season);
+  if(top16.length < 2){ alert('Need at least 2 qualified players'); return; }
+  if(!season.playoffs) season.playoffs = {};
+  season.playoffs.seeds = top16.map(r => r.name);
+  season.playoffs.seededAt = new Date().toISOString().slice(0,10);
+  if(!season.playoffs.r16) season.playoffs.r16 = Array.from({length:8}, () => ({winner:null,result:null}));
+  saveSeasonStore(store);
+  renderPlayoffs();
+}
+
+function openPoEntry(round, idx){
+  state.ui.playoffEntry = { round, idx };
+  saveState();
+  renderPlayoffs();
+}
+
+function closePoEntry(){
+  state.ui.playoffEntry = null;
+  saveState();
+  renderPlayoffs();
+}
+
+function savePoResult(round, idx){
+  const winner = (document.getElementById('po-winner-sel') || {}).value || '';
+  const result = ((document.getElementById('po-result-inp') || {}).value || '').trim();
+  if(!winner){ alert('Select a winner first'); return; }
+  const {store, season} = _poCtx();
+  if(!season) return;
+  if(!season.playoffs) season.playoffs = {};
+  if(!Array.isArray(season.playoffs[round])) season.playoffs[round] = [];
+  while(season.playoffs[round].length <= idx) season.playoffs[round].push({winner:null,result:null});
+  season.playoffs[round][idx].winner = winner;
+  season.playoffs[round][idx].result = result || '';
+  saveSeasonStore(store);
+  closePoEntry();
+}
+
+function clearPoResult(round, idx){
+  if(!masterMode) return;
+  const {store, season} = _poCtx();
+  if(!season || !season.playoffs || !Array.isArray(season.playoffs[round])) return;
+  if(season.playoffs[round][idx]){
+    season.playoffs[round][idx].winner = null;
+    season.playoffs[round][idx].result = null;
+  }
+  saveSeasonStore(store);
+  renderPlayoffs();
+}
+
+function renderPlayoffs(){
+  const host = document.getElementById('playoffs');
+  if(!host) return;
+  const {store, season} = _poCtx();
+  if(!season){
+    host.innerHTML = `<div class="card"><div class="section-title">🏆 Playoffs</div><div class="small">No season data.</div></div>`;
+    return;
+  }
+
+  const rows = aggregateSeason(season);
+  const ctx = rows._ctx || { PLAYOFF_MIN: 3, PLAYOFF_SLOTS: 16 };
+  const top16Live = rows.filter(r => r.qualified).slice().sort((a,b) =>
+    (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
+  ).slice(0, 16);
+
+  const pd = season.playoffs || {};
+  const isLocked = !!(pd.seeds && pd.seeds.length > 0);
+  // Live seeds when not locked; locked seeds otherwise
+  const seeds = isLocked ? pd.seeds : top16Live.map(r => r.name);
+  const r16 = pd.r16 || [];
+
+  // R16 pairings: seed[0]v[15], [1]v[14], [2]v[13], [3]v[12], [4]v[11], [5]v[10], [6]v[9], [7]v[8]
+  const r16Pairs = [[0,15],[1,14],[2,13],[3,12],[4,11],[5,10],[6,9],[7,8]];
+  const pe = state.ui.playoffEntry || {};
+  const r16Done = r16.filter(m => m && m.winner).length;
+
+  // Returns the player on a given side of an R16 match
+  function r16Player(matchIdx, side){ // side = 0 or 1
+    return seeds[r16Pairs[matchIdx][side]] || `Seed ${r16Pairs[matchIdx][side]+1}`;
+  }
+
+  // Winner/loser of a completed R16 match
+  function r16Winner(matchIdx){ return (r16[matchIdx] && r16[matchIdx].winner) || null; }
+  function r16Loser(matchIdx){
+    const m = r16[matchIdx]; if(!m || !m.winner) return null;
+    const p0 = r16Player(matchIdx, 0), p1 = r16Player(matchIdx, 1);
+    return m.winner === p0 ? p1 : p0;
+  }
+
+  // Renders a single R16 match row
+  function r16Row(matchIdx){
+    const [s1i, s2i] = r16Pairs[matchIdx];
+    const p1 = seeds[s1i] || `Seed ${s1i+1}`;
+    const p2 = seeds[s2i] || `Seed ${s2i+1}`;
+    const m = r16[matchIdx] || { winner: null, result: null };
+    const w = m.winner;
+    const p1cls = w ? (w===p1 ? 'winner' : 'loser') : '';
+    const p2cls = w ? (w===p2 ? 'winner' : 'loser') : '';
+    const resultBadge = w ? `<span class="po-result-badge">${m.result||'W/O'}</span>` : '';
+    const isOpen = pe.round === 'r16' && pe.idx === matchIdx;
+    const clickable = masterMode && !isOpen ? 'clickable' : '';
+    const onClick = masterMode ? `onclick="openPoEntry('r16',${matchIdx})"` : '';
+
+    const entryPanel = (masterMode && isOpen) ? `
+      <div class="po-entry">
+        <div class="toolbar tight" style="flex-wrap:wrap;gap:6px">
+          <select id="po-winner-sel" style="flex:1;min-width:120px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px">
+            <option value="">— Winner —</option>
+            <option value="${p1}"${w===p1?' selected':''}>${p1} (#${s1i+1})</option>
+            <option value="${p2}"${w===p2?' selected':''}>${p2} (#${s2i+1})</option>
+          </select>
+          <input id="po-result-inp" type="text" maxlength="10" placeholder="3&amp;2 / 1up / W/O"
+            value="${m.result||''}"
+            style="width:100px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px;font-family:monospace"
+            onkeydown="if(event.key==='Enter')savePoResult('r16',${matchIdx})"/>
+          <button class="btn gold slim" onclick="savePoResult('r16',${matchIdx})">Save</button>
+          <button class="btn ghost slim" onclick="closePoEntry()">✕</button>
+        </div>
+        ${w ? `<button class="btn ghost slim" style="margin-top:6px;font-size:10px" onclick="clearPoResult('r16',${matchIdx})">Clear result</button>` : ''}
+      </div>` : '';
+
+    return `<div class="po-match-wrap">
+      <div class="po-match ${clickable}" ${onClick}>
+        <div class="po-match-no">M${matchIdx+1}</div>
+        <div class="po-player ${p1cls}"><span class="po-sn">#${s1i+1}</span>${p1}</div>
+        <div class="po-vs">vs</div>
+        <div class="po-player right ${p2cls}">${p2}<span class="po-sn">#${s2i+1}</span></div>
+        <div>${resultBadge}</div>
+      </div>
+      ${entryPanel}
+    </div>`;
+  }
+
+  // Renders a QF or Shield match row (players derived from R16 outcomes)
+  function derivedRow(round, matchIdx, r16mA, r16mB, matchNum, role){
+    // role = 'winner' (QF) or 'loser' (Shield)
+    const fn = role === 'winner' ? r16Winner : r16Loser;
+    const p1 = fn(r16mA) || `${role==='winner'?'Winner':'Loser'} M${r16mA+1}`;
+    const p2 = fn(r16mB) || `${role==='winner'?'Winner':'Loser'} M${r16mB+1}`;
+    const tbd = !fn(r16mA) || !fn(r16mB);
+    const arr = pd[round] || [];
+    const m = arr[matchIdx] || { winner: null, result: null };
+    const w = m.winner;
+    const p1cls = w ? (w===p1 ? 'winner' : 'loser') : '';
+    const p2cls = w ? (w===p2 ? 'winner' : 'loser') : '';
+    const resultBadge = w ? `<span class="po-result-badge">${m.result||'W/O'}</span>` : '';
+    const isOpen = pe.round === round && pe.idx === matchIdx;
+    const canClick = masterMode && !tbd && !isOpen;
+    const onClick = canClick ? `onclick="openPoEntry('${round}',${matchIdx})"` : '';
+
+    const entryPanel = (masterMode && isOpen && !tbd) ? `
+      <div class="po-entry">
+        <div class="toolbar tight" style="flex-wrap:wrap;gap:6px">
+          <select id="po-winner-sel" style="flex:1;min-width:120px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px">
+            <option value="">— Winner —</option>
+            <option value="${p1}"${w===p1?' selected':''}>${p1}</option>
+            <option value="${p2}"${w===p2?' selected':''}>${p2}</option>
+          </select>
+          <input id="po-result-inp" type="text" maxlength="10" placeholder="3&amp;2 / 1up / W/O"
+            value="${m.result||''}"
+            style="width:100px;background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px;font-family:monospace"
+            onkeydown="if(event.key==='Enter')savePoResult('${round}',${matchIdx})"/>
+          <button class="btn gold slim" onclick="savePoResult('${round}',${matchIdx})">Save</button>
+          <button class="btn ghost slim" onclick="closePoEntry()">✕</button>
+        </div>
+        ${w ? `<button class="btn ghost slim" style="margin-top:6px;font-size:10px" onclick="clearPoResult('${round}',${matchIdx})">Clear result</button>` : ''}
+      </div>` : '';
+
+    const p1Display = tbd ? `<span style="color:var(--muted);font-style:italic">${p1}</span>` : p1;
+    const p2Display = tbd ? `<span style="color:var(--muted);font-style:italic">${p2}</span>` : p2;
+    return `<div class="po-match-wrap">
+      <div class="po-match ${canClick?'clickable':''}" ${onClick}>
+        <div class="po-match-no">M${matchNum}</div>
+        <div class="po-player ${p1cls}">${p1Display}</div>
+        <div class="po-vs">vs</div>
+        <div class="po-player right ${p2cls}">${p2Display}</div>
+        <div>${resultBadge}</div>
+      </div>
+      ${entryPanel}
+    </div>`;
+  }
+
+  // Seedings table
+  const seedRows = seeds.map((name, i) => {
+    const rd = rows.find(r => r.name === name);
+    const sp = rd ? rd.seedPoints : '?';
+    const pld = rd ? rd.played : '?';
+    return `<div class="po-seed-row">
+      <div class="po-seed-rank">${i+1}</div>
+      <div class="po-seed-name">${name}</div>
+      <div class="po-seed-pts">${sp}pts <span style="font-size:9px">${pld}ev</span></div>
+    </div>`;
+  }).join('');
+
+  const lockBtn = (masterMode && !isLocked && top16Live.length >= 2)
+    ? `<button class="btn gold slim" style="margin:8px 0 2px" onclick="lockPlayoffSeeds()">🔒 Lock Seeds for Bracket</button>`
+    : (isLocked ? `<div class="small tight" style="color:var(--muted);margin:2px 0">Seeds locked ${pd.seededAt||''}</div>` : '');
+
+  const unlockHint = !isLocked
+    ? `<div class="small tight" style="color:#d9a14a;margin-bottom:6px">⚠ Seeds not yet locked — will update as rounds are scored. Lock before May Chubbs.</div>`
+    : '';
+
+  const qualWarn = top16Live.length < 16
+    ? `<div class="small tight" style="color:#d9a14a;margin-bottom:6px">⚠ Only ${top16Live.length} of 16 playoff spots filled (need min ${ctx.PLAYOFF_MIN} rounds each). ${16-top16Live.length} spot${16-top16Live.length>1?'s':''} TBD.</div>`
+    : '';
+
+  // R16 HTML — Cup half (M1-M4) then Plate half (M5-M8)
+  const cupHalf = [0,1,2,3].map(i => r16Row(i)).join('');
+  const plateHalf = [4,5,6,7].map(i => r16Row(i)).join('');
+
+  // QF section (visible once ≥1 R16 result exists)
+  const qfSection = r16Done > 0 ? `
+    <div class="po-section-hdr">⚔️ Quarter Finals — May Chubbs</div>
+    <div class="po-sub-hdr">🏆 Cup</div>
+    <div class="po-bracket">
+      ${derivedRow('qf',0, 0,3, 9,'winner')}
+      ${derivedRow('qf',1, 1,2, 10,'winner')}
+    </div>
+    <div class="po-sub-hdr" style="margin-top:10px">🍽️ Plate</div>
+    <div class="po-bracket">
+      ${derivedRow('qf',2, 4,7, 11,'winner')}
+      ${derivedRow('qf',3, 5,6, 12,'winner')}
+    </div>
+    <div class="po-sub-hdr" style="margin-top:10px">🛡️ Shield — consolation (R16 losers)</div>
+    <div class="po-bracket">
+      ${derivedRow('shield',0, 0,3, 13,'loser')}
+      ${derivedRow('shield',1, 1,2, 14,'loser')}
+      ${derivedRow('shield',2, 4,7, 15,'loser')}
+      ${derivedRow('shield',3, 5,6, 16,'loser')}
+    </div>` : '';
+
+  const adminHint = masterMode
+    ? `<div class="small tight" style="color:var(--muted);margin-top:10px">Tap any match to enter result (master mode)</div>`
+    : '';
+
+  host.innerHTML = `
+    <div class="card">
+      <div class="section-title" style="margin-bottom:2px">🏆 Season 4 Playoffs</div>
+      <div class="small" style="color:var(--muted);margin-bottom:10px">§11 · Match play · 9 holes · Min ${ctx.PLAYOFF_MIN} rounds to qualify · R16 + QF at May Chubbs · SF + Final at June Chubbs</div>
+
+      <div class="po-section-hdr" style="border-top:none;margin-top:0">Playoff Seedings</div>
+      <div class="small tight" style="color:var(--muted);margin-bottom:4px">Ranked by total season points (all rounds, not best-7)</div>
+      ${unlockHint}${qualWarn}
+      <div class="po-seeds-grid">${seedRows}</div>
+      ${lockBtn}
+
+      <div class="po-section-hdr">🎯 Round of 16 — May Chubbs</div>
+      <div class="po-sub-hdr">🏆 Cup half (seeds 1–4 vs 13–16)</div>
+      <div class="po-bracket">${cupHalf}</div>
+      <div class="po-sub-hdr" style="margin-top:10px">🍽️ Plate half (seeds 5–8 vs 9–12)</div>
+      <div class="po-bracket">${plateHalf}</div>
+
+      ${qfSection}
+      ${adminHint}
+      <div class="small tight" style="color:var(--muted);margin-top:12px;line-height:1.5">
+        HCP strokes = diff between players · allocated to hardest holes (lowest SI first) · Tie → highest stableford → lower HCP · No-shows lose by walkover (§11)
+      </div>
+    </div>`;
 }
 
 // Collapsible sections on Setup tab (Roster, Stableford groups, etc.)
@@ -4501,7 +4812,7 @@ function renderTabs(){
   const gameTabs = scrambleBeforeStableford()
     ? [['day1','Scramble'],['day2','Stableford']]
     : [['day2','Stableford'],['day1','Scramble']];
-  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],...gameTabs,['season','📅 Season']];
+  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],...gameTabs,['season','📅 Season'],['playoffs','🏆 Playoffs']];
   document.getElementById('tabs').innerHTML = tabs.map(([id,label]) =>
     `<button class="tab-btn ${state.ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`
   ).join('\n');
@@ -6542,8 +6853,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.56) — bump both together on every deploy
-const APP_VERSION = '5.22';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.57) — bump both together on every deploy
+const APP_VERSION = '5.23';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
@@ -6664,6 +6975,7 @@ function renderAll(){
   renderDay2();
   renderLeaderboard();
   renderSeason();
+  renderPlayoffs();
   renderAbout();
   renderFooter();
   applyReadOnlyLocks();
