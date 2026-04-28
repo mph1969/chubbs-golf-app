@@ -79,7 +79,7 @@ The mobile app has a durable "seasons" concept:
 - **`chubbs_seasons_v1` localStorage** = `{ viewingSeasonId, seasons: { 'season-4': {...}, 'season-5': {...} } }`.
 - **Season 4 is baked-in:** `ChubbsMobileApp_v5/season-4.json` is generated from `Season 4 Scores.xlsx` (Terry's sheet) via a Python extractor in the parent directory. Regen when the xlsx updates.
 - **Phase 2 live-accumulate:** `appendCurrentEventToActiveSeason()` runs on every `saveEventSnapshot()`, keying by event id so re-saves overwrite in place.
-- **Player-name normalization** lives in the Python extractor: Mike H → Hanson, Mike → Mike W, Stuartom → Stuart, Ryan → Ryan N, PLZ → Penglei, Greame → Graeme, Matt → Matt D unless Matt D is already in that event.
+- **Player-name normalization** lives in the Python extractor: Mike H → Hanson, Mike → Mike W, Stuartom → Stuart, Ryan → Ryan N, PLZ → Penglei, Greame → Graeme. Three Matts: **Matt D** (top of standings), **Matthew SA** (new South African player — Mar Qingyuan "Other Matt", Apr Palm "Mathew"), **Matty** (older Shenzhen player matty_11989, none in current 8-event dataset). Map: bare "Matt" → Matt D when Matt D not already in event; "Other Matt" / "Mathew" → Matthew SA.
 
 ## Deployment Workflow
 
