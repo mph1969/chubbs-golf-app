@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 4,
   "id": "season-4",
   "name": "Chubbs Season 4",
   "status": "active",
@@ -3231,7 +3231,7 @@
           ]
         },
         {
-          "name": "Matt",
+          "name": "Matthew SA",
           "hcp": 25,
           "gross": [
             7,
@@ -3409,7 +3409,7 @@
           ]
         },
         {
-          "name": "Matthew",
+          "name": "Matthew SA",
           "hcp": 25,
           "gross": [
             7,
