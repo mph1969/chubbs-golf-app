@@ -48,7 +48,9 @@ Admin builds event config ──push──► Firebase /events/{eventId}/bundle
 - `renderSeason()` (~1959) — standings UI with Top-16 seed line + qualified-16 playoff line + ⚠ DNQ badges.
 - `season-4.json` — baked historical Season 4 data (7 events, 111 player-rounds Sept-Mar).
 
-**Admin (`ChubbsAdmin/`)** — ~2,300 lines:
+**Admin (`ChubbsAdmin/`)** — ~2,500 lines:
+- `season-4.json` — copy of mobile's season data (kept in sync — Python extractor writes both).
+- `buildPlayoffPayload()` / `renderPlayoffCard()` (v5.25) — §11 R16+QF setup card. Loads `./season-4.json`, applies admin's roster overrides, computes top-16 seedings, embeds in event bundle as `playoffs.{seeds, stage, seededAt, ...}`. Mobile receives → `season.playoffs.seeds` locked with `source:'admin'`.
 - `exportConfig()` / `applyConfigPayload()` — clone-an-event workflow. `init()` runs BEFORE form repopulation (order fix in v5.38) so course + date fields survive import.
 - `showLibraryPanel()` — in-app archive of 20 most-recent exports (bundles + configs), independent of OS download folder.
 - `pushToLiveApp()` — writes event bundle to Firebase.

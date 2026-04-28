@@ -1548,7 +1548,8 @@ function normalizeEventBundle(raw){
     day1ScrambleTeams:Array.isArray(data.day1ScrambleTeams) ? data.day1ScrambleTeams.map(item => normalizeLineup(item, 'team')) : [],
     day2Groups:Array.isArray(data.day2Groups) ? data.day2Groups.map(item => normalizeLineup(item, 'group')) : [],
     day1Challenges:Array.isArray(data.day1Challenges) ? data.day1Challenges : [],
-    day2Challenges:Array.isArray(data.day2Challenges) ? data.day2Challenges : []
+    day2Challenges:Array.isArray(data.day2Challenges) ? data.day2Challenges : [],
+    playoffs: (data.playoffs && typeof data.playoffs === 'object') ? data.playoffs : null
   };
 }
 function applyImportedEventBundle(bundle, requestedPlayerId){
@@ -2695,7 +2696,7 @@ function renderPlayoffs(){
     ? `<button class="btn gold slim" style="margin:8px 0 2px" onclick="lockPlayoffSeeds()">🔒 Lock Seeds for Bracket</button>`
     : (isLocked
         ? `<div class="toolbar tight" style="margin:2px 0;justify-content:space-between;align-items:center;flex-wrap:wrap">
-            <div class="small tight" style="color:var(--muted)">Seeds locked ${pd.seededAt||''}</div>
+            <div class="small tight" style="color:var(--muted)">${pd.source==='admin'?'☁️ Locked from Admin · ':''}Seeds locked ${pd.seededAt||''}</div>
             ${masterMode ? `<button class="btn ghost slim" style="font-size:10px" onclick="unlockPoSeeds()">🔓 Unlock</button>` : ''}
           </div>`
         : '');
@@ -2914,6 +2915,24 @@ function _doApplyBundle(bundle, requestedPlayerId){
     state.stableford.hole = sh;
   }
   if(Number.isFinite(parseInt(normalized.options.minDrives, 10))) state.scramble.minDrives = Math.max(1, Math.min(9, parseInt(normalized.options.minDrives, 10)));
+
+  // §11 — playoff bundle from admin push: lock seeds into season store.
+  // Master-mode users can still unlock for day-of edits (v5.24+).
+  if(normalized.playoffs && Array.isArray(normalized.playoffs.seeds) && normalized.playoffs.seeds.length){
+    try {
+      const store = ensureActiveSeason();
+      const season = store.seasons[ACTIVE_SEASON_ID];
+      if(season){
+        if(!season.playoffs) season.playoffs = {};
+        season.playoffs.seeds = normalized.playoffs.seeds.slice();
+        season.playoffs.seededAt = normalized.playoffs.seededAt || new Date().toISOString().slice(0,10);
+        season.playoffs.stage = normalized.playoffs.stage || 'r16';
+        season.playoffs.source = 'admin';
+        if(!Array.isArray(season.playoffs.r16)) season.playoffs.r16 = Array.from({length:8}, () => ({winner:null,result:null}));
+        saveSeasonStore(store);
+      }
+    } catch(e){ console.warn('[playoffs] failed to apply admin seeds:', e); }
+  }
 
   saveState();
   renderAll();
@@ -6956,8 +6975,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.58) — bump both together on every deploy
-const APP_VERSION = '5.24';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.59) — bump both together on every deploy
+const APP_VERSION = '5.25';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

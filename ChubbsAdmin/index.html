@@ -114,6 +114,44 @@
 
     /* Modal */
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(4px); }
+
+    /* ── Playoff card (§11) ─────────────────────────────────────────────── */
+    .po-toggle-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 12px;background:rgba(214,176,90,0.05);border:1px solid rgba(214,176,90,0.2);border-radius:10px;margin-bottom:14px}
+    .po-toggle-row label{margin:0;color:var(--gold2);text-transform:none;letter-spacing:0;font-size:13px;font-weight:700}
+    .po-toggle-row .small{font-size:11px;color:var(--muted);margin-top:2px;font-weight:400}
+    .po-toggle-switch{position:relative;width:48px;height:26px;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;transition:background 0.2s;flex-shrink:0}
+    .po-toggle-switch.on{background:linear-gradient(180deg,var(--gold2),var(--gold))}
+    .po-toggle-knob{position:absolute;top:3px;left:3px;width:20px;height:20px;background:#fff;border-radius:50%;transition:left 0.2s;box-shadow:0 2px 4px rgba(0,0,0,0.3)}
+    .po-toggle-switch.on .po-toggle-knob{left:25px}
+    .po-stage-pills{display:flex;gap:6px;background:rgba(255,255,255,0.04);border-radius:8px;padding:4px;margin-bottom:12px}
+    .po-stage-pill{flex:1;padding:8px;text-align:center;font-size:12px;font-weight:700;color:var(--muted);border-radius:6px;cursor:pointer;border:1px solid transparent}
+    .po-stage-pill.active{background:#12251b;border-color:var(--line);color:var(--gold2)}
+    .po-meta-row{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;margin:6px 0 10px}
+    .po-meta-row .po-count-badge{font-weight:800;color:var(--gold2);font-size:14px}
+    .po-roster-list{max-height:520px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;background:#0b1b14}
+    .po-roster-item{display:grid;grid-template-columns:32px 36px 1fr auto;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px solid var(--line);cursor:pointer;user-select:none;font-size:13px;transition:background 0.15s}
+    .po-roster-item:last-child{border-bottom:none}
+    .po-roster-item:hover{background:rgba(255,255,255,0.02)}
+    .po-roster-item.out{opacity:0.45;background:rgba(209,107,93,0.04)}
+    .po-roster-item.out .po-r-name{text-decoration:line-through}
+    .po-r-check{font-size:14px;text-align:center;font-weight:700;color:var(--green)}
+    .po-roster-item.out .po-r-check{color:var(--red)}
+    .po-r-rank{font-family:monospace;font-size:11px;color:var(--gold2);font-weight:800;text-align:center}
+    .po-roster-item.out .po-r-rank{color:var(--muted);font-weight:600}
+    .po-r-name{font-weight:700}
+    .po-r-pts{font-size:11px;color:var(--muted);font-family:monospace;white-space:nowrap}
+    .po-bracket-preview{margin-top:14px;border:1px solid var(--line);border-radius:10px;padding:12px;background:rgba(255,255,255,0.015)}
+    .po-bp-hdr{font-size:11px;font-weight:800;color:var(--gold2);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
+    .po-bp-match{display:grid;grid-template-columns:30px 1fr 24px 1fr;gap:6px;align-items:center;padding:6px 0;font-size:12px;border-bottom:1px solid rgba(255,255,255,0.04)}
+    .po-bp-match:last-child{border-bottom:none}
+    .po-bp-match-no{font-family:monospace;font-size:10px;color:var(--muted);text-align:center}
+    .po-bp-player{font-weight:600}
+    .po-bp-player.right{text-align:right}
+    .po-bp-player .seed{font-size:10px;color:var(--muted);margin:0 4px}
+    .po-bp-vs{font-size:10px;color:var(--muted);text-align:center}
+    .po-bp-tbd{color:var(--muted);font-style:italic}
+    .po-warn{color:#d9a14a;font-size:11px;margin:8px 0}
+    .po-load-status{font-size:10px;color:var(--muted);margin:4px 0 8px;font-family:monospace}
   </style>
 </head>
 <body>
@@ -398,6 +436,57 @@
             </div>
 
             <div class="team-grid" id="stableford-groups-container">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="card-playoff">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <h2 class="card-title collapsible-title" style="margin:0" onclick="toggleCardCollapse('card-playoff')">
+            <span><span class="collapse-chev">▾</span>6. 🏆 Playoff Setup
+              <span id="po-card-pill" class="collapsed-pill" style="font-style:normal">— optional</span>
+            </span>
+          </h2>
+        </div>
+        <div class="collapsible-body">
+          <div class="po-toggle-row">
+            <div>
+              <label style="margin:0">Include playoff bracket in this event</label>
+              <div class="small">Pushes locked seeds to the mobile app · Master users can edit on the day</div>
+            </div>
+            <div id="po-toggle" class="po-toggle-switch" onclick="togglePlayoffEnabled()">
+              <div class="po-toggle-knob"></div>
+            </div>
+          </div>
+          <div id="po-body" style="display:none">
+            <label>Stage</label>
+            <div class="po-stage-pills">
+              <div class="po-stage-pill active" data-stage="r16" onclick="setPlayoffStage('r16')">R16 + QF (May)</div>
+              <div class="po-stage-pill" data-stage="sf" onclick="setPlayoffStage('sf')">SF + Final (June)</div>
+            </div>
+
+            <div id="po-load-status" class="po-load-status">Season data not loaded yet</div>
+
+            <div class="po-meta-row">
+              <div><span id="po-fill-count" class="po-count-badge">0/16</span> playoff spots filled · <span id="po-confirmed-count">0</span> of <span id="po-qual-count">0</span> qualified players confirmed</div>
+              <button class="small ghost" id="po-reset-btn" onclick="resetPlayoffRoster()" style="display:none">Reset all</button>
+            </div>
+
+            <div id="po-warn-area"></div>
+
+            <label>Roster — tap to toggle each player in/out for May Chubbs</label>
+            <div class="po-roster-list" id="po-roster-list">
+              <div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Loading season data…</div>
+            </div>
+
+            <div id="po-bracket-preview" class="po-bracket-preview" style="display:none">
+              <div class="po-bp-hdr">Bracket preview · R16 — locked when you push to app</div>
+              <div id="po-bp-content"></div>
+            </div>
+
+            <div style="font-size:11px;color:var(--muted);margin-top:12px;line-height:1.5">
+              §11 · Top 16 confirmed players seeded by total season points (sum-all-rounds) · Cup half = seeds 1–4 vs 13–16 · Plate half = seeds 5–8 vs 9–12 · R16 losers drop to Shield bracket · No-shows lose by walkover
             </div>
           </div>
         </div>
@@ -1454,9 +1543,273 @@ function buildEventBundle() {
     },
     options: opts, players: playersOut, day1ScrambleTeams: d1Teams, day2Groups: d2Groups,
     day1Challenges: getChallenges('scramble'),
-    day2Challenges: getChallenges('stableford')
+    day2Challenges: getChallenges('stableford'),
+    playoffs: buildPlayoffPayload()
   };
 }
+
+// ── Playoff bracket setup (§11) ─────────────────────────────────────────
+// Source of truth for May/June Chubbs playoff seedings. Computes top-16 from
+// season-4.json, applies admin's roster overrides, locks pairings, and
+// embeds them in the event bundle pushed to mobile (chubbs-golf.netlify.app).
+const PO_STATE_KEY = 'chubbs_admin_playoff_v1';
+let poState = { enabled: false, stage: 'r16', roster: {} };  // roster: { name: false } when explicitly out
+let _poSeasonData = null;  // cached season-4.json
+let _poStandings = null;   // computed standings (qualified players sorted by seedPoints)
+
+function loadPoState(){
+  try { const s = JSON.parse(localStorage.getItem(PO_STATE_KEY) || '{}');
+    poState = Object.assign({ enabled: false, stage: 'r16', roster: {} }, s);
+  } catch(e){ poState = { enabled: false, stage: 'r16', roster: {} }; }
+}
+function savePoState(){
+  try { localStorage.setItem(PO_STATE_KEY, JSON.stringify(poState)); } catch(e){}
+}
+
+// Ported from mobile (kept identical so seedings match)
+function _poCanonName(n){
+  if(!n || typeof n !== 'string') return n || '';
+  return n.split(/\s+/).join(' ').trim();
+}
+function _poShotsReceived(hcp, si){
+  const safe = Math.max(0, parseInt(hcp || 0, 10));
+  const base = Math.floor(safe / 18);
+  const rem = safe % 18;
+  return base + (si <= rem ? 1 : 0);
+}
+function _poStablefordPoints(gross, par, shots){
+  if(gross === null || gross === undefined || gross === '') return null;
+  const net = gross - shots;
+  const diff = net - par;
+  if(diff <= -4) return 6;
+  if(diff === -3) return 5;
+  if(diff === -2) return 4;
+  if(diff === -1) return 3;
+  if(diff === 0) return 2;
+  if(diff === 1) return 1;
+  return 0;
+}
+const _PO_RANK_PTS = [13,11,10,9,8,7,6,5,4,3,2,1];
+const _PO_PLAYOFF_MIN = 3;
+
+// Aggregate a season's events → rows with seedPoints (sum-all-rounds)
+// Mirrors mobile aggregateSeason() with same tie-break rules.
+function _poAggregate(season){
+  if(!season || !Array.isArray(season.events)) return [];
+  const rankPts = season.rankPoints || _PO_RANK_PTS;
+  const agg = {};
+  const perPlayerEvents = {};
+  for(const ev of season.events){
+    const scored = [];
+    for(const p of ev.players){
+      const nm = _poCanonName(p.name);
+      let sb = 0, gross = 0;
+      const cb = []; let cbTot = 0;
+      for(let i=0; i<ev.holes.length; i++){
+        const g = p.gross[i];
+        if(g === null || g === undefined || g === '') continue;
+        const hole = ev.holes[i];
+        const shots = _poShotsReceived(p.hcp, hole.si);
+        const pts = _poStablefordPoints(g, hole.par, shots);
+        if(pts !== null) sb += pts;
+        gross += g;
+      }
+      for(let i=ev.holes.length-1; i>=0; i--){
+        const g = p.gross[i];
+        cbTot += (typeof g === 'number') ? g : 0;
+        cb.push(cbTot);
+      }
+      scored.push({ name: nm, stableford: sb, gross, cb });
+    }
+    scored.sort((a,b) => {
+      if(b.stableford !== a.stableford) return b.stableford - a.stableford;
+      for(let i=0; i<a.cb.length; i++){
+        if(a.cb[i] !== b.cb[i]) return a.cb[i] - b.cb[i];
+      }
+      return 0;
+    });
+    scored.forEach((row, rank) => {
+      if(!agg[row.name]){ agg[row.name] = { name: row.name, played: 0, stableford: 0 }; perPlayerEvents[row.name] = []; }
+      const epRaw = ev.players.find(p => _poCanonName(p.name) === row.name);
+      const override = (epRaw && Number.isFinite(epRaw.overrideSeasonPts)) ? epRaw.overrideSeasonPts : null;
+      const seasonPts = override !== null ? override : (rank < rankPts.length ? rankPts[rank] : 0);
+      agg[row.name].played += 1;
+      agg[row.name].stableford += row.stableford;
+      perPlayerEvents[row.name].push({ stableford: row.stableford, seasonPts });
+    });
+  }
+  return Object.values(agg).map(a => {
+    const evs = perPlayerEvents[a.name] || [];
+    const seedPoints = evs.reduce((s,e) => s + e.seasonPts, 0);
+    return { ...a, seedPoints, qualified: a.played >= _PO_PLAYOFF_MIN };
+  });
+}
+
+async function loadPoSeasonData(){
+  if(_poSeasonData) return _poSeasonData;
+  try {
+    const res = await fetch('./season-4.json', { cache: 'no-cache' });
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    _poSeasonData = await res.json();
+    const rows = _poAggregate(_poSeasonData);
+    _poStandings = rows.filter(r => r.qualified).sort((a,b) =>
+      (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
+    );
+    return _poSeasonData;
+  } catch(e){
+    console.error('Failed to load season-4.json:', e);
+    return null;
+  }
+}
+
+function _poRosterStatus(name){
+  return !(poState.roster && poState.roster[name] === false);
+}
+
+function togglePlayoffEnabled(){
+  poState.enabled = !poState.enabled;
+  savePoState();
+  document.getElementById('po-toggle').classList.toggle('on', poState.enabled);
+  document.getElementById('po-body').style.display = poState.enabled ? 'block' : 'none';
+  document.getElementById('po-card-pill').textContent = poState.enabled ? '— enabled' : '— optional';
+  if(poState.enabled) renderPlayoffCard();
+}
+
+function setPlayoffStage(stage){
+  poState.stage = stage;
+  savePoState();
+  document.querySelectorAll('.po-stage-pill').forEach(el => {
+    el.classList.toggle('active', el.dataset.stage === stage);
+  });
+  renderPlayoffCard();
+}
+
+function togglePlayoffRoster(name){
+  const cur = _poRosterStatus(name);
+  if(!poState.roster) poState.roster = {};
+  poState.roster[name] = !cur;
+  savePoState();
+  renderPlayoffCard();
+}
+
+function resetPlayoffRoster(){
+  if(!confirm('Reset roster to all qualified players confirmed?')) return;
+  poState.roster = {};
+  savePoState();
+  renderPlayoffCard();
+}
+
+function _poConfirmedQual(){
+  if(!_poStandings) return [];
+  return _poStandings.filter(r => _poRosterStatus(r.name));
+}
+
+function _poTop16(){
+  return _poConfirmedQual().slice(0, 16);
+}
+
+function buildPlayoffPayload(){
+  if(!poState.enabled) return null;
+  const top16 = _poTop16();
+  if(top16.length < 2) return null;
+  return {
+    version: 1,
+    stage: poState.stage,
+    seeds: top16.map(r => r.name),
+    seedPoints: top16.map(r => r.seedPoints),
+    seededAt: new Date().toISOString().slice(0,10),
+    rosterCount: top16.length,
+    totalQualified: _poStandings ? _poStandings.length : 0,
+    droppedFromTop16: _poStandings
+      ? _poStandings.slice(0, 16).filter(r => !_poRosterStatus(r.name)).map(r => r.name)
+      : []
+  };
+}
+
+function renderPlayoffCard(){
+  const list = document.getElementById('po-roster-list');
+  if(!list) return;
+  if(!_poSeasonData){
+    list.innerHTML = `<div style="padding:24px;text-align:center;color:var(--muted);font-size:13px">Loading season data…</div>`;
+    return;
+  }
+
+  const events = _poSeasonData.events || [];
+  document.getElementById('po-load-status').textContent =
+    `Season 4 · v${_poSeasonData.version || '?'} · ${events.length} events · ${_poStandings.length} qualified players`;
+
+  const allQual = _poStandings || [];
+  const confirmedQual = _poConfirmedQual();
+  const top16 = _poTop16();
+  const droppedFromTop16 = allQual.slice(0, 16).filter(r => !_poRosterStatus(r.name));
+
+  document.getElementById('po-fill-count').textContent = `${top16.length}/16`;
+  document.getElementById('po-confirmed-count').textContent = confirmedQual.length;
+  document.getElementById('po-qual-count').textContent = allQual.length;
+
+  const hasOverrides = poState.roster && Object.values(poState.roster).some(v => v === false);
+  document.getElementById('po-reset-btn').style.display = hasOverrides ? 'inline-block' : 'none';
+
+  // Warnings
+  let warnHtml = '';
+  if(top16.length < 16){
+    warnHtml += `<div class="po-warn">⚠ Only ${top16.length} of 16 spots filled. ${16-top16.length} player${16-top16.length>1?'s':''} TBD — bracket will have byes.</div>`;
+  }
+  if(droppedFromTop16.length > 0){
+    warnHtml += `<div class="po-warn">↻ Reseeded — ${droppedFromTop16.length} top-16 player${droppedFromTop16.length>1?'s':''} dropped: ${droppedFromTop16.map(r=>r.name).join(', ')}</div>`;
+  }
+  document.getElementById('po-warn-area').innerHTML = warnHtml;
+
+  // Roster list
+  list.innerHTML = allQual.map(r => {
+    const confirmed = _poRosterStatus(r.name);
+    const seedIdx = confirmedQual.findIndex(c => c.name === r.name);
+    const rankLabel = !confirmed ? '—' : (seedIdx >= 0 && seedIdx < 16 ? `#${seedIdx+1}` : '·');
+    const safeName = r.name.replace(/'/g,"\\'");
+    return `<div class="po-roster-item ${confirmed?'':'out'}" onclick="togglePlayoffRoster('${safeName}')">
+      <div class="po-r-check">${confirmed ? '✓' : '✗'}</div>
+      <div class="po-r-rank">${rankLabel}</div>
+      <div class="po-r-name">${r.name}</div>
+      <div class="po-r-pts">${r.seedPoints}pts · ${r.played}ev</div>
+    </div>`;
+  }).join('');
+
+  // Bracket preview
+  const bp = document.getElementById('po-bracket-preview');
+  const bpc = document.getElementById('po-bp-content');
+  if(top16.length >= 2 && poState.stage === 'r16'){
+    const pairs = [[0,15],[1,14],[2,13],[3,12],[4,11],[5,10],[6,9],[7,8]];
+    bpc.innerHTML = pairs.map(([a,b], i) => {
+      const p1 = top16[a] ? top16[a].name : null;
+      const p2 = top16[b] ? top16[b].name : null;
+      const p1Html = p1 ? `<span class="seed">#${a+1}</span>${p1}` : `<span class="po-bp-tbd">— TBD —</span>`;
+      const p2Html = p2 ? `${p2}<span class="seed">#${b+1}</span>` : `<span class="po-bp-tbd">— TBD —</span>`;
+      return `<div class="po-bp-match">
+        <div class="po-bp-match-no">M${i+1}</div>
+        <div class="po-bp-player">${p1Html}</div>
+        <div class="po-bp-vs">vs</div>
+        <div class="po-bp-player right">${p2Html}</div>
+      </div>`;
+    }).join('');
+    bp.style.display = 'block';
+  } else {
+    bp.style.display = 'none';
+  }
+}
+
+async function initPlayoffCard(){
+  loadPoState();
+  document.getElementById('po-toggle').classList.toggle('on', poState.enabled);
+  document.getElementById('po-body').style.display = poState.enabled ? 'block' : 'none';
+  document.getElementById('po-card-pill').textContent = poState.enabled ? '— enabled' : '— optional';
+  document.querySelectorAll('.po-stage-pill').forEach(el => {
+    el.classList.toggle('active', el.dataset.stage === poState.stage);
+  });
+  await loadPoSeasonData();
+  renderPlayoffCard();
+}
+
+document.addEventListener('DOMContentLoaded', () => { initPlayoffCard(); });
 
 // ── Export/Import Admin Config ──
 function exportConfig(){
@@ -1488,7 +1841,8 @@ function exportConfig(){
     challenges:{
       scramble:getChallenges('scramble'),
       stableford:getChallenges('stableford')
-    }
+    },
+    playoff: { enabled: poState.enabled, stage: poState.stage, roster: poState.roster || {} }
   };
   // Mirror event-bundle naming: {eventId}-{LIVE|TEST}-{YYYYMMDD}-config.json
   // Falls back to {eventName}-config-{date}.json if no event has been
@@ -1671,6 +2025,11 @@ function applyConfigPayload(config){
     populateChallengeHoles('stableford');
     (config.challenges.scramble || []).forEach(ch => { const sel = document.getElementById('ch-scramble-'+ch.id); if(sel) sel.value = ch.hole; });
     (config.challenges.stableford || []).forEach(ch => { const sel = document.getElementById('ch-stableford-'+ch.id); if(sel) sel.value = ch.hole; });
+  }
+  if(config.playoff){
+    poState = Object.assign({ enabled: false, stage: 'r16', roster: {} }, config.playoff);
+    savePoState();
+    initPlayoffCard();
   }
   alert('Config applied. Review the setup and update dates/event name for the new event.');
 }
