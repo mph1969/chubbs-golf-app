@@ -2181,12 +2181,15 @@ function aggregateSeason(season){
     const best7 = evs.map(e => e.seasonPts).sort((x,y) => y - x).slice(0, 7).reduce((s,v) => s+v, 0);
     const perfect10Bonus = (a.played === 10) ? 3 : 0;   // §10.2 bonus for full attendance
     const points = best7 + perfect10Bonus;
+    // Playoff seeding uses sum-of-all-rounds rather than best-7 (per Terry, 2026-04-28).
+    // Final season standings still use best-7 + perfect-10 bonus.
+    const seedPoints = evs.reduce((s,e) => s + e.seasonPts, 0);
     const roundAvg = a.played ? (best7 / a.played) : 0;
     const sorted = evs.slice().sort((x,y) => y.stableford - x.stableford);
     const best = sorted[0] || null;
     const worst = sorted.length > 1 ? sorted[sorted.length-1] : null;
     const qualified = a.played >= PLAYOFF_MIN;
-    return { ...a, points, best7, perfect10Bonus, roundAvg, events: evs, best, worst, qualified };
+    return { ...a, points, seedPoints, best7, perfect10Bonus, roundAvg, events: evs, best, worst, qualified };
   });
   // expose computed context for the renderer
   Object.defineProperty(rows, '_ctx', { value: { totalEvents, PLAYOFF_MIN, PLAYOFF_SLOTS }, enumerable: false });
@@ -6539,8 +6542,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.55) — bump both together on every deploy
-const APP_VERSION = '5.21';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.56) — bump both together on every deploy
+const APP_VERSION = '5.22';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
