@@ -6,9 +6,9 @@ Monthly golf tournament app for a friend group in Nansha. Season runs Sept→Jun
 
 | Path | What | Netlify site | Deploys |
 |---|---|---|---|
-| `ChubbsMobileApp_v5/` | Scorer PWA used by players on course | `chubbs-mobile.netlify.app` | auto on push to master |
+| `ChubbsMobileApp_v5/` | Scorer PWA used by players on course | `chubbs-golf.netlify.app` | auto on push to master |
 | `ChubbsAdmin/` | Event-setup portal used by organiser | `chubbs-admin.netlify.app` | auto on push to master |
-| _(future)_ | Public leaderboard + honeypot prank | `chubbs-golf.netlify.app` | not yet built — see `Archive/chubbs-golf-app-master.zip` |
+| _(future)_ | Public leaderboard + honeypot prank | TBD (separate site) | not yet built — see `Archive/chubbs-golf-app-master.zip` |
 
 GitHub: `mph1969/chubbs-golf-app` (this repo). Firebase project: Realtime Database under Michael's account.
 
