@@ -1645,21 +1645,36 @@ function _poAggregate(season){
   });
 }
 
+// season-4.json is single-sourced from the mobile app via GitHub raw.
+// Local ./season-4.json is the offline fallback only. The mobile app's
+// copy in ChubbsMobileApp_v5/season-4.json is the canonical file.
+const PO_SEASON_REMOTE = 'https://raw.githubusercontent.com/mph1969/chubbs-golf-app/master/ChubbsMobileApp_v5/season-4.json';
 async function loadPoSeasonData(){
   if(_poSeasonData) return _poSeasonData;
+  let source = 'unknown';
   try {
-    const res = await fetch('./season-4.json', { cache: 'no-cache' });
+    const res = await fetch(PO_SEASON_REMOTE, { cache: 'default' });
     if(!res.ok) throw new Error('HTTP ' + res.status);
     _poSeasonData = await res.json();
-    const rows = _poAggregate(_poSeasonData);
-    _poStandings = rows.filter(r => r.qualified).sort((a,b) =>
-      (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
-    );
-    return _poSeasonData;
-  } catch(e){
-    console.error('Failed to load season-4.json:', e);
-    return null;
+    source = 'github';
+  } catch(remoteErr){
+    console.warn('[playoffs] remote season-4.json fetch failed, falling back to local:', remoteErr);
+    try {
+      const res = await fetch('./season-4.json', { cache: 'no-cache' });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      _poSeasonData = await res.json();
+      source = 'local-fallback';
+    } catch(localErr){
+      console.error('[playoffs] both remote and local season-4.json failed:', localErr);
+      return null;
+    }
   }
+  _poSeasonData._loadSource = source;
+  const rows = _poAggregate(_poSeasonData);
+  _poStandings = rows.filter(r => r.qualified).sort((a,b) =>
+    (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
+  );
+  return _poSeasonData;
 }
 
 function _poRosterStatus(name){
@@ -1735,8 +1750,11 @@ function renderPlayoffCard(){
   }
 
   const events = _poSeasonData.events || [];
+  const srcLabel = _poSeasonData._loadSource === 'github' ? '☁️ GitHub'
+                 : _poSeasonData._loadSource === 'local-fallback' ? '⚠ local fallback'
+                 : 'unknown';
   document.getElementById('po-load-status').textContent =
-    `Season 4 · v${_poSeasonData.version || '?'} · ${events.length} events · ${_poStandings.length} qualified players`;
+    `${srcLabel} · Season 4 v${_poSeasonData.version || '?'} · ${events.length} events · ${_poStandings.length} qualified players`;
 
   const allQual = _poStandings || [];
   const confirmedQual = _poConfirmedQual();
