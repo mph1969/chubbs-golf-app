@@ -542,6 +542,7 @@
     <section id="day1" class="section"></section>
     <section id="day2" class="section"></section>
     <section id="leaderboard" class="section"></section>
+    <section id="mycard" class="section"></section>
     <section id="season" class="section"></section>
     <section id="playoffs" class="section"></section>
     <section id="about" class="section"></section>
@@ -909,7 +910,12 @@ const DEFAULT_STATE = {
     stampCounter:0,
     digitalDeal:null
   },
-  ui:{tab:'setup', locationLang:'zh', courseEditorTarget:'day1', day1Revealed:false, adminTab:'players'}
+  ui:{tab:'setup', locationLang:'zh', courseEditorTarget:'day1', day1Revealed:false, adminTab:'players'},
+  // My Card tab (v5.43): personal real-time scoring panel.
+  // manualSlot is used only in non-imported (manual) mode where there's no
+  // "Playing as" identity to bind — player picks themselves once.
+  // panels = which optional cards to show; defaults pick the must-haves.
+  myCard:{ manualSlot:-1, panels:{ stbf:true, gn:true, putts:true, poker:false, last5:false } }
 };
 
 function deepClone(obj){ return JSON.parse(JSON.stringify(obj)); }
@@ -2251,7 +2257,14 @@ function aggregateSeason(season){
   });
   // expose computed context for the renderer
   Object.defineProperty(rows, '_ctx', { value: { totalEvents, PLAYOFF_MIN, PLAYOFF_SLOTS }, enumerable: false });
-  rows.sort((a,b) => (b.points - a.points) || (b.stableford - a.stableford));
+  // Cut-line tiebreak per Terry 2026-04-29: best-7 desc, then most rounds played
+  // (rewards attendance), then sum-of-all-rounds (matches Terry's spreadsheet
+  // head-of-table ordering when best-7 ties), then total stableford as final.
+  rows.sort((a,b) =>
+    (b.points - a.points)
+    || (b.played - a.played)
+    || (b.seedPoints - a.seedPoints)
+    || (b.stableford - a.stableford));
   return rows;
 }
 
@@ -4968,7 +4981,7 @@ function renderTabs(){
   const gameTabs = scrambleBeforeStableford()
     ? [['day1','Scramble'],['day2','Stableford']]
     : [['day2','Stableford'],['day1','Scramble']];
-  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],...gameTabs,['season','📅 Season'],['playoffs','🏆 Playoffs']];
+  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],['mycard','My Card'],...gameTabs,['season','📅 Season'],['playoffs','🏆 Playoffs']];
   document.getElementById('tabs').innerHTML = tabs.map(([id,label]) =>
     `<button class="tab-btn ${state.ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`
   ).join('\n');
@@ -5769,6 +5782,412 @@ function renderStablefordScorecard(){
     <div class="card" style="border-top:none;border-radius:0 0 22px 22px;margin-top:-1px">
     <div class="small tight" style="margin-bottom:8px">Gross scores · (Stableford pts) in totals. Tap any cell to jump.</div>${half(0)}
     <div class="small" style="margin-top:8px;margin-bottom:4px">Back 9:</div>${half(9)}</div></details>`;
+}
+
+// ── My Card (v5.43) ─────────────────────────────────────────────────────
+// Personal real-time scoring panel. Identity is bound to "Playing as":
+//   - imported event → state.eventPlayerId → match in current day2 group
+//   - manual mode    → state.myCard.manualSlot picked once on the tab
+// Renders inside #mycard. Auto-refreshes via the existing renderAll() chain
+// after every score input (local pushState + Firebase onValue both call it).
+
+function getMyPlayerIdx(){
+  const players = currentPlayers('stableford') || [];
+  if(hasImportedEvent() && state.eventPlayerId){
+    const me = currentEventPlayer();
+    if(me){
+      const myName = String(me.shortName || me.displayName || me.fullName || me.playerId || '').toUpperCase();
+      const idx = players.findIndex(p => String(p && p.name || '').toUpperCase() === myName);
+      if(idx >= 0) return idx;
+      const pidIdx = players.findIndex(p => String(p && p.playerId || '') === String(me.playerId));
+      if(pidIdx >= 0) return pidIdx;
+    }
+    return -1;
+  }
+  // Manual mode — slot picker
+  const slot = (state.myCard && Number.isInteger(state.myCard.manualSlot)) ? state.myCard.manualSlot : -1;
+  if(slot >= 0 && slot < players.length && (players[slot] && players[slot].name || '').trim()) return slot;
+  return -1;
+}
+
+function setMyManualSlot(slot){
+  state.myCard = state.myCard || { manualSlot:-1, panels:{ stbf:true, gn:true, putts:true, poker:false, last5:false } };
+  state.myCard.manualSlot = parseInt(slot, 10);
+  saveState();
+  renderMyCard();
+}
+
+function toggleMyCardPanel(id){
+  state.myCard = state.myCard || { manualSlot:-1, panels:{} };
+  state.myCard.panels = state.myCard.panels || {};
+  state.myCard.panels[id] = !state.myCard.panels[id];
+  saveState();
+  renderMyCard();
+}
+
+function _mcPanels(){
+  const p = (state.myCard && state.myCard.panels) || {};
+  return { stbf:p.stbf!==false, gn:p.gn!==false, putts:p.putts!==false, poker:!!p.poker, last5:!!p.last5 };
+}
+
+// Per-player aggregates for My Card (cheaper than going through aggregateSeason)
+function _mcPlayerStats(idx){
+  const players = currentPlayers('stableford') || [];
+  const me = players[idx]; if(!me) return null;
+  const course = activeCourse('day2');
+  const holes = (course && course.holes) || [];
+  let gross = 0, net = 0, sb = 0, par = 0, entered = 0, putts = 0, threePuttCount = 0, puttsEntered = 0;
+  const perHole = []; // {holeIdx, gross, par, sb, putts, isNetBirdie, isDoublePar}
+  for(let i=0; i<holes.length; i++){
+    const bucket = state.stableford.holes[i] || {};
+    const g = bucket.gross && bucket.gross[idx];
+    const pu = bucket.putts && bucket.putts[idx];
+    const meta = holes[i] || {};
+    const shots = (typeof meta.si === 'number') ? shotsReceived(me.hcp, meta.si) : 0;
+    if(typeof g === 'number'){
+      gross += g; par += (meta.par || 0); entered += 1;
+      net += (g - shots);
+      const pts = stablefordPoints(g, meta.par, shots);
+      if(pts !== null) sb += pts;
+      perHole.push({
+        holeIdx:i, gross:g, par:meta.par, si:meta.si, shots,
+        sb:pts || 0, putts:(typeof pu === 'number' ? pu : null),
+        isNetBirdie: (g - shots - (meta.par || 0)) === -1,
+        isDoublePar: g >= 2 * (meta.par || 0)
+      });
+    }
+    if(typeof pu === 'number'){ putts += pu; puttsEntered += 1; if(pu >= 3) threePuttCount += 1; }
+  }
+  return { me, idx, gross, net, sb, par, entered, putts, puttsEntered, threePuttCount, perHole, totalHoles:holes.length };
+}
+
+function _mcEmptyState(reason){
+  const setupBtn = `<button class="btn gold slim" onclick="setTab('setup')">Open Setup →</button>`;
+  return `<div class="card" style="text-align:center;padding:28px 20px">
+    <div style="font-size:32px;margin-bottom:8px">🃏</div>
+    <div style="font-size:15px;font-weight:800;color:var(--gold2);margin-bottom:8px">My Card</div>
+    <div class="small tight" style="color:var(--muted);margin-bottom:14px;line-height:1.55">${reason}</div>
+    ${setupBtn}
+  </div>`;
+}
+
+function _mcManualPicker(){
+  const players = currentPlayers('stableford') || [];
+  const slot = (state.myCard && Number.isInteger(state.myCard.manualSlot)) ? state.myCard.manualSlot : -1;
+  const opts = players.map((p, i) => {
+    const nm = (p && p.name || '').trim() || `Player ${i+1}`;
+    return `<option value="${i}"${i===slot?' selected':''}>${nm}</option>`;
+  }).join('');
+  return `<div class="card" style="text-align:center;padding:24px 18px">
+    <div style="font-size:32px;margin-bottom:6px">🃏</div>
+    <div style="font-size:15px;font-weight:800;color:var(--gold2);margin-bottom:6px">My Card</div>
+    <div class="small tight" style="color:var(--muted);margin-bottom:14px">Pick yourself once — only your scores will appear here.</div>
+    <select onchange="setMyManualSlot(this.value)" style="background:rgba(255,255,255,0.05);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px;font-weight:700;min-width:180px">
+      <option value="-1" ${slot<0?'selected':''}>— Pick a player —</option>
+      ${opts}
+    </select>
+  </div>`;
+}
+
+function _mcStablefordHero(stats){
+  if(!stats) return '';
+  const big = stats.entered > 0 ? stats.sb : '—';
+  const sub = stats.entered > 0 ? `thru ${stats.entered} of ${stats.totalHoles} holes` : 'Awaiting first hole';
+  return `<div class="card" style="text-align:center;padding:36px 18px;background:linear-gradient(135deg,rgba(214,176,90,0.12),rgba(42,163,106,0.04));border:1px solid rgba(214,176,90,0.32);min-height:38vh;display:flex;flex-direction:column;justify-content:center">
+    <div style="font-family:'DM Mono',monospace;font-size:104px;font-weight:900;color:var(--gold2);line-height:1;letter-spacing:-2px">${big}</div>
+    <div style="font-size:13px;font-weight:800;letter-spacing:.18em;color:var(--gold2);margin-top:14px;text-transform:uppercase">Stableford</div>
+    <div class="small tight" style="color:var(--muted);margin-top:4px">${sub}</div>
+  </div>`;
+}
+
+function _mcGrossNet(stats){
+  if(!stats || stats.entered === 0){
+    return `<div class="card"><div class="meta-grid"><div class="meta"><div class="k">Gross</div><div class="v">—</div></div><div class="meta"><div class="k">Net</div><div class="v">—</div></div></div></div>`;
+  }
+  const grossDiff = stats.gross - stats.par;
+  const netDiff = stats.net - stats.par;
+  const fmt = (d) => d > 0 ? `+${d}` : `${d}`;
+  return `<div class="card" style="padding:14px 16px">
+    <div class="meta-grid">
+      <div class="meta"><div class="k">Gross</div><div class="v" style="font-size:28px;font-family:'DM Mono',monospace;color:var(--gold2)">${stats.gross}</div><div class="small" style="color:var(--muted);font-size:11px">${fmt(grossDiff)} vs par</div></div>
+      <div class="meta"><div class="k">Net</div><div class="v" style="font-size:28px;font-family:'DM Mono',monospace;color:var(--gold2)">${stats.net}</div><div class="small" style="color:var(--muted);font-size:11px">${fmt(netDiff)} vs par</div></div>
+    </div>
+  </div>`;
+}
+
+function _mcPutts(stats){
+  if(!stats) return '';
+  if(stats.puttsEntered === 0){
+    return `<div class="card" style="padding:14px 16px"><div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--gold2);text-transform:uppercase;margin-bottom:6px">Putts</div><div class="small tight" style="color:var(--muted)">No putts entered yet.</div></div>`;
+  }
+  const avg = (stats.putts / stats.puttsEntered).toFixed(2);
+  const trips = stats.threePuttCount;
+  return `<div class="card" style="padding:14px 16px">
+    <div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--gold2);text-transform:uppercase;margin-bottom:8px">Putts</div>
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+      <div style="font-family:'DM Mono',monospace;font-size:32px;font-weight:900;color:var(--gold2)">${stats.putts}</div>
+      <div class="small tight" style="color:var(--muted)">thru ${stats.puttsEntered} · avg ${avg}${trips ? ` · ${trips}× 3-putt` : ''}</div>
+    </div>
+  </div>`;
+}
+
+function _mcPoker(stats){
+  if(!state.options.threePuttPoker) return '';
+  if(!stats) return '';
+  const cards = stats.threePuttCount;
+  const ps = pokerSummary();
+  const currency = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency) || 'RMB';
+  const stamps = (state.poker && state.poker.stampCounter) || 0;
+  return `<div class="card" style="padding:14px 16px">
+    <div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--gold2);text-transform:uppercase;margin-bottom:8px">3-Putt Poker</div>
+    <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap">
+      <div style="font-family:'DM Mono',monospace;font-size:32px;font-weight:900;color:var(--gold2)">${cards}</div>
+      <div class="small tight" style="color:var(--muted)">card${cards===1?'':'s'} earned · pot ${ps.pot} ${currency}${stamps?` · ${stamps} stamp${stamps===1?'':'s'}`:''}</div>
+    </div>
+    <div class="small tight" style="color:var(--muted);margin-top:6px">Need 5+ for a poker hand at the deal.</div>
+  </div>`;
+}
+
+function _mcLast5(stats){
+  if(!stats || !stats.perHole.length) return '';
+  const last = stats.perHole.slice(-5);
+  const cells = last.map(h => {
+    const icon = h.isNetBirdie ? '✦' : (h.isDoublePar ? '▼' : '●');
+    const colour = h.isNetBirdie ? 'var(--green)' : (h.isDoublePar ? '#ffb5ae' : 'var(--muted)');
+    return `<div style="text-align:center;flex:1">
+      <div class="small" style="color:var(--muted);font-size:10px">H${h.holeIdx+1}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:800;color:var(--ink)">${h.gross}</div>
+      <div style="font-size:13px;color:${colour}">${icon}</div>
+      <div class="small" style="color:var(--gold2);font-size:11px;font-weight:700">${h.sb}</div>
+    </div>`;
+  }).join('');
+  return `<div class="card" style="padding:14px 16px">
+    <div style="font-size:11px;font-weight:800;letter-spacing:.16em;color:var(--gold2);text-transform:uppercase;margin-bottom:8px">Last ${last.length} hole${last.length===1?'':'s'}</div>
+    <div style="display:flex;gap:6px">${cells}</div>
+    <div class="small tight" style="color:var(--muted);margin-top:6px">✦ Net birdie · ▼ Double par · ● Par-ish · bottom row = stableford</div>
+  </div>`;
+}
+
+function _mcGearPanel(){
+  const p = _mcPanels();
+  const row = (id, label, gateOk) => {
+    const checked = p[id] ? 'checked' : '';
+    const dis = gateOk === false ? 'disabled style="opacity:0.4"' : '';
+    return `<label style="display:flex;align-items:center;gap:10px;padding:8px 4px;border-bottom:1px solid var(--line);font-size:13px"${gateOk===false?' title="Enable in Setup options"':''}>
+      <input type="checkbox" ${checked} ${dis} onchange="toggleMyCardPanel('${id}')" />
+      <span>${label}</span>
+    </label>`;
+  };
+  return `<details class="card" style="padding:10px 16px;margin-top:10px">
+    <summary style="cursor:pointer;font-weight:800;font-size:13px;color:var(--gold2);list-style:none;padding:6px 0">⚙️ Customize panels</summary>
+    <div style="margin-top:8px">
+      ${row('stbf','Stableford big number')}
+      ${row('gn','Gross / Net')}
+      ${row('putts','Putts')}
+      ${row('poker','3-putt poker', !!state.options.threePuttPoker)}
+      ${row('last5','Last 5 holes')}
+    </div>
+  </details>`;
+}
+
+function renderMyCard(){
+  const host = document.getElementById('mycard');
+  if(!host) return;
+
+  const players = currentPlayers('stableford') || [];
+  if(!players.length || !players.some(p => p && (p.name || '').trim())){
+    host.innerHTML = _mcEmptyState('Load an event from your WeChat link to see your card.');
+    return;
+  }
+
+  let idx = getMyPlayerIdx();
+
+  // Manual mode without a slot picked → show picker
+  if(idx < 0 && !hasImportedEvent()){
+    host.innerHTML = _mcManualPicker();
+    return;
+  }
+  // Imported event but identity not set or not in field
+  if(idx < 0 && hasImportedEvent()){
+    if(!state.eventPlayerId){
+      host.innerHTML = _mcEmptyState('Pick "Playing as" in Setup so your card knows who you are.');
+    } else {
+      host.innerHTML = _mcEmptyState('You\'re not in the active group for this round. Update "Playing as" in Setup if that\'s wrong.');
+    }
+    return;
+  }
+
+  const stats = _mcPlayerStats(idx);
+  if(!stats){ host.innerHTML = _mcEmptyState('No data yet for your slot.'); return; }
+
+  const course = activeCourse('day2');
+  const courseName = (course && course.name) || '';
+  const holeIdx = state.stableford.hole;
+  const panels = _mcPanels();
+
+  const headerRow = `<div class="card" style="padding:10px 14px;margin-bottom:10px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+      <div style="min-width:0">
+        <div style="font-weight:800;font-size:15px;color:var(--gold2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${stats.me.name || 'Me'}</div>
+        <div class="small tight" style="color:var(--muted)">HCP ${stats.me.hcp || 0} · Hole ${holeIdx+1}/18${courseName?` · ${courseName}`:''}</div>
+      </div>
+    </div>
+  </div>`;
+
+  const sections = [
+    panels.stbf  ? _mcStablefordHero(stats) : '',
+    panels.gn    ? _mcGrossNet(stats) : '',
+    panels.putts ? _mcPutts(stats) : '',
+    panels.poker ? _mcPoker(stats) : '',
+    panels.last5 ? _mcLast5(stats) : ''
+  ].filter(Boolean).join('');
+
+  host.innerHTML = `${headerRow}${sections}${_mcGearPanel()}`;
+}
+
+// ── Intermission card (v5.42) ──
+// Shows on Leaderboard tab between events: April recap + Best-7 standings +
+// Final Two teaser + Playoffs link. Hides automatically when scorers start a
+// new round (any score entered → !isIntermission → card disappears).
+const FINAL_TWO_INFO = [
+  { id:'yinli', label:'May Chubbs · Yinli',  city:'Dongguan',
+    days:'Fri 22 May (Scramble) + Sat 23 May (Chubbs + Playoffs R1)',
+    cost:'¥2,800', payBy:'2026-05-09', payByLabel:'May 9' },
+  { id:'birds', label:'June Chubbs · Birds', city:'Huizhou',
+    days:'Sat 6 Jun (Chubbs + Playoffs R2) + Sun 7 Jun (Scramble)',
+    cost:'¥2,600', payBy:'2026-05-16', payByLabel:'May 16' }
+];
+const FINAL_TWO_SIGNUPS = 14; // confirmed in WeChat thread (29 Apr)
+
+function _daysUntilISO(iso){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(iso + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+// Per-event ranking with handbook countback (gross from H18 backwards, no HCP)
+function _rankEventForIntermission(event){
+  if(!event || !event.holes || !event.players) return [];
+  const scored = event.players.map(p => {
+    let sb = 0, gross = 0;
+    for(let i=0; i<event.holes.length; i++){
+      const g = p.gross[i];
+      if(g === null || g === undefined || g === '') continue;
+      const hole = event.holes[i];
+      const shots = shotsReceived(p.hcp, hole.si);
+      const pts = stablefordPoints(g, hole.par, shots);
+      if(pts !== null) sb += pts;
+      gross += g;
+    }
+    const cb = [];
+    let cbTot = 0;
+    for(let i=event.holes.length-1; i>=0; i--){
+      const g = p.gross[i];
+      cbTot += (typeof g === 'number') ? g : 0;
+      cb.push(cbTot);
+    }
+    return { name: p.name, hcp: p.hcp, stableford: sb, gross, cb };
+  });
+  scored.sort((a,b) => {
+    if(b.stableford !== a.stableford) return b.stableford - a.stableford;
+    for(let i=0; i<a.cb.length; i++){
+      if(a.cb[i] !== b.cb[i]) return a.cb[i] - b.cb[i];
+    }
+    return 0;
+  });
+  return scored;
+}
+
+function renderIntermissionCard(){
+  // Detection: no live scoring activity (active event empty or finished)
+  const scrambleHasScores = scrambleTotals().entered > 0;
+  const stableScores = leaderboardPlayers().some(r => r.entered > 0);
+  if(scrambleHasScores || stableScores) return '';
+
+  const store = ensureActiveSeason();
+  const season = store && store.seasons && store.seasons[ACTIVE_SEASON_ID];
+  if(!season || !Array.isArray(season.events) || !season.events.length) return '';
+
+  const lastEvent = season.events[season.events.length - 1];
+  const lastRanked = _rankEventForIntermission(lastEvent);
+  const top3 = lastRanked.slice(0,3);
+  const restRanked = lastRanked.slice(3);
+  const standings = aggregateSeason(season).slice(0, 16);
+
+  // Final Two countdowns
+  const teaserCards = FINAL_TWO_INFO.map(ft => {
+    const d = _daysUntilISO(ft.payBy);
+    let badge;
+    if(d < 0)      badge = `<span style="background:rgba(255,90,90,0.18);color:#ffb5ae;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:800">Past · ${ft.payByLabel}</span>`;
+    else if(d===0) badge = `<span style="background:rgba(214,176,90,0.22);color:var(--gold2);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:800">Pay TODAY</span>`;
+    else if(d<=7)  badge = `<span style="background:rgba(214,176,90,0.22);color:var(--gold2);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:800">Pay by ${ft.payByLabel} · ${d}d</span>`;
+    else           badge = `<span style="background:rgba(121,176,227,0.16);color:var(--blue);padding:2px 8px;border-radius:6px;font-size:11px;font-weight:800">Pay by ${ft.payByLabel} · ${d}d</span>`;
+    return `<div style="padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-top:8px;background:rgba(255,255,255,0.02)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;margin-bottom:4px">
+        <div style="font-weight:800;font-size:14px;color:var(--gold2)">${ft.label}</div>
+        ${badge}
+      </div>
+      <div class="small tight" style="color:var(--muted);margin-bottom:2px">${ft.city} · ${ft.cost}</div>
+      <div class="small tight" style="line-height:1.45">${ft.days}</div>
+    </div>`;
+  }).join('');
+
+  const top3Html = top3.length ? top3.map((r,i) => {
+    const medal = i===0?'🥇':i===1?'🥈':'🥉';
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 4px;border-bottom:1px solid var(--line)">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-size:15px">${medal}</span><strong style="font-size:13px">${r.name}</strong></div>
+      <div style="text-align:right;font-family:monospace;font-size:12px"><span style="color:var(--gold2);font-weight:800">${r.stableford}</span> pts · ${r.gross} gross</div>
+    </div>`;
+  }).join('') : '<div class="small tight" style="color:var(--muted)">No event data yet.</div>';
+
+  const restHtml = restRanked.length ? `<details style="margin-top:4px">
+    <summary style="cursor:pointer;list-style:none;text-align:center;padding:8px;font-size:12px;color:var(--gold2);font-weight:700">Show all ${lastRanked.length} players ▾</summary>
+    ${restRanked.map((r,i) => `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 4px;border-bottom:1px solid var(--line)">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:monospace;font-size:11px;color:var(--muted);width:18px">${i+4}</span><strong style="font-size:12px">${r.name}</strong></div>
+      <div style="text-align:right;font-family:monospace;font-size:11px"><span style="color:var(--gold2);font-weight:800">${r.stableford}</span> pts · ${r.gross} gross</div>
+    </div>`).join('')}
+  </details>` : '';
+
+  const standingsHtml = standings.length ? standings.slice(0, 8).map((r,i) => {
+    const cut = i === 7 ? 'border-bottom:2px solid var(--gold2)' : 'border-bottom:1px solid var(--line)';
+    const tag = r.qualified ? '✓' : `⚠ ${r.played}/3`;
+    return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 4px;${cut}">
+      <div style="display:flex;align-items:center;gap:8px"><span style="font-family:monospace;font-size:11px;color:var(--muted);width:18px">${i+1}</span><strong style="font-size:12px">${r.name}</strong></div>
+      <div style="text-align:right;font-family:monospace;font-size:12px"><span style="color:var(--gold2);font-weight:800">${r.points}</span> · ${r.played} pld · <span style="color:${r.qualified?'var(--green)':'#ffb5ae'};font-size:10px">${tag}</span></div>
+    </div>`;
+  }).join('') : '';
+
+  const eventsScored = season.events.length;
+
+  return `<div class="card" style="background:linear-gradient(135deg,rgba(214,176,90,0.07),rgba(121,176,227,0.03));border:1px solid rgba(214,176,90,0.30)">
+    <div class="section-title" style="margin-bottom:6px">🏆 Final Two — Season 4 Playoffs</div>
+    <div class="small tight" style="color:var(--muted);margin-bottom:10px">${eventsScored} of 10 events scored · Top 16 locked · R16 → QF in May, SF → Final in June</div>
+
+    <div style="margin-top:6px">
+      <div style="font-weight:800;font-size:13px;color:var(--gold2);margin-bottom:6px">🥇 Last event — ${lastEvent.name || 'April'}</div>
+      ${top3Html}
+      ${restHtml}
+      <div style="margin-top:6px"><button class="btn ghost slim full" onclick="setTab('season')">View season standings →</button></div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-weight:800;font-size:13px;color:var(--gold2);margin-bottom:6px">📊 Top 8 · Best 7 of ${eventsScored}</div>
+      ${standingsHtml}
+      <div class="small tight" style="color:var(--muted);margin-top:6px">Cut line at #16 — tap "View standings" for the full board.</div>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-weight:800;font-size:13px;color:var(--gold2);margin-bottom:6px">🥊 Playoffs bracket</div>
+      <div class="small tight" style="margin-bottom:6px">Top 16 seeded · R16 losers drop to Shield · 4-tier cascade: Cup / Plate / Shield / Spoon</div>
+      <button class="btn gold slim full" onclick="setTab('playoffs')">Open bracket →</button>
+    </div>
+
+    <div style="margin-top:14px">
+      <div style="font-weight:800;font-size:13px;color:var(--gold2);margin-bottom:6px">🗓 Up next · Final two rounds</div>
+      ${teaserCards}
+      <div class="small tight" style="color:var(--muted);margin-top:8px;text-align:center">Total ¥5,400 · ${FINAL_TWO_SIGNUPS} confirmed in WeChat</div>
+    </div>
+  </div>`;
 }
 
 // ── End-of-Round Results Summary ──
@@ -6883,6 +7302,8 @@ function renderLeaderboard(){
   document.getElementById('leaderboard').innerHTML = `
     ${renderHoneypotAdminBar()}
 
+    ${renderIntermissionCard()}
+
     ${scrambleCard}
 
     ${stablefordCard}
@@ -7009,8 +7430,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.61) — bump both together on every deploy
-const APP_VERSION = '5.27';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.63) — bump both together on every deploy
+const APP_VERSION = '5.43';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
@@ -7130,6 +7551,7 @@ function renderAll(){
   renderDay1();
   renderDay2();
   renderLeaderboard();
+  renderMyCard();
   renderSeason();
   renderPlayoffs();
   renderAbout();
