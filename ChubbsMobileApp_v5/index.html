@@ -4981,7 +4981,12 @@ function renderTabs(){
   const gameTabs = scrambleBeforeStableford()
     ? [['day1','Scramble'],['day2','Stableford']]
     : [['day2','Stableford'],['day1','Scramble']];
-  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard'],['mycard','My Card'],...gameTabs,['season','📅 Season'],['playoffs','🏆 Playoffs']];
+  const showMyCard = _myCardShouldShow();
+  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard']];
+  if(showMyCard) tabs.push(['mycard','My Card']);
+  tabs.push(...gameTabs, ['season','📅 Season'], ['playoffs','🏆 Playoffs']);
+  // If the active tab is the now-hidden My Card, bounce to Leaderboard.
+  if(!showMyCard && state.ui.tab === 'mycard') state.ui.tab = 'leaderboard';
   document.getElementById('tabs').innerHTML = tabs.map(([id,label]) =>
     `<button class="tab-btn ${state.ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`
   ).join('\n');
@@ -6098,11 +6103,42 @@ function _rankEventForIntermission(event){
   return scored;
 }
 
+// Date-based event lifecycle helpers (replaces score-residual heuristic which
+// got fooled by stale wiped-event state — v5.43.1).
+function _isEventOver(){
+  if(!hasImportedEvent()) return true;             // no event loaded = always "between"
+  const ev = state.eventBundle.event || {};
+  const end = parseEventDate(ev.sunDate) || parseEventDate(ev.satDate);
+  if(!end) return false;                           // can't determine → assume not over
+  const today = new Date(); today.setHours(0,0,0,0);
+  end.setHours(0,0,0,0);
+  return today > end;
+}
+
+function _myCardShouldShow(){
+  if(_isEventOver()){
+    // Event past — keep visible only while a "Playing as" user is still
+    // entering catch-up scores. Otherwise hide so it doesn't shadow the
+    // Final Two intermission card.
+    const idx = getMyPlayerIdx();
+    return idx >= 0 && state.stableford.holes.some(h => h && typeof h.gross[idx] === 'number');
+  }
+  if(!hasImportedEvent()) return false;
+  const ev = state.eventBundle.event || {};
+  const start = parseEventDate(ev.satDate) || parseEventDate(ev.sunDate);
+  if(!start) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  start.setHours(0,0,0,0);
+  if(today >= start) return true;                  // event day or in-progress
+  // Event is in future — only surface card once user has actually scored
+  const idx = getMyPlayerIdx();
+  return idx >= 0 && state.stableford.holes.some(h => h && typeof h.gross[idx] === 'number');
+}
+
 function renderIntermissionCard(){
-  // Detection: no live scoring activity (active event empty or finished)
-  const scrambleHasScores = scrambleTotals().entered > 0;
-  const stableScores = leaderboardPlayers().some(r => r.entered > 0);
-  if(scrambleHasScores || stableScores) return '';
+  // Show when between events (no event loaded, or event date is past).
+  // Stale residual scores no longer suppress the card.
+  if(!_isEventOver()) return '';
 
   const store = ensureActiveSeason();
   const season = store && store.seasons && store.seasons[ACTIVE_SEASON_ID];
@@ -7430,8 +7466,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.63) — bump both together on every deploy
-const APP_VERSION = '5.43';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.64) — bump both together on every deploy
+const APP_VERSION = '5.44';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
