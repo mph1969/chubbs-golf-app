@@ -3446,6 +3446,93 @@ function stablefordPoints(gross, par, shots){
   if(diff === 1) return 1;
   return 0;
 }
+
+// ── Match-play engine (§11 playoffs) ──────────────────────────────────────
+// Pure helpers — assumptions: lower NET wins each hole; full hcp differential
+// allocated to hardest holes (lowest SI first). Locked Michael 2026-05-09.
+// Verify against Season 3 historical data when available.
+
+// Strokes the higher-handicap player gets on this hole, in a match between
+// hcpA and hcpB. Returns 0 if hcps are equal or invalid.
+function matchPlayStrokes(hcpA, hcpB, si){
+  const a = Math.max(0, parseInt(hcpA || 0, 10));
+  const b = Math.max(0, parseInt(hcpB || 0, 10));
+  const diff = Math.abs(a - b);
+  if(diff === 0) return 0;
+  const base = Math.floor(diff / 18);
+  const rem = diff % 18;
+  return base + (si <= rem ? 1 : 0);
+}
+
+// Who won this hole? Returns 'a' | 'b' | 'halved' | null (null = incomplete).
+// Strokes go to whichever hcp is higher; equal hcps → no strokes.
+function matchPlayHoleWinner(grossA, hcpA, grossB, hcpB, si){
+  if(grossA == null || grossB == null) return null;
+  const strokes = matchPlayStrokes(hcpA, hcpB, si);
+  const aHigher = parseInt(hcpA || 0, 10) > parseInt(hcpB || 0, 10);
+  const netA = grossA - (aHigher ? strokes : 0);
+  const netB = grossB - (aHigher ? 0 : strokes);
+  if(netA < netB) return 'a';
+  if(netB < netA) return 'b';
+  return 'halved';
+}
+
+// Aggregate match status from per-hole winners. holes = ['a'|'b'|'halved'|null...].
+// Returns { played, remaining, lead, leader, closed, dormie, allSquare,
+//           label, closedScore } where closedScore is e.g. "3&2" when match
+// can't be caught.
+function matchPlayStatus(holes, totalHoles){
+  const total = totalHoles || holes.length || 9;
+  let played = 0, aWins = 0, bWins = 0;
+  for(const w of holes){
+    if(w === null || w === undefined) continue;
+    played += 1;
+    if(w === 'a') aWins += 1;
+    else if(w === 'b') bWins += 1;
+  }
+  const remaining = Math.max(0, total - played);
+  const aUp = aWins - bWins;
+  const lead = Math.abs(aUp);
+  const leader = aUp > 0 ? 'a' : (aUp < 0 ? 'b' : null);
+
+  // Closed: leader's lead exceeds holes remaining → opponent can't catch up.
+  // Standard scoring: "X&Y" when closed early (Y holes to play); "X UP" when
+  // it goes to the final hole (no holes remaining).
+  if(lead > remaining && played > 0){
+    const score = remaining === 0 ? `${lead} UP` : `${lead}&${remaining}`;
+    return {
+      played, remaining, lead, leader,
+      closed: true, dormie: false, allSquare: false,
+      closedScore: score,
+      label: score,
+    };
+  }
+  // Dormie: leader is exactly "X up with X to play" — opponent must win all
+  // remaining holes just to halve the match.
+  if(lead === remaining && lead > 0 && remaining > 0){
+    return {
+      played, remaining, lead, leader,
+      closed: false, dormie: true, allSquare: false,
+      label: `Dormie · ${lead} UP`,
+    };
+  }
+  // All square — either mid-round tied or final-hole tied (caller decides
+  // tiebreak via Stableford → lower hcp → arm wrestle, handbook §11).
+  if(lead === 0){
+    return {
+      played, remaining, lead: 0, leader: null,
+      closed: false, dormie: false, allSquare: true,
+      label: played ? `ALL SQUARE thru ${played}` : 'ALL SQUARE',
+    };
+  }
+  // In progress — leader has a lead but match still mathematically alive.
+  return {
+    played, remaining, lead, leader,
+    closed: false, dormie: false, allSquare: false,
+    label: `${lead} UP thru ${played}`,
+  };
+}
+
 // Numeric form — returns the integer delta per §3.2, or null when adjustment
 // is skipped (zero-points = lost scorecard, handbook §3.2 last bullet).
 function hcpAdjustDelta(points){
@@ -7488,8 +7575,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.66) — bump both together on every deploy
-const APP_VERSION = '5.46';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.67) — bump both together on every deploy
+const APP_VERSION = '5.47';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
