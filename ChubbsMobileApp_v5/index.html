@@ -740,10 +740,10 @@ const COURSE_LIBRARY = {
     name:"Bird's Nest",
     club:'Birds Resort (Former Huizhou Golf & Resort Club)',
     city:'Huizhou',
-    note:'Preloaded from your scorecard image plus hole-by-hole stroke index data. Review tee details if your group is not using the default routing.',
+    note:'Par/SI from Terry\'s Season 4 sheet (Sept Birds round). Review tee details if your group is not using the default routing.',
     holes:[
-      {par:4,si:9},{par:5,si:17},{par:3,si:11},{par:4,si:3},{par:4,si:15},{par:3,si:7},{par:5,si:13},{par:4,si:1},{par:4,si:5},
-      {par:4,si:10},{par:5,si:18},{par:4,si:6},{par:3,si:16},{par:4,si:2},{par:4,si:14},{par:3,si:12},{par:5,si:8},{par:4,si:4}
+      {par:4,si:18},{par:5,si:10},{par:3,si:12},{par:4,si:7},{par:4,si:11},{par:3,si:17},{par:4,si:16},{par:4,si:1},{par:5,si:13},
+      {par:4,si:9},{par:5,si:14},{par:4,si:6},{par:3,si:15},{par:4,si:2},{par:4,si:8},{par:3,si:3},{par:5,si:4},{par:4,si:5}
     ]
   },
   firestone:{name:'Firestone', club:'Shenzhen Firestone Golf Club', city:'Shenzhen', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
@@ -779,8 +779,26 @@ const COURSE_LIBRARY = {
       {par:5,si:4},{par:4,si:14},{par:4,si:10},{par:3,si:16},{par:4,si:8},{par:4,si:6},{par:5,si:2},{par:3,si:18},{par:4,si:12}
     ]
   },
-  qingyuan:{name:'Qingyuan Holiday Islands', club:'Qingyuan Holiday Islands Golf Club', city:'Qingyuan', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
-  tangspring:{name:'Tangspring', club:'Huizhou Tangspring Golf Club', city:'Huizhou', note:'Listed on ChubbsHub. Upload or enter the hole card for Stableford.', holes:blankCourseHoles()},
+  qingyuan:{
+    name:'Qingyuan Holiday Islands',
+    club:'Qingyuan Holiday Islands Golf Club',
+    city:'Qingyuan',
+    note:'Par/SI from Terry\'s Season 4 sheet (Mar Qingyuan round). Sheet had SI=9 duplicated on H10/H15 with SI=17 missing; corrected to H15=17 as best guess. Confirm with pro-shop card before relying on stroke allocations.',
+    holes:[
+      {par:5,si:10},{par:4,si:12},{par:3,si:6},{par:4,si:8},{par:4,si:4},{par:3,si:18},{par:4,si:14},{par:4,si:16},{par:5,si:2},
+      {par:4,si:9},{par:5,si:11},{par:4,si:15},{par:3,si:5},{par:4,si:13},{par:4,si:17},{par:5,si:1},{par:3,si:7},{par:4,si:3}
+    ]
+  },
+  tangspring:{
+    name:'Tangspring',
+    club:'Huizhou Tangspring Golf Club',
+    city:'Huizhou',
+    note:'Par/SI from Terry\'s Season 4 sheet (Jan Tangspring round). Review tee details if your group is not using the default routing.',
+    holes:[
+      {par:5,si:7},{par:3,si:3},{par:4,si:13},{par:5,si:1},{par:3,si:17},{par:4,si:5},{par:4,si:11},{par:3,si:15},{par:5,si:9},
+      {par:5,si:12},{par:4,si:16},{par:4,si:8},{par:4,si:14},{par:3,si:4},{par:4,si:2},{par:3,si:18},{par:5,si:10},{par:4,si:6}
+    ]
+  },
   yinli:{
     name:'Yinli',
     club:'Yinli Foreign Investors Golf Club',
@@ -7470,8 +7488,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.65) — bump both together on every deploy
-const APP_VERSION = '5.45';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.66) — bump both together on every deploy
+const APP_VERSION = '5.46';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
