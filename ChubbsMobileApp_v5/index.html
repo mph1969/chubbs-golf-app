@@ -48,7 +48,12 @@
     .hero h1{margin:0;font-size:26px;line-height:1.05;font-family:Georgia,serif;color:var(--gold2)}
     .hero .sub{margin-top:3px;font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .hero-controls{position:absolute;top:10px;right:12px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center;z-index:1;max-width:140px}
-    .tabs{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:14px 0}
+    .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0 8px}
+    .sub-tabs{display:flex;gap:4px;padding:4px;margin:0 0 14px;border-radius:12px;background:rgba(255,255,255,0.025);border:1px solid var(--line)}
+    .sub-tabs:empty{display:none}
+    .seg-pill{flex:1;padding:8px 10px;background:transparent;border:1px solid transparent;border-radius:8px;color:var(--muted);font-weight:700;font-size:12px;letter-spacing:.04em;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:background 0.12s, color 0.12s, border-color 0.12s}
+    .seg-pill.active{background:rgba(214,176,90,0.14);border-color:rgba(214,176,90,0.4);color:var(--gold2)}
+    .seg-pill:hover:not(.active){color:var(--ink)}
     /* Season tab table */
     .season-table{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-top:8px;background:rgba(255,255,255,0.01)}
     .season-header,.season-row{display:grid;grid-template-columns:28px minmax(72px,1fr) 38px 30px 38px 34px 34px 34px;gap:3px;align-items:center;padding:7px 5px;font-size:11px}
@@ -392,7 +397,7 @@
       .hero h1{font-size:23px}
       .badge{width:76px;height:76px;flex:0 0 76px;border-radius:16px}
       .hero-controls{max-width:110px;top:8px;right:10px;gap:4px}
-      .tabs{grid-template-columns:repeat(3,1fr)}
+      .tabs{grid-template-columns:repeat(4,1fr)}
       .grid-2,.grid-3,.event-grid,.meta-grid,.meta-grid-4{grid-template-columns:1fr}
       .driver-grid{grid-template-columns:1fr}
     }
@@ -559,6 +564,7 @@
     <div id="pendingEventBanner" style="display:none"></div>
     <div id="modeBanner" class="mode-banner"></div>
     <nav class="tabs" id="tabs"></nav>
+    <nav class="sub-tabs" id="sub-tabs"></nav>
     <section id="setup" class="section"></section>
     <section id="day1" class="section"></section>
     <section id="day2" class="section"></section>
@@ -5310,14 +5316,12 @@ function scrambleBeforeStableford(){
   if(!d1 || !d2 || isNaN(d1) || isNaN(d2)) return true;
   return d1 <= d2;
 }
-function renderTabs(){
-  const setupLabel = masterMode ? 'Setup' : 'Me';
-  const gameTabs = scrambleBeforeStableford()
-    ? [['day1','Scramble'],['day2','Stableford']]
-    : [['day2','Stableford'],['day1','Scramble']];
+// 4 top-level groups: Round / Leaderboard / Standings / Setup. Each group
+// owns one or more <section> ids. Sub-pills appear when a group has >1
+// section visible. state.ui.tab still stores a section id (back-compat with
+// every existing setTab() caller); the top-level group is computed.
+function _getNavGroups(){
   const showMyCard = _myCardShouldShow();
-  // Playoffs tab visible to non-admin only when seeds are actually locked.
-  // Admin always sees it (for previewing/seeding work).
   let showPlayoffs = masterMode;
   try {
     const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
@@ -5326,18 +5330,71 @@ function renderTabs(){
       showPlayoffs = true;
     }
   } catch(e){}
-  const tabs = [['setup',setupLabel],['leaderboard','Leaderboard']];
-  if(showMyCard) tabs.push(['mycard','My Card']);
-  tabs.push(...gameTabs, ['season','Season']);
-  if(showPlayoffs) tabs.push(['playoffs','Playoffs']);
-  // Bounce off any tab that just became hidden.
-  if(!showMyCard && state.ui.tab === 'mycard') state.ui.tab = 'leaderboard';
-  if(!showPlayoffs && state.ui.tab === 'playoffs') state.ui.tab = 'season';
-  document.getElementById('tabs').innerHTML = tabs.map(([id,label]) =>
-    `<button class="tab-btn ${state.ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`
-  ).join('\n');
+  // Round group — order Stableford/Scramble by which day comes first
+  const roundSections = scrambleBeforeStableford() ? ['day1','day2'] : ['day2','day1'];
+  if(showMyCard) roundSections.push('mycard');
+  // Standings group — Season always; Playoffs only when seeded or admin
+  const standingsSections = ['season'];
+  if(showPlayoffs) standingsSections.push('playoffs');
+  return [
+    { id:'round',       label:'Round',                      sections: roundSections },
+    { id:'leaderboard', label:'Leaderboard',                sections: ['leaderboard'] },
+    { id:'standings',   label:'Standings',                  sections: standingsSections },
+    { id:'setup',       label: masterMode ? 'Setup' : 'Me', sections: ['setup'] },
+  ];
+}
+
+const SUB_TAB_LABELS = {
+  day1:'Scramble', day2:'Stableford', mycard:'My Card',
+  season:'Season', playoffs:'Playoffs',
+};
+
+function renderTabs(){
+  // About page is a "modal" — hides the nav chrome until user taps Back.
+  if(state.ui.tab === 'about'){
+    document.getElementById('tabs').innerHTML = '';
+    document.getElementById('sub-tabs').innerHTML = '';
+    document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
+    document.getElementById('about').classList.add('active');
+    return;
+  }
+  const groups = _getNavGroups();
+  // Map every visible section id → group id
+  const sectionToGroup = {};
+  groups.forEach(g => g.sections.forEach(s => { sectionToGroup[s] = g.id; }));
+  // Bounce off any state.ui.tab that just became invalid (e.g. My Card hidden,
+  // Playoffs hidden after season change).
+  if(!sectionToGroup[state.ui.tab]) state.ui.tab = 'leaderboard';
+  const activeGroupId = sectionToGroup[state.ui.tab];
+  const activeGroup = groups.find(g => g.id === activeGroupId);
+  // Top-level tabs
+  document.getElementById('tabs').innerHTML = groups.map(g =>
+    `<button class="tab-btn ${g.id===activeGroupId?'active':''}" onclick="setGroupTab('${g.id}')">${g.label}</button>`
+  ).join('');
+  // Sub-pills (only when active group has multiple sections)
+  const subEl = document.getElementById('sub-tabs');
+  if(activeGroup && activeGroup.sections.length > 1){
+    subEl.innerHTML = activeGroup.sections.map(s =>
+      `<button class="seg-pill ${state.ui.tab===s?'active':''}" onclick="setTab('${s}')">${SUB_TAB_LABELS[s] || s}</button>`
+    ).join('');
+  } else {
+    subEl.innerHTML = '';
+  }
+  // Show the active section
   document.querySelectorAll('.section').forEach(sec => sec.classList.remove('active'));
   document.getElementById(state.ui.tab).classList.add('active');
+}
+
+// Click handler for top-level tab buttons. Routes to the first visible
+// section in the chosen group.
+function setGroupTab(gid){
+  const groups = _getNavGroups();
+  const g = groups.find(x => x.id === gid);
+  if(g && g.sections.length){
+    state.ui.tab = g.sections[0];
+    saveState();
+    renderAll();
+  }
 }
 
 // ── Shared import card HTML (used in both player + master view) ──
@@ -7817,8 +7874,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.72) — bump both together on every deploy
-const APP_VERSION = '5.52';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.73) — bump both together on every deploy
+const APP_VERSION = '5.53';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
