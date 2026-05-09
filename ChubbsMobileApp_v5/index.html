@@ -129,6 +129,9 @@
     .mp-action{padding:6px 10px 8px 44px;border-top:1px dashed rgba(214,176,90,0.18);background:rgba(214,176,90,0.04)}
     .mp-save-btn{font-size:11px;padding:6px 12px}
     .mp-saved{font-size:11px;color:#9ad9a8;font-weight:700}
+    .mp-hint{padding:4px 10px 6px 44px;font-size:10px;color:var(--muted);font-family:monospace;background:rgba(255,255,255,0.012);line-height:1.4}
+    .mp-hint-win-a{color:#a5f0c5}
+    .mp-hint-win-b{color:#ffb5ae}
     .po-rs-rank{font-size:11px;font-family:monospace;color:var(--gold2);font-weight:800;text-align:center}
     .po-rs-rank.out{color:var(--muted);font-weight:600}
     .po-rs-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3546,11 +3549,36 @@ function getActiveMatchPlayMatches(){
       const ch = course.holes[i]; if(!ch || !ch.si) return null;
       return matchPlayHoleWinner(h.gross[idxA], playerA.hcp, h.gross[idxB], playerB.hcp, ch.si);
     });
+    // Current-hole snapshot for the inline net-compare hint. Returns null
+    // when the current hole is outside the 9-hole match window or either
+    // player hasn't entered a gross yet.
+    let currentHole = null;
+    const curIdx = state.stableford.hole;
+    if(matchHoleIdxs.indexOf(curIdx) >= 0){
+      const ch = course.holes[curIdx];
+      const h  = holes[curIdx];
+      const grossA = h && h.gross[idxA];
+      const grossB = h && h.gross[idxB];
+      if(ch && ch.si && grossA != null && grossB != null){
+        const strokes = matchPlayStrokes(playerA.hcp, playerB.hcp, ch.si);
+        const aHigher = parseInt(playerA.hcp || 0, 10) > parseInt(playerB.hcp || 0, 10);
+        const netA = grossA - (aHigher ? strokes : 0);
+        const netB = grossB - (aHigher ? 0 : strokes);
+        currentHole = {
+          idx: curIdx, par: ch.par, si: ch.si,
+          grossA, grossB, netA, netB,
+          winner: matchPlayHoleWinner(grossA, playerA.hcp, grossB, playerB.hcp, ch.si),
+          strokesToHigher: strokes,
+          aHigher,
+        };
+      }
+    }
     matches.push({
       matchNum: matchIdx + 1,
       seedA: pair[0] + 1, playerA: playerA.name, idxA,
       seedB: pair[1] + 1, playerB: playerB.name, idxB,
       status: matchPlayStatus(winners, 9),
+      currentHole,
     });
   });
   return matches;
@@ -3594,11 +3622,25 @@ function renderMatchPlayBanner(){
     } else {
       status = '— not started —'; cls = 'mp-status mp-idle';
     }
+    // Per-hole inline comparison hint — shows the math behind the status.
+    let hintHtml = '';
+    if(m.currentHole && !s.closed){
+      const cd = m.currentHole;
+      let outcome, hintCls = 'mp-hint';
+      if(cd.winner === 'a'){ outcome = `${m.playerA} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-a'; }
+      else if(cd.winner === 'b'){ outcome = `${m.playerB} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-b'; }
+      else { outcome = `H${cd.idx+1} halved`; }
+      const aShots = cd.aHigher ? cd.strokesToHigher : 0;
+      const bShots = cd.aHigher ? 0 : cd.strokesToHigher;
+      const aLabel = `${m.playerA}: ${cd.grossA}${aShots ? '−'+aShots : ''}=${cd.netA}n`;
+      const bLabel = `${m.playerB}: ${cd.grossB}${bShots ? '−'+bShots : ''}=${cd.netB}n`;
+      hintHtml = `<div class="${hintCls}">H${cd.idx+1} (par ${cd.par}, SI ${cd.si}) · ${aLabel} · ${bLabel} → ${outcome}</div>`;
+    }
     return `<div class="mp-row">
       <span class="mp-tag">M${m.matchNum}</span>
       <span class="mp-pair"><span class="mp-sn">#${m.seedA}</span>${m.playerA} vs ${m.playerB}<span class="mp-sn">#${m.seedB}</span></span>
       <span class="${cls}">${status}</span>
-    </div>${actionHtml}`;
+    </div>${hintHtml}${actionHtml}`;
   }).join('');
   return `
     <div class="card mp-card">
@@ -7707,8 +7749,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.69) — bump both together on every deploy
-const APP_VERSION = '5.49';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.70) — bump both together on every deploy
+const APP_VERSION = '5.50';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
