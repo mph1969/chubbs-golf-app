@@ -126,6 +126,9 @@
     .mp-status.mp-square{color:#79b0e3}
     .mp-status.mp-lead{color:#a5f0c5}
     .mp-status.mp-idle{color:var(--muted);font-weight:500}
+    .mp-action{padding:6px 10px 8px 44px;border-top:1px dashed rgba(214,176,90,0.18);background:rgba(214,176,90,0.04)}
+    .mp-save-btn{font-size:11px;padding:6px 12px}
+    .mp-saved{font-size:11px;color:#9ad9a8;font-weight:700}
     .po-rs-rank{font-size:11px;font-family:monospace;color:var(--gold2);font-weight:800;text-align:center}
     .po-rs-rank.out{color:var(--muted);font-weight:600}
     .po-rs-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -2550,6 +2553,28 @@ function savePoResult(round, idx){
   closePoEntry();
 }
 
+// Auto-push from the score-view match-play banner. No DOM dependency, no modal —
+// called with values already determined by matchPlayStatus when a match closes.
+// Confirms before overwriting an existing different-winner entry.
+function pushMatchToBracket(matchIdx, winnerName, resultLabel){
+  if(!masterMode){ alert('Admin mode required to save bracket results'); return; }
+  if(!winnerName || matchIdx == null) return;
+  const {store, season} = _poCtx();
+  if(!season) return;
+  if(!season.playoffs) season.playoffs = {};
+  if(!Array.isArray(season.playoffs.r16)){
+    season.playoffs.r16 = Array.from({length:8}, () => ({winner:null,result:null}));
+  }
+  const existing = season.playoffs.r16[matchIdx] || {};
+  if(existing.winner && existing.winner !== winnerName){
+    if(!confirm(`Overwrite M${matchIdx+1}? Currently saved: ${existing.winner} ${existing.result || ''}`)) return;
+  }
+  season.playoffs.r16[matchIdx] = { winner: winnerName, result: resultLabel || '' };
+  saveSeasonStore(store);
+  try { renderAll(); } catch(e){}
+  try { if(typeof renderPlayoffs === 'function') renderPlayoffs(); } catch(e){}
+}
+
 function clearPoResult(round, idx){
   if(!masterMode) return;
   const {store, season} = _poCtx();
@@ -3536,12 +3561,28 @@ function getActiveMatchPlayMatches(){
 function renderMatchPlayBanner(){
   const matches = getActiveMatchPlayMatches();
   if(!matches.length) return '';
+  // Detect already-saved bracket entries so admin sees "Saved" not "Save".
+  let r16 = [];
+  try {
+    const store = ensureActiveSeason();
+    const season = store && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
+    r16 = (season && season.playoffs && Array.isArray(season.playoffs.r16)) ? season.playoffs.r16 : [];
+  } catch(e){}
   const rowHtml = matches.map(m => {
     const s = m.status;
-    let status, cls;
+    let status, cls, actionHtml = '';
     if(s.closed){
       const winner = s.leader === 'a' ? m.playerA : m.playerB;
       status = `🏆 ${winner} · ${s.label}`; cls = 'mp-status mp-closed';
+      const saved = r16[m.matchNum - 1] || {};
+      const isSaved = saved.winner === winner && saved.result === s.label;
+      if(masterMode){
+        actionHtml = isSaved
+          ? `<div class="mp-action"><span class="mp-saved">✓ Saved to bracket</span></div>`
+          : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${m.matchNum-1}, ${JSON.stringify(winner)}, ${JSON.stringify(s.label)})'>📌 Save M${m.matchNum} to bracket</button></div>`;
+      } else if(saved.winner){
+        actionHtml = `<div class="mp-action"><span class="mp-saved">✓ ${saved.winner} ${saved.result}</span></div>`;
+      }
     } else if(s.dormie){
       const leader = s.leader === 'a' ? m.playerA : m.playerB;
       status = `⚠ ${leader} · ${s.label}`; cls = 'mp-status mp-dormie';
@@ -3557,7 +3598,7 @@ function renderMatchPlayBanner(){
       <span class="mp-tag">M${m.matchNum}</span>
       <span class="mp-pair"><span class="mp-sn">#${m.seedA}</span>${m.playerA} vs ${m.playerB}<span class="mp-sn">#${m.seedB}</span></span>
       <span class="${cls}">${status}</span>
-    </div>`;
+    </div>${actionHtml}`;
   }).join('');
   return `
     <div class="card mp-card">
@@ -7666,8 +7707,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.68) — bump both together on every deploy
-const APP_VERSION = '5.48';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.69) — bump both together on every deploy
+const APP_VERSION = '5.49';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
