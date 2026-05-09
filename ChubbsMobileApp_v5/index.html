@@ -112,6 +112,20 @@
     .po-roster-row.out{opacity:0.45;background:rgba(255,75,75,0.04)}
     .po-roster-row.out .po-rs-name{text-decoration:line-through}
     .po-rs-check{font-size:14px;text-align:center;font-weight:700}
+    /* Match-play overlay banner — sits above the Stableford scorecard during
+       playoff rounds (R16). Updates live on every gross-score input. */
+    .mp-card{border:1px solid rgba(214,176,90,0.4);background:linear-gradient(180deg,rgba(214,176,90,0.06),rgba(20,40,30,0.92))}
+    .mp-row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid rgba(255,255,255,0.04);font-size:12px}
+    .mp-row:first-of-type{border-top:none}
+    .mp-tag{font-size:10px;font-weight:800;color:var(--gold2);font-family:monospace;text-align:center;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.3);border-radius:5px;padding:3px 0}
+    .mp-pair{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mp-pair .mp-sn{font-size:9px;color:var(--muted);margin:0 4px;font-family:monospace}
+    .mp-status{font-weight:700;font-size:11px;white-space:nowrap;text-align:right}
+    .mp-status.mp-closed{color:#d6b05a}
+    .mp-status.mp-dormie{color:#e07060}
+    .mp-status.mp-square{color:#79b0e3}
+    .mp-status.mp-lead{color:#a5f0c5}
+    .mp-status.mp-idle{color:var(--muted);font-weight:500}
     .po-rs-rank{font-size:11px;font-family:monospace;color:var(--gold2);font-weight:800;text-align:center}
     .po-rs-rank.out{color:var(--muted);font-weight:600}
     .po-rs-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3477,6 +3491,82 @@ function matchPlayHoleWinner(grossA, hcpA, grossB, hcpB, si){
   return 'halved';
 }
 
+// Pick the matches active in the current scoring group. Returns [] when
+// no playoff seeds are locked or no R16 pairs are present in this foursome.
+function getActiveMatchPlayMatches(){
+  const players = currentPlayers('stableford') || [];
+  if(players.length < 2) return [];
+  let store; try { store = ensureActiveSeason(); } catch(e){ return []; }
+  const season = store && store.seasons && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
+  const seeds = season && season.playoffs && Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
+  if(!seeds || seeds.length < 2) return [];
+  const course = activeCourse('day2');
+  const holes = state.stableford && state.stableford.holes;
+  if(!course || !course.holes || !holes) return [];
+  // R16 pairings — kept in lock-step with the bracket viewer (index.html:2619).
+  const R16_PAIRS = [[0,15],[7,8],[4,11],[3,12],[2,13],[5,10],[6,9],[1,14]];
+  const norm = s => String(s||'').trim().toUpperCase();
+  const playerSeeds = players.map(p => seeds.findIndex(s => norm(s) === norm(p && p.name)));
+  const order = (typeof getHoleOrder === 'function') ? getHoleOrder('stableford') : null;
+  const matchHoleIdxs = order ? order.slice(0, 9) : [0,1,2,3,4,5,6,7,8];
+  const matches = [];
+  R16_PAIRS.forEach((pair, matchIdx) => {
+    const idxA = playerSeeds.indexOf(pair[0]);
+    const idxB = playerSeeds.indexOf(pair[1]);
+    if(idxA < 0 || idxB < 0) return;
+    const playerA = players[idxA];
+    const playerB = players[idxB];
+    const winners = matchHoleIdxs.map(i => {
+      const h = holes[i]; if(!h) return null;
+      const ch = course.holes[i]; if(!ch || !ch.si) return null;
+      return matchPlayHoleWinner(h.gross[idxA], playerA.hcp, h.gross[idxB], playerB.hcp, ch.si);
+    });
+    matches.push({
+      matchNum: matchIdx + 1,
+      seedA: pair[0] + 1, playerA: playerA.name, idxA,
+      seedB: pair[1] + 1, playerB: playerB.name, idxB,
+      status: matchPlayStatus(winners, 9),
+    });
+  });
+  return matches;
+}
+
+// Banner injected at the top of the score view when an active playoff seed
+// list is loaded AND at least one R16 pair is in the current scoring group.
+function renderMatchPlayBanner(){
+  const matches = getActiveMatchPlayMatches();
+  if(!matches.length) return '';
+  const rowHtml = matches.map(m => {
+    const s = m.status;
+    let status, cls;
+    if(s.closed){
+      const winner = s.leader === 'a' ? m.playerA : m.playerB;
+      status = `🏆 ${winner} · ${s.label}`; cls = 'mp-status mp-closed';
+    } else if(s.dormie){
+      const leader = s.leader === 'a' ? m.playerA : m.playerB;
+      status = `⚠ ${leader} · ${s.label}`; cls = 'mp-status mp-dormie';
+    } else if(s.allSquare && s.played > 0){
+      status = `⚖ ${s.label}`; cls = 'mp-status mp-square';
+    } else if(s.lead > 0){
+      const leader = s.leader === 'a' ? m.playerA : m.playerB;
+      status = `${leader} · ${s.label}`; cls = 'mp-status mp-lead';
+    } else {
+      status = '— not started —'; cls = 'mp-status mp-idle';
+    }
+    return `<div class="mp-row">
+      <span class="mp-tag">M${m.matchNum}</span>
+      <span class="mp-pair"><span class="mp-sn">#${m.seedA}</span>${m.playerA} vs ${m.playerB}<span class="mp-sn">#${m.seedB}</span></span>
+      <span class="${cls}">${status}</span>
+    </div>`;
+  }).join('');
+  return `
+    <div class="card mp-card">
+      <div class="section-title" style="margin-bottom:4px">🥊 Match-play · 9-hole match</div>
+      ${rowHtml}
+      <div class="small" style="margin-top:6px;color:var(--muted)">Live status updates after each gross score. Closed matches still play out for Stableford.</div>
+    </div>`;
+}
+
 // Aggregate match status from per-hole winners. holes = ['a'|'b'|'halved'|null...].
 // Returns { played, remaining, lead, leader, closed, dormie, allSquare,
 //           label, closedScore } where closedScore is e.g. "3&2" when match
@@ -6641,6 +6731,7 @@ function renderDay2(){
   </div>` : '';
   const d2ViewOnly=!isCurrentPlayerScorer('stableford');
   document.getElementById('day2').innerHTML = `
+    ${renderMatchPlayBanner()}
     ${!state.options.threePuttPoker ? pokerSetupCard : ''}
     <div class="card">
       <div class="section-title">Stableford</div>
@@ -7575,8 +7666,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.67) — bump both together on every deploy
-const APP_VERSION = '5.47';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.68) — bump both together on every deploy
+const APP_VERSION = '5.48';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
