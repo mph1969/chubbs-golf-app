@@ -5316,11 +5316,23 @@ function renderTabs(){
     ? [['day1','Scramble'],['day2','Stableford']]
     : [['day2','Stableford'],['day1','Scramble']];
   const showMyCard = _myCardShouldShow();
+  // Playoffs tab visible to non-admin only when seeds are actually locked.
+  // Admin always sees it (for previewing/seeding work).
+  let showPlayoffs = masterMode;
+  try {
+    const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
+    const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
+    if(season && season.playoffs && Array.isArray(season.playoffs.seeds) && season.playoffs.seeds.length){
+      showPlayoffs = true;
+    }
+  } catch(e){}
   const tabs = [['setup',setupLabel],['leaderboard','Leaderboard']];
   if(showMyCard) tabs.push(['mycard','My Card']);
-  tabs.push(...gameTabs, ['season','📅 Season'], ['playoffs','🏆 Playoffs']);
-  // If the active tab is the now-hidden My Card, bounce to Leaderboard.
+  tabs.push(...gameTabs, ['season','Season']);
+  if(showPlayoffs) tabs.push(['playoffs','Playoffs']);
+  // Bounce off any tab that just became hidden.
   if(!showMyCard && state.ui.tab === 'mycard') state.ui.tab = 'leaderboard';
+  if(!showPlayoffs && state.ui.tab === 'playoffs') state.ui.tab = 'season';
   document.getElementById('tabs').innerHTML = tabs.map(([id,label]) =>
     `<button class="tab-btn ${state.ui.tab===id?'active':''}" onclick="setTab('${id}')">${label}</button>`
   ).join('\n');
@@ -7805,8 +7817,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.71) — bump both together on every deploy
-const APP_VERSION = '5.51';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.72) — bump both together on every deploy
+const APP_VERSION = '5.52';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
