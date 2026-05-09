@@ -1,6 +1,17 @@
 // Chubbs Golf — Service Worker
 // Bump CACHE_VERSION on every deploy to trigger update prompt
-const CACHE_VERSION = 'chubbs-v5.74';
+const CACHE_VERSION = 'chubbs-v5.75';
+
+// Cache API only supports GET requests on http(s) URLs. Trying to put POST
+// requests or chrome-extension:// scripts throws TypeError noise into the
+// console. This guard silences both.
+function isCacheable(request){
+  if(request.method !== 'GET') return false;
+  try {
+    const url = new URL(request.url);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch(e){ return false; }
+}
 const ASSETS = [
   './',
   './index.html',
@@ -45,7 +56,7 @@ self.addEventListener('fetch', event => {
       fetch(event.request)
         .then(response => {
           const clone = response.clone();
-          caches.open(CACHE_VERSION).then(cache => cache.put(event.request, clone));
+          if (isCacheable(event.request)) caches.open(CACHE_VERSION).then(cache => cache.put(event.request, clone));
           return response;
         })
         .catch(() => caches.match(event.request))

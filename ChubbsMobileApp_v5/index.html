@@ -141,6 +141,7 @@
     .mp-scorer{padding:7px 10px;font-size:11px;font-weight:700;border-radius:8px;margin:0 0 8px;letter-spacing:0.02em}
     .mp-scorer-self{background:rgba(74,176,100,0.1);border:1px solid rgba(74,176,100,0.3);color:#9ad9a8}
     .mp-scorer-view{background:rgba(121,176,227,0.06);border:1px solid rgba(121,176,227,0.25);color:#79b0e3}
+    .playoff-intro-card{border:1px solid rgba(214,176,90,0.45);background:linear-gradient(180deg,rgba(214,176,90,0.06),rgba(20,40,30,0.92))}
     .po-rs-rank{font-size:11px;font-family:monospace;color:var(--gold2);font-weight:800;text-align:center}
     .po-rs-rank.out{color:var(--muted);font-weight:600}
     .po-rs-name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3427,9 +3428,36 @@ function courseConfigForDay(day){
     palmIsland: safePalmCombo(raw.palmIsland)
   };
 }
+// Brain trust per handbook §3 — used as the default scorer when the admin
+// bundle didn't specify one. Priority order matches the admin app.
+const BRAIN_TRUST_NAMES = ['Luke', 'Terry', 'Jack', 'Ryan N', 'Mike W'];
+
+function _pickDefaultScorerId(ids){
+  if(!Array.isArray(ids) || !ids.length) return '';
+  if(!state.eventBundle) return ids[0] || '';
+  const players = ids.map(id => findEventPlayerCatalog(state.eventBundle, id)).filter(Boolean);
+  if(!players.length) return ids[0] || '';
+  for(const btName of BRAIN_TRUST_NAMES){
+    const match = players.find(p =>
+      ((p.displayName || p.fullName || '') + '').trim().toUpperCase() === btName.toUpperCase()
+    );
+    if(match) return String(match.playerId);
+  }
+  let best = players[0];
+  for(const p of players){
+    const ph = Number.isFinite(+p.playingHandicap) ? +p.playingHandicap : 36;
+    const bh = Number.isFinite(+best.playingHandicap) ? +best.playingHandicap : 36;
+    if(ph < bh) best = p;
+  }
+  return String(best.playerId);
+}
+
 function lineupScorerId(lineup){
   const ids = Array.isArray(lineup && lineup.playerIds) ? lineup.playerIds.filter(Boolean).map(v => String(v)) : [];
-  return String((lineup && lineup.scorerPlayerId) || ids[0] || '');
+  if(lineup && lineup.scorerPlayerId) return String(lineup.scorerPlayerId);
+  // Fallback when admin bundle didn't set scorerPlayerId — apply brain-trust rule
+  const picked = _pickDefaultScorerId(ids);
+  return picked || ids[0] || '';
 }
 function lineupScorerPlayer(lineup, bundle){
   const pid = lineupScorerId(lineup);
@@ -3625,6 +3653,41 @@ function getActiveMatchPlayMatches(){
     });
   });
   return matches;
+}
+
+// One-time intro card shown the first time a player opens the score view for
+// a playoff bundle. Sets a per-bundle dismissed flag so it never shows again
+// for that event. Surfaces the matchplay format + scorer expectation up front
+// so brain trust members aren't surprised on tee.
+function renderPlayoffIntro(){
+  let seeds = null;
+  try {
+    const store = ensureActiveSeason();
+    const season = store && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
+    seeds = season && season.playoffs && season.playoffs.seeds;
+  } catch(e){}
+  if(!seeds || !seeds.length) return '';
+  const bundleId = state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId;
+  if(!bundleId) return '';
+  const key = 'chubbs_playoff_intro_seen_' + bundleId;
+  try { if(localStorage.getItem(key)) return ''; } catch(e){ return ''; }
+  return `
+    <div class="card playoff-intro-card">
+      <div class="section-title" style="margin-bottom:6px">🥊 Playoff round</div>
+      <div class="small" style="margin-bottom:10px;line-height:1.5">
+        R16 today on the front 9, QF on the back. One designated scorer per foursome enters all 4 grosses — the other 3 phones go read-only. Live match status appears above the scorecard. When a match closes, scorer taps "Save to bracket". Stableford runs for all 18 regardless.
+      </div>
+      <button class="btn slim gold" style="font-size:11px;padding:6px 14px" onclick="dismissPlayoffIntro()">Got it</button>
+    </div>
+  `;
+}
+
+function dismissPlayoffIntro(){
+  try {
+    const bundleId = state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId;
+    if(bundleId) localStorage.setItem('chubbs_playoff_intro_seen_' + bundleId, '1');
+  } catch(e){}
+  if(typeof renderAll === 'function') renderAll();
 }
 
 // Banner injected at the top of the score view when an active playoff seed
@@ -6965,6 +7028,7 @@ function renderDay2(){
   </div>` : '';
   const d2ViewOnly=!isCurrentPlayerScorer('stableford');
   document.getElementById('day2').innerHTML = `
+    ${renderPlayoffIntro()}
     ${renderMatchPlayBanner()}
     ${!state.options.threePuttPoker ? pokerSetupCard : ''}
     <div class="card">
@@ -7900,8 +7964,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.74) — bump both together on every deploy
-const APP_VERSION = '5.54';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.75) — bump both together on every deploy
+const APP_VERSION = '5.55';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

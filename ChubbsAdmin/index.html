@@ -1484,6 +1484,36 @@ function initFirebase() {
   }
 }
 
+// Brain trust per handbook §3 — Luke (chair), Terry (scramble chair), Jack
+// (Sanders), Ryan N (Nimmo), Mike W (Warford). When the admin hasn't manually
+// picked a scorer for a foursome, we default to the first brain-trust member
+// in this priority order, then fall back to lowest handicap. Easier to manage:
+// the brain trust knows the format, the handbook, and Luke can chase them.
+const BRAIN_TRUST_NAMES = ['Luke', 'Terry', 'Jack', 'Ryan N', 'Mike W'];
+
+function pickDefaultScorerId(playerIds) {
+  if (!Array.isArray(playerIds) || !playerIds.length) return '';
+  const players = playerIds
+    .map(id => masterRoster.find(p => p.playerId === id))
+    .filter(Boolean);
+  if (!players.length) return playerIds[0];
+  // Brain-trust priority — first match wins
+  for (const btName of BRAIN_TRUST_NAMES) {
+    const match = players.find(p =>
+      ((p.displayName || '') + '').trim().toUpperCase() === btName.toUpperCase()
+    );
+    if (match) return match.playerId;
+  }
+  // Fallback: lowest handicap
+  let best = players[0];
+  for (const p of players) {
+    const ph = Number.isFinite(+p.playingHandicap) ? +p.playingHandicap : 36;
+    const bh = Number.isFinite(+best.playingHandicap) ? +best.playingHandicap : 36;
+    if (ph < bh) best = p;
+  }
+  return best.playerId;
+}
+
 function buildEventBundle() {
   const lbRadio = document.querySelector('input[name="lb-access"]:checked');
   const lbAccess = lbRadio ? lbRadio.value : 'open';
@@ -1502,20 +1532,20 @@ function buildEventBundle() {
 
   const d1Teams = state.scrambleTeams.map(t => {
     let players = t.players.filter(p => p);
-    let scorer = t.scorerId || (players[0] || "");
+    let scorer = t.scorerId || pickDefaultScorerId(players);
     if (scorer && players.includes(scorer)) {
       players = players.filter(p => p !== scorer);
-      players.push(scorer); 
+      players.push(scorer);
     }
     return { teamId: t.id, teamName: t.name, startingHole: t.startingHole || 1, scorerPlayerId: scorer, playerIds: players };
   }).filter(t => t.playerIds.length > 0);
 
   const d2Groups = state.stablefordGroups.map(g => {
     let players = g.players.filter(p => p);
-    let scorer = g.scorerId || (players[0] || "");
+    let scorer = g.scorerId || pickDefaultScorerId(players);
     if (scorer && players.includes(scorer)) {
       players = players.filter(p => p !== scorer);
-      players.push(scorer); 
+      players.push(scorer);
     }
     return { groupId: g.id, groupName: g.name, teeTime: g.time, startingHole: g.startingHole || 1, scorerPlayerId: scorer, playerIds: players };
   }).filter(g => g.playerIds.length > 0);
