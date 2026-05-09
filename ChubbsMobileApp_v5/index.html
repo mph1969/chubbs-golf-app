@@ -5429,7 +5429,7 @@ function _getNavGroups(){
     { id:'round',       label:'Round',                      sections: roundSections },
     { id:'leaderboard', label:'Leaderboard',                sections: ['leaderboard'] },
     { id:'standings',   label:'Standings',                  sections: standingsSections },
-    { id:'setup',       label: masterMode ? 'Setup' : 'Me', sections: ['setup'] },
+    { id:'setup',       label: masterMode ? 'Admin' : 'Me', sections: ['setup'] },
   ];
 }
 
@@ -7964,8 +7964,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.75) — bump both together on every deploy
-const APP_VERSION = '5.55';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.76) — bump both together on every deploy
+const APP_VERSION = '5.56';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
@@ -8094,41 +8094,41 @@ function renderAll(){
   // Keep gear button state in sync
   const mb = document.getElementById('master-btn');
   if(mb) mb.style.opacity = masterMode ? '1' : '0.55';
-  // Update hero subtitle with event dates when event is loaded
+  // Header subtitle — when an event is loaded, show one tight line that
+  // combines player + course + dates ("Hanson @ Palm Island · Sat 25 Apr ·
+  // Sun 26 Apr"). When no event is loaded, fall back to the static
+  // "Golf scorer" label. Tagline gets hidden during events to reduce
+  // header noise; the full-width "event banner" card is also dropped.
   const heroSub = document.getElementById('hero-event-sub');
+  const taglineEl = document.querySelector('.tagline');
+  const eBanner = document.getElementById('event-banner');
+  const ev = state.eventBundle && state.eventBundle.event;
+  const eventLoaded = !!(ev && (ev.displayName || ev.name || ev.satDate || ev.sunDate));
   if(heroSub){
-    const ev = state.eventBundle && state.eventBundle.event;
-    if(ev && (ev.satDate || ev.sunDate)){
+    if(eventLoaded){
+      const isTest = !!(state.eventBundle && state.eventBundle._isTest);
+      const ep = state.eventBundle && state.eventBundle.players
+        ? state.eventBundle.players.find(p => String(p.playerId) === String(state.eventPlayerId)) : null;
+      const playerName = ep ? (ep.displayName || ep.fullName || ep.playerId) : '';
+      // Pick a course label — prefer day2 when set, fall back to day1
+      const courseLabel = (ev.day2CourseLabel || ev.day1CourseLabel || '').trim();
       const sat = ev.satDate ? formatEventDate(ev.satDate,'short') : '';
       const sun = ev.sunDate ? formatEventDate(ev.sunDate,'short') : '';
-      heroSub.textContent = [sat, sun].filter(Boolean).join(' · ');
+      const dateStr = [sat, sun].filter(Boolean).join(' · ');
+      const lhs = playerName
+        ? `${playerName}${courseLabel ? ' @ ' + courseLabel : ''}`
+        : (courseLabel || (ev.displayName || ev.name || ''));
+      heroSub.textContent = (isTest ? '🧪 ' : '') + [lhs, dateStr].filter(Boolean).join(' · ');
+      if(isTest) heroSub.style.color = '#f5d85c'; else heroSub.style.color = '';
     } else {
       heroSub.textContent = 'Golf scorer';
+      heroSub.style.color = '';
     }
   }
-  // Update event banner
-  const eBanner = document.getElementById('event-banner');
-  if(eBanner){
-    const ev = state.eventBundle && state.eventBundle.event;
-    if(ev && (ev.displayName || ev.name)){
-      eBanner.style.display = '';
-      const isTest = !!state.eventBundle._isTest;
-      const nameEl = document.getElementById('event-banner-name');
-      nameEl.textContent = (isTest ? '🧪 TEST · ' : '') + (ev.displayName || ev.name);
-      if(isTest) nameEl.style.color = '#f5d85c';
-      else nameEl.style.color = '';
-      eBanner.style.borderBottom = isTest ? '2px solid rgba(245,216,92,0.4)' : '1px solid rgba(201,168,76,0.2)';
-      eBanner.style.background = isTest
-        ? 'linear-gradient(135deg,rgba(245,216,92,0.06),rgba(92,58,10,0.3))'
-        : 'linear-gradient(135deg,rgba(201,168,76,0.08),rgba(29,56,40,0.4))';
-      const ep = state.eventBundle.players.find(p => String(p.playerId) === String(state.eventPlayerId));
-      const playerName = ep ? (ep.displayName || ep.fullName || ep.playerId) : '';
-      const courseName = ev.day1CourseLabel || '';
-      document.getElementById('event-banner-player').textContent = playerName ? `Playing as ${playerName}${courseName ? ' · ' + courseName : ''}` : '';
-    } else {
-      eBanner.style.display = 'none';
-    }
-  }
+  // Hide the cycling tagline + the legacy event banner during events — the
+  // info has been hoisted into the header subtitle above.
+  if(taglineEl) taglineEl.style.display = eventLoaded ? 'none' : '';
+  if(eBanner) eBanner.style.display = 'none';
 }
 // ── Startup: Firebase init + jacket seed + watch mode bootstrap ──
 initFirebase();
