@@ -8,7 +8,7 @@ Monthly golf tournament app for a friend group in Nansha. Season runs Sept→Jun
 |---|---|---|---|
 | `ChubbsMobileApp_v5/` | Scorer PWA used by players on course | `chubbs-golf.netlify.app` | auto on push to master |
 | `ChubbsAdmin/` | Event-setup portal used by organiser | `chubbs-admin.netlify.app` | auto on push to master |
-| _(future)_ | Public leaderboard + honeypot prank | TBD (separate site) | not yet built — see `Archive/chubbs-golf-app-master.zip` |
+| _(future)_ | Public leaderboard | TBD (separate site) | not yet built — see `Archive/chubbs-golf-app-master.zip` |
 
 GitHub: `mph1969/chubbs-golf-app` (this repo). Firebase project: Realtime Database under Michael's account.
 
@@ -71,8 +71,6 @@ Admin builds event config ──push──► Firebase /events/{eventId}/bundle
 | 11 | Playoffs: top 16 after 8 rounds, min 3 rounds to qualify | ✅ v5.39 (prediction only — bracket UI not built) |
 | 12 | Shooter Cup October Ryder Cup format | 🟡 data hook shipped (event.players[i].overrideSeasonPts) — admin UI deferred until October |
 
-**Honeypot (Phase A, v5.41):** Gate + gator prank + "Most Pressed" throne on Leaderboard tab. See `project_chubbs_honeypot.md` memory. Controlled by `/chubbs/leaderboardPublished` + `/chubbs/presses/{KEY}`. Admin bypass via `?admin=CHUBBSGATOR2026` URL param (rotate by editing `HONEYPOT.ADMIN_SECRET` in index.html).
-
 ## Season Infrastructure
 
 The mobile app has a durable "seasons" concept:
@@ -103,13 +101,12 @@ The mobile app has a durable "seasons" concept:
 | `chubbs_admin_collapsed_v1` | Admin card collapse preferences |
 | `chubbs_fontsize` | UI font-size preference (std/large/xl) |
 | `dc_pro_v1` | Pro unlock (unused on Chubbs — DX! Golf only) |
-| `chubbs_admin_unlock_v1` | Honeypot admin bypass flag (set by `?admin=CHUBBSGATOR2026`) |
 
 ## Untracked In-Repo Files (local-only)
 
 - `Season 4 Scores.xlsx` — Terry's season spreadsheet, source for `season-4.json`.
 - `LIVE-APRIL-CHUBBS-At-config-2026-04-17.json` — Michael's local April event config.
-- `NewFeatures/files.zip` — draft honeypot spec + prototype for the public leaderboard.
+- `NewFeatures/files.zip` — draft public-leaderboard prototype (legacy).
 - `Archive/chubbs-golf-app-master.zip` — snapshot of the public-leaderboard sub-app (same repo, different subfolder presumably).
 
 These stay untracked — do not `git add` them in a commit unless explicitly asked.

@@ -7,20 +7,14 @@ documentation, Firebase enforces what's in the console.
 
 ---
 
-## Current full ruleset (Phase A — includes honeypot paths)
-
-**DO NOT add `.read: true` or `.write: true` at the root of `"rules"`.** Firebase
-rule cascades: granting access at the root nullifies every stricter child rule
-below — specifically, it'd break the press-ratchet rule that prevents malicious
-writes bigger than +1.
-
-The shape is path-specific all the way down. Paste this as the full ruleset:
+## Current full ruleset (post-honeypot removal, v5.59)
 
 ```json
 {
   "rules": {
     "events": {
       ".read": true,
+      ".indexOn": "bundle/_publishedAt",
       "$eventId": {
         ".write": true
       }
@@ -28,87 +22,49 @@ The shape is path-specific all the way down. Paste this as the full ruleset:
     "admin": {
       ".read": true,
       ".write": true
-    },
-    "chubbs": {
-      "presses": {
-        "$player": {
-          ".read": true,
-          ".write": "newData.isNumber() && newData.val() === (data.exists() ? data.val() : 0) + 1 && newData.val() <= 9999"
-        }
-      },
-      "leaderboardPublished": {
-        ".read": true,
-        ".write": true
-      }
     }
   }
 }
 ```
 
-### Note on the ratchet rule syntax
-
-Firebase RTDB Security Rules are a restricted expression language — `||`
-requires boolean operands on both sides, unlike JavaScript. That's why the
-ratchet uses `(data.exists() ? data.val() : 0)` instead of the JS-idiomatic
-`(data.val() || 0)`. First press (no prior value) falls through to `0 + 1`;
-subsequent presses increment the stored integer.
-
-### Merging into your existing rules
-
-If `"events"` and `"admin"` already exist with your own tweaks, keep them as
-they are and **add the `"chubbs": { ... }` block alongside** them. Don't nest
-`"chubbs"` inside `"events"`. Don't wrap the whole thing in a root `.read/.write`.
+The `.indexOn` line tells Firebase to maintain a server-side index on the
+`bundle/_publishedAt` field of each event. Without it, Firebase warns
+"Using an unspecified index" on every read and downloads the full `/events`
+node before filtering client-side. With it, queries are filtered server-side.
 
 ### What each path does
 
 | Path | Read | Write | Purpose |
 |---|---|---|---|
-| `/chubbs/leaderboardPublished` | anyone | anyone (Phase A) | Boolean flag. `true` = leaderboard visible to everyone; `false`/missing = honeypot gate active. Admin toolbar in the mobile app toggles this. |
-| `/chubbs/presses/{PLAYER_KEY}` | anyone | ratchet-only (+1 per write, cap 9999) | Counter per player of "admin gate" tap-throughs. Server enforces the ratchet — even if someone tries to write directly, they can only nudge their own counter by +1 at a time. |
-| `/events/{eventId}/bundle` | anyone | anyone | Existing — event config pushed by ChubbsAdmin, consumed by ChubbsMobileApp. (Whatever you had before, keep as-is.) |
+| `/events/{eventId}/bundle` | anyone | anyone | Event config pushed by ChubbsAdmin, consumed by ChubbsMobileApp. Includes seeds, players, lineups, scorers, course config. |
+| `/admin` | anyone | anyone | Generic admin scratch (legacy — used for cross-device coordination flags). |
 
 ---
 
 ## How to apply (step-by-step)
 
-1. Open the Firebase Console for the **Chubbs** project.
+1. Open the Firebase Console for the **chubbs-golf** project.
 2. Left sidebar → **Realtime Database**.
 3. Top tabs → **Rules**.
 4. You'll see your existing rules in a JSON editor.
-5. Copy the JSON block above and paste it over the existing content.
-   - If you had custom paths besides `/events`, merge them in under `"rules"`
-     instead of replacing wholesale.
+5. Replace with the JSON block above.
 6. Click **Publish** (top-right).
-7. Confirm by expanding **Data** tab and writing a test value — the Chubbs
-   mobile app will also start recording presses immediately.
 
 ---
 
-## Phase B (not yet built — server-side hardening)
+## Removed: Honeypot paths (Phase A, was v5.41 → v5.58)
 
-If we ever lock down the admin toggle properly:
+The honeypot UI ("Most Pressed" throne, gator chomp prank, gate modal) was
+retired 2026-05-10 in v5.59 after one event of fun-gimmick use. Removed
+paths:
 
-```json
-"leaderboardPublished": {
-  ".read": true,
-  ".write": false
-}
-```
+- `/chubbs/leaderboardPublished` — was the gate flag
+- `/chubbs/presses/{PLAYER_KEY}` — was the press counter with ratchet write rule
 
-Then a Netlify Function using Firebase Admin SDK becomes the only writer.
-Not needed for the friends-group scope.
+When you publish the new rules above, those paths just stop being writable
+through the app. Existing data under `/chubbs/` can be deleted from the
+Firebase Console (Data tab → expand `chubbs` → trash icon) — purely
+cosmetic, doesn't affect anything live.
 
----
-
-## Security notes (Phase A trade-offs)
-
-- **`leaderboardPublished` is world-writable.** In theory any player who finds
-  the Firebase credentials in the client bundle could toggle it. Mitigation:
-  nobody looks. If it happens, check the Firebase Rules logs and rotate.
-- **`ADMIN_SECRET` is baked into the client** at `HONEYPOT.ADMIN_SECRET` in
-  `ChubbsMobileApp_v5/index.html`. View-source reveals it. To rotate: edit
-  the constant, push, Netlify redeploy. Old bookmarks with `?admin=<old>` stop
-  working immediately.
-- **Press ratchet rule is the real protection.** Even if someone builds a
-  malicious client, they can only `+1` their own counter per write, capped at
-  9999. Same rules as honest players. That's the intended game.
+The `chubbs_admin_unlock_v1` localStorage flag on phones is also harmless
+and will age out as players reload the app over time.
