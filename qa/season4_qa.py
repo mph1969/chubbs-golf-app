@@ -153,8 +153,11 @@ def aggregate_season(season):
             "qualified": a["played"] >= PLAYOFF_MIN,
         })
 
-    # Cut-line tiebreak (Terry 2026-04-29): points desc, played desc, seedPts desc, stableford desc
-    rows.sort(key=lambda r: (-r["points"], -r["played"], -r["seedPoints"], -r["stableford"]))
+    # Cut-line tiebreak per Terry 2026-05-10: points desc → round-avg desc →
+    # seedPoints desc → stableford desc. Replaces the played-desc rule from
+    # 2026-04-29 (Terry didn't remember locking it, confirmed average is what
+    # the spreadsheet uses).
+    rows.sort(key=lambda r: (-r["points"], -r["roundAvg"], -r["seedPoints"], -r["stableford"]))
     return rows
 
 
@@ -180,11 +183,16 @@ def normalize_terry(name, event_player_set=None):
     n = (name or "").strip()
     if n in TERRY_TO_CANON:
         return TERRY_TO_CANON[n]
-    # Other Matt / Mathew = Matthew SA (per CLAUDE.md). Bare "Matt" always means
-    # Matt D — Mar Qingyuan disambiguates the second Matt with "Other Matt".
+    # Other Matt / Mathew = Matthew SA (per CLAUDE.md disambiguators).
     if n in ("Other Matt", "Mathew"):
         return "Matthew SA"
+    # Bare "Matt": context-aware. If event_player_set already contains "Matt D",
+    # then "Matt" must mean the other one (Matthew SA). Otherwise it's Matt D.
+    # In sheets with no context (per-event sheets where only one Matt appears),
+    # default to Matt D — the regular Season 4 player.
     if n == "Matt":
+        if event_player_set is not None and "Matt D" in event_player_set:
+            return "Matthew SA"
         return "Matt D"
     return n
 
@@ -287,14 +295,14 @@ def read_terry_event(wb, sheet_name):
 def read_terry_standings():
     wb = openpyxl.load_workbook(SHEET_PATH, data_only=True)
     ws = wb["Standings"]
-    rows = []
+    raw = []
     for row in ws.iter_rows(values_only=True):
         # Layout: . | rank | name | points | played | round_avg | dblpar | neagle | nbirdie
         if row[1] == "Rank": continue
         if not isinstance(row[1], int): continue
-        rows.append({
+        raw.append({
             "rank": row[1],
-            "name": normalize_terry(row[2]),
+            "name_raw": (row[2] or "").strip(),
             "points": int(row[3] or 0),
             "played": int(row[4] or 0),
             "roundAvg": float(row[5] or 0),
@@ -302,6 +310,14 @@ def read_terry_standings():
             "neagle": int(row[7] or 0),
             "nbirdie": int(row[8] or 0),
         })
+    # Build name set so context-aware Matt disambiguation can fire correctly:
+    # standings sheet has both "Matt D" AND a separate "Matt" row — that bare
+    # "Matt" must mean Matthew SA, not Matt D.
+    name_set = {r["name_raw"] for r in raw}
+    rows = []
+    for r in raw:
+        r["name"] = normalize_terry(r["name_raw"], name_set)
+        rows.append(r)
     return rows
 
 

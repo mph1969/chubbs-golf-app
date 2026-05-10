@@ -56,19 +56,24 @@ def seed_field(season, terry_order=False, best7=False):
     """Return the 16 seeds, with withdrawals removed."""
     rows = aggregate_season(season)
     qualified = [r for r in rows if r["qualified"] and r["name"] not in WITHDRAWALS]
-    if terry_order:
-        # Terry's spreadsheet tiebreak: seedPoints desc → round-avg desc → stableford desc
+    if best7:
+        # Handbook §10.2 reading: best-7 desc → round-avg desc → seedPoints desc → stableford desc
+        qualified.sort(key=lambda r: (-r["best7"], -(r["best7"] / max(r["played"], 1)), -r["seedPoints"], -r["stableford"]))
+    elif terry_order:
+        # Legacy flag — kept for back-compat. Same rule as default now.
         qualified.sort(key=lambda r: (
             -r["seedPoints"],
             -(r["best7"] / max(r["played"], 1)),
             -r["stableford"],
         ))
-    elif best7:
-        # Handbook §10.2 reading: best-7 desc → played desc → seedPoints desc → stableford desc
-        qualified.sort(key=lambda r: (-r["best7"], -r["played"], -r["seedPoints"], -r["stableford"]))
     else:
-        # App locked rule (Terry 2026-04-28): seedPoints desc → played desc → stableford desc
-        qualified.sort(key=lambda r: (-r["seedPoints"], -r["played"], -r["stableford"]))
+        # Active rule per Terry 2026-05-10: seedPoints desc → round-avg desc → stableford desc.
+        # Replaces the played-desc rule from 2026-04-29 (Terry didn't remember locking it).
+        qualified.sort(key=lambda r: (
+            -r["seedPoints"],
+            -(r["best7"] / max(r["played"], 1)),
+            -r["stableford"],
+        ))
     return qualified[:16]
 
 
@@ -203,11 +208,11 @@ def main():
         s["_seed"] = i  # 0-indexed for chooser logic
 
     if best7:
-        rule_label = "Handbook §10.2 (best-7 desc → played-desc tiebreak)"
+        rule_label = "Handbook §10.2 (best-7 desc → round-avg tiebreak)"
     elif terry_order:
-        rule_label = "Terry sheet (sum-of-all → round-avg tiebreak)"
+        rule_label = "Legacy --terry-order flag (same as default now)"
     else:
-        rule_label = "App locked (sum-of-all → played-desc tiebreak)"
+        rule_label = "App locked (sum-of-all → round-avg tiebreak, per Terry 2026-05-10)"
     print(f"Seeding rule: {rule_label}")
     print(f"\nField (post-withdrawals: {', '.join(sorted(WITHDRAWALS.keys()))}):")
     print(f"  {'Seed':>4} {'Player':<14} {'seedPts':>7} {'played':>6}")
