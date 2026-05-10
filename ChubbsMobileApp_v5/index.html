@@ -3622,7 +3622,19 @@ function getActiveMatchPlayMatches(){
         };
       }
     }
-    const status = matchPlayStatus(winners, 9);
+    // Freeze status at the close point. Once a match has been closed (lead
+    // exceeded remaining), subsequent stableford holes shouldn't drift the
+    // matchplay label. Without this, a "4&2" close can become "2 UP" after
+    // continued play, and the saved-bracket detection breaks.
+    let status = null;
+    const winnersSoFar = [];
+    for(let i = 0; i < winners.length; i++){
+      winnersSoFar.push(winners[i]);
+      if(winners[i] === null || winners[i] === undefined) continue;
+      const s = matchPlayStatus(winnersSoFar, 9);
+      if(s.closed){ status = s; break; }
+    }
+    if(!status) status = matchPlayStatus(winners, 9);
     // Handbook §11 tiebreak when 9-hole match ends ALL SQUARE:
     //   1) higher Stableford  2) lower hcp  3) arm wrestle (manual)
     let tiebreak = null;
@@ -7971,8 +7983,8 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.77) — bump both together on every deploy
-const APP_VERSION = '5.57';
+// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.78) — bump both together on every deploy
+const APP_VERSION = '5.58';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

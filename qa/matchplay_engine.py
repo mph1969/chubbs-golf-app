@@ -47,6 +47,21 @@ def hole_winner(gross_a, hcp_a, gross_b, hcp_b, si):
     return 'halved'
 
 
+def freeze_at_close(winners, total=9):
+    """Iterative status — once a match closes, freeze the label. Mirrors the
+    freeze logic in getActiveMatchPlayMatches() in mobile (index.html). Without
+    this, continued stableford scoring after a closed match drifts the
+    matchplay label (e.g., "3&2" close → "1 UP" after continued play).
+    """
+    so_far = []
+    for w in winners:
+        so_far.append(w)
+        if w is None: continue
+        s = match_play_status(so_far, total)
+        if s.get("closed"): return s
+    return match_play_status(winners, total)
+
+
 def match_play_status(holes, total=9):
     """Aggregate match status from a list of per-hole winners.
 
@@ -124,6 +139,16 @@ def run_tests():
 
         ("ALL SQUARE thru 9 → handbook §11 tiebreak triggers",
          lambda: 'ALL SQUARE thru 9' in match_play_status(['a','b','a','b','a','b','halved','halved','halved'])['label']),
+
+        # Freeze tests — match closes early, subsequent scoring shouldn't drift the label
+        ("freeze: 4&2 close at H7, continued scoring stays 4&2",
+         lambda: freeze_at_close(['a','a','a','a','b','halved','a','b','b'])['label'] == '4&2'),
+
+        ("freeze: 5&4 close at H5, continued play stays 5&4",
+         lambda: freeze_at_close(['a','a','a','a','a','b','b','b','b'])['label'] == '5&4'),
+
+        ("freeze: never closes (1 UP at 18) — final label preserved",
+         lambda: freeze_at_close(['a','b','a','b','a','b','a','halved','halved'])['label'] == '1 UP'),
     ]
 
     failed = 0
