@@ -3883,17 +3883,23 @@ function getChallengesForHole(holeIdx, day){
     ?(state.eventBundle.day1Challenges||[])
     :(state.eventBundle.day2Challenges||[]);
   if(!challenges.length) return [];
-  // Convert nine+hole notation (e.g. "B5") to course hole index (0-17)
   const ev=state.eventBundle.event||{};
   const front=(day==='day1'||day==='scramble')?ev.day1PalmIslandFront:ev.day2PalmIslandFront;
   const back=(day==='day1'||day==='scramble')?ev.day1PalmIslandBack:ev.day2PalmIslandBack;
   return challenges.filter(ch=>{
     if(!ch.hole) return false;
-    const nine=ch.hole[0]; // 'A','B','C'
-    const holeInNine=parseInt(ch.hole.slice(1))-1; // 0-8
+    const holeStr=String(ch.hole);
     let courseIdx=-1;
-    if(nine===front) courseIdx=holeInNine;       // front nine: 0-8
-    else if(nine===back) courseIdx=9+holeInNine;  // back nine: 9-17
+    if(/^[A-Z]/i.test(holeStr)){
+      // Palm Island sub-9 notation (e.g. "A5", "B9")
+      const nine=holeStr[0].toUpperCase();
+      const holeInNine=parseInt(holeStr.slice(1))-1; // 0-8
+      if(nine===front) courseIdx=holeInNine;
+      else if(nine===back) courseIdx=9+holeInNine;
+    } else {
+      // Plain hole number 1-18 (standard 18-hole courses)
+      courseIdx=parseInt(holeStr,10)-1;
+    }
     return courseIdx===holeIdx;
   });
 }
@@ -7574,8 +7580,11 @@ function renderFooter(){
       </button>`;
 }
 
-// ⚠️ APP_VERSION must match CACHE_VERSION in sw.js (chubbs-v5.79) — bump both together on every deploy
-const APP_VERSION = '5.59';
+// APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
+// CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.80) and does NOT need to match.
+// Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
+const APP_VERSION = '5.60';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

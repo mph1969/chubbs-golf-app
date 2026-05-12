@@ -719,18 +719,26 @@ const STABLEFORD_CHALLENGES=['littlechubby','ctp','moneyhole','longestputt','lon
 const STABLEFORD_CHALLENGE_NAMES={littlechubby:'Little Chubby',ctp:'CTP',moneyhole:'Money Hole',longestputt:'Longest Putt',longestdrive:'Longest Drive'};
 
 function populateChallengeHoles(prefix){
-  const front=document.getElementById(`${prefix}-front`).value||'A';
-  const back=document.getElementById(`${prefix}-back`).value||'B';
-  const challenges=prefix==='scramble'?SCRAMBLE_CHALLENGES:STABLEFORD_CHALLENGES;
-  // Build hole options: Front 9 (nine label + hole 1-9) then Back 9
+  // Palm Island composes 18 from two of three 9-hole loops (A/B/C) and stores values like "A5".
+  // Every other course is a standard 18-hole routing — plain "1".."18" values.
+  const courseId=document.getElementById(`${prefix}-course`).value;
+  const isPalm=courseId==='palmIsland';
   let opts='<option value="">— None —</option>';
-  [front,back].forEach((nine,ni)=>{
-    const lbl=NINE_LABELS[nine]||nine;
-    for(let h=1;h<=9;h++){
-      const courseHole=ni*9+h; // 1-18
-      opts+=`<option value="${nine}${h}">${nine}${h} · Hole ${courseHole}</option>`;
+  if(isPalm){
+    const front=document.getElementById(`${prefix}-front`).value||'A';
+    const back=document.getElementById(`${prefix}-back`).value||'B';
+    [front,back].forEach((nine,ni)=>{
+      for(let h=1;h<=9;h++){
+        const courseHole=ni*9+h; // 1-18
+        opts+=`<option value="${nine}${h}">${nine}${h} · Hole ${courseHole}</option>`;
+      }
+    });
+  } else {
+    for(let h=1;h<=18;h++){
+      opts+=`<option value="${h}">Hole ${h}</option>`;
     }
-  });
+  }
+  const challenges=prefix==='scramble'?SCRAMBLE_CHALLENGES:STABLEFORD_CHALLENGES;
   challenges.forEach(ch=>{
     const sel=document.getElementById(`ch-${prefix}-${ch}`);
     if(sel){const cur=sel.value;sel.innerHTML=opts;if(cur)sel.value=cur;}
