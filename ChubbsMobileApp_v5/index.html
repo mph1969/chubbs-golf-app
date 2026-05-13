@@ -137,6 +137,7 @@
     .mp-hint{padding:4px 10px 6px 44px;font-size:10px;color:var(--muted);font-family:monospace;background:rgba(255,255,255,0.012);line-height:1.4}
     .mp-hint-win-a{color:#a5f0c5}
     .mp-hint-win-b{color:#ffb5ae}
+    .mp-stroke-adv{padding:5px 10px 6px 44px;font-size:11px;color:#a5f0c5;background:rgba(76,175,80,0.10);border-left:2px solid rgba(76,175,80,0.55);font-weight:700;line-height:1.4}
     .mp-tiebreak{padding:7px 10px 7px 44px;font-size:11px;font-weight:600;color:#79b0e3;background:rgba(121,176,227,0.07);border-top:1px dashed rgba(121,176,227,0.3);line-height:1.4}
     .mp-scorer{padding:7px 10px;font-size:11px;font-weight:700;border-radius:8px;margin:0 0 8px;letter-spacing:0.02em}
     .mp-scorer-self{background:rgba(74,176,100,0.1);border:1px solid rgba(74,176,100,0.3);color:#9ad9a8}
@@ -3490,28 +3491,39 @@ function getActiveMatchPlayMatches(){
       const ch = course.holes[i]; if(!ch || !ch.si) return null;
       return matchPlayHoleWinner(h.gross[idxA], playerA.hcp, h.gross[idxB], playerB.hcp, ch.si);
     });
-    // Current-hole snapshot for the inline net-compare hint. Returns null
-    // when the current hole is outside the 9-hole match window or either
-    // player hasn't entered a gross yet.
+    // Current-hole snapshot — drives both the pre-hole "X gets a stroke here"
+    // heads-up (before grosses are entered) and the post-score net-compare
+    // hint (once both grosses are in). Null when the current hole is outside
+    // the 9-hole match window or has no SI.
     let currentHole = null;
     const curIdx = state.stableford.hole;
     if(matchHoleIdxs.indexOf(curIdx) >= 0){
       const ch = course.holes[curIdx];
       const h  = holes[curIdx];
-      const grossA = h && h.gross[idxA];
-      const grossB = h && h.gross[idxB];
-      if(ch && ch.si && grossA != null && grossB != null){
+      if(ch && ch.si){
+        const grossA = h && h.gross[idxA];
+        const grossB = h && h.gross[idxB];
         const strokes = matchPlayStrokes(playerA.hcp, playerB.hcp, ch.si);
         const aHigher = parseInt(playerA.hcp || 0, 10) > parseInt(playerB.hcp || 0, 10);
-        const netA = grossA - (aHigher ? strokes : 0);
-        const netB = grossB - (aHigher ? 0 : strokes);
-        currentHole = {
-          idx: curIdx, par: ch.par, si: ch.si,
-          grossA, grossB, netA, netB,
-          winner: matchPlayHoleWinner(grossA, playerA.hcp, grossB, playerB.hcp, ch.si),
-          strokesToHigher: strokes,
-          aHigher,
-        };
+        if(grossA != null && grossB != null){
+          const netA = grossA - (aHigher ? strokes : 0);
+          const netB = grossB - (aHigher ? 0 : strokes);
+          currentHole = {
+            idx: curIdx, par: ch.par, si: ch.si,
+            grossA, grossB, netA, netB,
+            winner: matchPlayHoleWinner(grossA, playerA.hcp, grossB, playerB.hcp, ch.si),
+            strokesToHigher: strokes,
+            aHigher,
+          };
+        } else if(strokes > 0){
+          // Pre-hole heads-up — at least one stroke being awarded this hole.
+          currentHole = {
+            idx: curIdx, par: ch.par, si: ch.si,
+            strokesToHigher: strokes,
+            aHigher,
+            preHole: true,
+          };
+        }
       }
     }
     // Freeze status at the close point. Once a match has been closed (lead
@@ -3683,19 +3695,27 @@ function renderMatchPlayBanner(){
           : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${m.matchNum-1}, ${JSON.stringify(winnerName)}, ${JSON.stringify(resultLabel)})'>📌 Save M${m.matchNum} (Tiebreak)</button></div>`;
       }
     }
-    // Per-hole inline comparison hint — shows the math behind the status.
+    // Per-hole inline hint — either a pre-hole stroke heads-up (before both
+    // grosses are entered) or the post-score net-compare math.
     let hintHtml = '';
     if(m.currentHole && !s.closed){
       const cd = m.currentHole;
-      let outcome, hintCls = 'mp-hint';
-      if(cd.winner === 'a'){ outcome = `${m.playerA} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-a'; }
-      else if(cd.winner === 'b'){ outcome = `${m.playerB} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-b'; }
-      else { outcome = `H${cd.idx+1} halved`; }
-      const aShots = cd.aHigher ? cd.strokesToHigher : 0;
-      const bShots = cd.aHigher ? 0 : cd.strokesToHigher;
-      const aLabel = `${m.playerA}: ${cd.grossA}${aShots ? '−'+aShots : ''}=${cd.netA}n`;
-      const bLabel = `${m.playerB}: ${cd.grossB}${bShots ? '−'+bShots : ''}=${cd.netB}n`;
-      hintHtml = `<div class="${hintCls}">H${cd.idx+1} (par ${cd.par}, SI ${cd.si}) · ${aLabel} · ${bLabel} → ${outcome}</div>`;
+      if(cd.preHole){
+        const strokePlayer = cd.aHigher ? m.playerA : m.playerB;
+        const sCount = cd.strokesToHigher;
+        const sLbl = sCount === 1 ? '1 stroke' : `${sCount} strokes`;
+        hintHtml = `<div class="mp-stroke-adv">⬇ ${strokePlayer} gets ${sLbl} on H${cd.idx+1} · par ${cd.par} · SI ${cd.si}</div>`;
+      } else {
+        let outcome, hintCls = 'mp-hint';
+        if(cd.winner === 'a'){ outcome = `${m.playerA} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-a'; }
+        else if(cd.winner === 'b'){ outcome = `${m.playerB} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-b'; }
+        else { outcome = `H${cd.idx+1} halved`; }
+        const aShots = cd.aHigher ? cd.strokesToHigher : 0;
+        const bShots = cd.aHigher ? 0 : cd.strokesToHigher;
+        const aLabel = `${m.playerA}: ${cd.grossA}${aShots ? '−'+aShots : ''}=${cd.netA}n`;
+        const bLabel = `${m.playerB}: ${cd.grossB}${bShots ? '−'+bShots : ''}=${cd.netB}n`;
+        hintHtml = `<div class="${hintCls}">H${cd.idx+1} (par ${cd.par}, SI ${cd.si}) · ${aLabel} · ${bLabel} → ${outcome}</div>`;
+      }
     }
     return `<div class="mp-row">
       <span class="mp-tag">M${m.matchNum}</span>
@@ -7582,9 +7602,9 @@ function renderFooter(){
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.80) and does NOT need to match.
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.81) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.60';
+const APP_VERSION = '5.61';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
