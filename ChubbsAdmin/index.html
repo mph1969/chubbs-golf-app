@@ -423,6 +423,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <h3 class="collapsible-title" style="margin:0; font-size:14px; color:var(--gold2)" onclick="toggleCardCollapse('stableford-groups-wrap')"><span class="collapse-chev">▾</span>Stableford Groups (Drag & Drop)</h3>
             <div>
+              <button class="small primary" onclick="generateGroupsFromBracket()" title="Auto-generate 4 R16 foursomes from the locked playoff bracket (M1+M2, M3+M4, M5+M6, M7+M8)">🏆 From Bracket</button>
               <button class="small primary" onclick="smartShuffleStableford()">🎲 Smart Shuffle Pairings</button>
               <button class="small ghost" onclick="addStablefordGroup()">+ Add Blank Group</button>
             </div>
@@ -1424,6 +1425,74 @@ function addStablefordGroup() {
   state.stablefordGroups.push({ id: `sun-${Date.now()}`, name: `Group ${state.stablefordGroups.length + 1}`, time: newTime, scorerId: '', startingHole: 1, players: [] });
   renderGroups();
 }
+// Build 4 R16 foursomes from the locked playoff bracket. M1+M2 share a foursome
+// because their winners meet in QF1; same logic for M3+M4, M5+M6, M7+M8. Order
+// matches mobile R16_PAIRS at ChubbsMobileApp_v5/index.html:3477 and the
+// printed-bracket visual top-to-bottom layout (v5.62).
+function generateGroupsFromBracket() {
+  if(!poState.enabled) {
+    alert("Playoffs aren't enabled. Toggle them on in the Playoff Setup card first.");
+    return;
+  }
+  const top16 = _poTop16();
+  if(!top16 || top16.length < 16) {
+    alert(`Need 16 locked seeds — currently ${top16 ? top16.length : 0} qualified. Confirm playoff roster first.`);
+    return;
+  }
+
+  // Bracket pairings in visual top-to-bottom order
+  const R16_PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
+
+  // seed name → playerId via normalised lookup
+  const norm = s => String(s||'').trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const seedNames = top16.map(r => r.name);
+  const seedIds = seedNames.map(name => {
+    const target = norm(name);
+    const hit = masterRoster.find(p => norm(p.displayName) === target || norm(p.fullName) === target);
+    return hit ? hit.playerId : null;
+  });
+  const missing = seedIds.map((id, i) => id ? null : seedNames[i]).filter(Boolean);
+  if(missing.length) {
+    alert(`These top-16 players aren't in the roster:\n\n${missing.join(', ')}\n\nAdd them via the Roster card before generating groups.`);
+    return;
+  }
+
+  if(state.stablefordGroups.length > 0) {
+    if(!confirm(`This will replace your ${state.stablefordGroups.length} existing Stableford group(s). Continue?`)) return;
+  }
+
+  const startTime = document.getElementById('stableford-time').value || "08:00";
+  const groups = [];
+  for(let i = 0; i < 4; i++) {
+    const pairA = R16_PAIRS[i*2];     // M1, M3, M5, M7
+    const pairB = R16_PAIRS[i*2 + 1]; // M2, M4, M6, M8
+    const players = [seedIds[pairA[0]], seedIds[pairA[1]], seedIds[pairB[0]], seedIds[pairB[1]]];
+    const matchA = i*2 + 1;
+    const matchB = i*2 + 2;
+    groups.push({
+      id: `sun-${Date.now()}-${i}`,
+      name: `R16 G${i+1} · M${matchA}+M${matchB}`,
+      time: addMinutesToTime(startTime, i * 10),
+      scorerId: players[0],  // top seed in the foursome → designated scorer
+      startingHole: 1,
+      players
+    });
+  }
+  state.stablefordGroups = groups;
+  renderGroups();
+
+  // Heads-up about who's still unassigned (Fireball Cup + Stableford-only players)
+  const assignedSet = new Set(groups.flatMap(g => g.players));
+  const stablefordAttending = masterRoster
+    .filter(p => state.attendance[p.playerId] === 'stableford' || state.attendance[p.playerId] === 'both')
+    .filter(p => !assignedSet.has(p.playerId))
+    .map(p => p.displayName);
+  const tail = stablefordAttending.length
+    ? `\n\nStill unassigned (${stablefordAttending.length}): ${stablefordAttending.join(', ')}\nDrag them into new groups manually.`
+    : '';
+  alert(`✅ Generated 4 R16 foursomes from the bracket.${tail}`);
+}
+
 function removeStablefordGroup(gIdx) { state.stablefordGroups.splice(gIdx, 1); renderGroups(); }
 function updateStablefordField(gIdx, field, val) { state.stablefordGroups[gIdx][field] = val; renderGroups(); }
 
