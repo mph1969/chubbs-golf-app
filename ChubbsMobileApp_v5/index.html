@@ -988,22 +988,15 @@ function renderMasterBtn(){
   const chip = document.getElementById('hole-chip-hero');
   const tab = state.ui.tab;
   const onScoringTab = (tab === 'day1' || tab === 'day2');
-  const showChip = onScoringTab; // always show hole chip on scoring tabs, even in admin mode
   const showGear = !onScoringTab && (tab === 'setup' || masterMode);
   if(btn){
     btn.style.display = showGear ? '' : 'none';
     btn.style.opacity = masterMode ? '1' : '0.55';
   }
-  if(chip){
-    chip.style.display = showChip ? '' : 'none';
-    if(showChip){
-      const holeIdx = tab === 'day1' ? state.scramble.hole : state.stableford.hole;
-      const holeNum = holeIdx + 1;
-      const chs = getChallengesForHole(holeIdx, tab);
-      const chIcon = chs.length ? `<span style="font-size:14px;display:block;margin-top:2px">${chs.map(c=>CHALLENGE_ICONS[c.id]||'🏆').join('')}</span>` : '';
-      chip.innerHTML = `Hole<span class="hnum">${holeNum}</span>${chIcon}`;
-    }
-  }
+  // v5.66: hero hole chip removed — redundant with the in-card hole nav
+  // (which shows "Hole N · Par P · S.I. S" + challenge badges) and was
+  // taking real estate that pushed the scoring grid below the fold.
+  if(chip) chip.style.display = 'none';
 }
 function revealDay1(){
   showConfirm('Show Day 1 scramble results? This cannot be undone on this device.', () => {
@@ -3753,7 +3746,6 @@ function renderMatchPlayBanner(){
       <div class="section-title" style="margin-bottom:4px">🥊 Match-play · 9-hole match</div>
       ${scorerHeader}
       ${rowHtml}
-      <div class="small" style="margin-top:6px;color:var(--muted)">Live status updates after each gross score. Closed matches still play out for Stableford.</div>
     </div>`;
 }
 
@@ -6799,7 +6791,6 @@ function renderDay1(){
         <div class="hole-chip" style="flex:1;text-align:center">${state.scramble.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole)+1}/18</span> ` : ''}Hole ${state.scramble.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}${challengeBadgeHtml(state.scramble.hole,'day1')}</div>
         <button class="btn slim" onclick="navHole('scramble',1)">Next → ${(()=>{const o=getHoleOrder('scramble');const pp=holeIdxToPlayOrder(state.scramble.hole,state.scramble.startingHole||0);return pp<17?'H'+(o[pp+1]+1):'✓';})()}</button>
       </div>
-      ${!state.scramble.holes.some(h=>typeof h.gross==='number') ? `<div style="text-align:center;margin:4px 0"><button class="btn slim ghost" style="font-size:10px" onclick="showStartingHoleModal('scramble')">⛳ Starting hole: ${(state.scramble.startingHole||0)+1}</button></div>` : (state.scramble.startingHole ? `<div style="text-align:center;font-size:9px;color:var(--muted);margin:2px 0">Started on hole ${state.scramble.startingHole+1}</div>` : '')}
 
       <!-- TEAM GROSS — primary scoring action -->
       <div style="background:linear-gradient(135deg,rgba(201,168,76,0.06),rgba(42,163,106,0.04));border:2px solid rgba(201,168,76,0.25);border-radius:14px;padding:14px;margin:10px 0">
@@ -7084,7 +7075,6 @@ function renderDay2(){
         <div class="hole-chip" style="flex:1;text-align:center">${state.stableford.startingHole ? `<span style="font-size:9px;color:var(--muted)">${holeIdxToPlayOrder(state.stableford.hole,state.stableford.startingHole)+1}/18</span> ` : ''}Hole ${state.stableford.hole + 1} · Par ${meta.par ?? '—'} · S.I. ${meta.si ?? '—'}${challengeBadgeHtml(state.stableford.hole,'day2')}</div>
         <button class="btn slim" onclick="navHole('stableford',1)">Next →</button>
       </div>
-      ${!state.stableford.holes.some(h=>h.gross.some(g=>typeof g==='number')) ? `<div style="text-align:center;margin:4px 0"><button class="btn slim ghost" style="font-size:10px" onclick="showStartingHoleModal('stableford')">⛳ Starting hole: ${(state.stableford.startingHole||0)+1}</button></div>` : (state.stableford.startingHole ? `<div style="text-align:center;font-size:9px;color:var(--muted);margin:2px 0">Started on hole ${state.stableford.startingHole+1}</div>` : '')}
       ${state.options.threePuttPoker && penaltyPlayers.length > 1 ? `<div class="status warn tight">More than one player 3-putted this hole. Flag the last one.</div>` : ''}
     </div>
 
@@ -7721,9 +7711,9 @@ function renderFooter(){
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.85) and does NOT need to match.
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.86) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.65';
+const APP_VERSION = '5.66';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
