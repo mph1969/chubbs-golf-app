@@ -138,6 +138,33 @@
     .mp-hint-win-a{color:#a5f0c5}
     .mp-hint-win-b{color:#ffb5ae}
     .mp-stroke-adv{padding:5px 10px 6px 44px;font-size:11px;color:#a5f0c5;background:rgba(76,175,80,0.10);border-left:2px solid rgba(76,175,80,0.55);font-weight:700;line-height:1.4}
+    /* v5.63 matchplay-paired Stableford layout — pairs sit side-by-side with the match info inline */
+    .match-container{border:1px solid rgba(214,176,90,0.4);border-radius:14px;padding:10px;margin-bottom:12px;background:linear-gradient(180deg,rgba(214,176,90,0.05),rgba(20,40,30,0.55))}
+    .mc-head{display:grid;grid-template-columns:auto 1fr auto;gap:6px;align-items:center;margin-bottom:6px;padding:0 2px 6px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;font-weight:700}
+    .mc-tag{background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.28);color:var(--gold2);padding:2px 8px;border-radius:6px;font-size:10px;letter-spacing:0.04em}
+    .mc-pair{padding:0 6px;color:#e0e0e0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .mc-pair .seed{color:var(--muted);font-size:10px;font-weight:600}
+    .mc-pair .vs{color:var(--muted);font-weight:500;margin:0 3px;font-size:10px}
+    .mc-status{font-size:10px;font-weight:700;white-space:nowrap}
+    .mc-stroke{padding:5px 10px;margin:2px 0 6px;font-size:11px;color:#a5f0c5;background:rgba(76,175,80,0.10);border-left:2px solid rgba(76,175,80,0.55);font-weight:700;line-height:1.4;border-radius:0 6px 6px 0}
+    .mc-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .mc-grid>.player-card{padding:8px;border-radius:10px}
+    .mc-grid>.player-card .player-head{margin-bottom:6px;gap:6px}
+    .mc-grid>.player-card .player-name{font-size:12px}
+    .mc-grid>.player-card .hcp-badge{padding:2px 6px;font-size:10px}
+    .mc-grid>.player-card .stepper{grid-template-columns:36px 1fr 36px;gap:4px}
+    .mc-grid>.player-card .stepper button{height:38px;font-size:18px;border-radius:10px}
+    .mc-grid>.player-card .stepper .val{height:38px;font-size:16px;border-radius:10px}
+    .mc-outcome{font-family:monospace;font-size:10px;color:var(--gold2);padding:6px 2px 2px;margin-top:6px;border-top:1px solid rgba(255,255,255,0.04);line-height:1.5}
+    .mc-outcome .mc-win{font-weight:800}
+    .mc-outcome.win-a .mc-win{color:#a5f0c5}
+    .mc-outcome.win-b .mc-win{color:#ffb5ae}
+    @media (max-width:380px){
+      .mc-grid>.player-card .stepper{grid-template-columns:32px 1fr 32px;gap:3px}
+      .mc-grid>.player-card .stepper button{height:36px;font-size:16px}
+      .mc-grid>.player-card .stepper .val{height:36px;font-size:15px}
+      .mc-pair{font-size:11px}
+    }
     .mp-tiebreak{padding:7px 10px 7px 44px;font-size:11px;font-weight:600;color:#79b0e3;background:rgba(121,176,227,0.07);border-top:1px dashed rgba(121,176,227,0.3);line-height:1.4}
     .mp-scorer{padding:7px 10px;font-size:11px;font-weight:700;border-radius:8px;margin:0 0 8px;letter-spacing:0.02em}
     .mp-scorer-self{background:rgba(74,176,100,0.1);border:1px solid rgba(74,176,100,0.3);color:#9ad9a8}
@@ -3699,28 +3726,10 @@ function renderMatchPlayBanner(){
           : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${m.matchNum-1}, ${JSON.stringify(winnerName)}, ${JSON.stringify(resultLabel)})'>📌 Save M${m.matchNum} (Tiebreak)</button></div>`;
       }
     }
-    // Per-hole inline hint — either a pre-hole stroke heads-up (before both
-    // grosses are entered) or the post-score net-compare math.
-    let hintHtml = '';
-    if(m.currentHole && !s.closed){
-      const cd = m.currentHole;
-      if(cd.preHole){
-        const strokePlayer = cd.aHigher ? m.playerA : m.playerB;
-        const sCount = cd.strokesToHigher;
-        const sLbl = sCount === 1 ? '1 stroke' : `${sCount} strokes`;
-        hintHtml = `<div class="mp-stroke-adv">⬇ ${strokePlayer} gets ${sLbl} on H${cd.idx+1} · par ${cd.par} · SI ${cd.si}</div>`;
-      } else {
-        let outcome, hintCls = 'mp-hint';
-        if(cd.winner === 'a'){ outcome = `${m.playerA} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-a'; }
-        else if(cd.winner === 'b'){ outcome = `${m.playerB} wins H${cd.idx+1}`; hintCls += ' mp-hint-win-b'; }
-        else { outcome = `H${cd.idx+1} halved`; }
-        const aShots = cd.aHigher ? cd.strokesToHigher : 0;
-        const bShots = cd.aHigher ? 0 : cd.strokesToHigher;
-        const aLabel = `${m.playerA}: ${cd.grossA}${aShots ? '−'+aShots : ''}=${cd.netA}n`;
-        const bLabel = `${m.playerB}: ${cd.grossB}${bShots ? '−'+bShots : ''}=${cd.netB}n`;
-        hintHtml = `<div class="${hintCls}">H${cd.idx+1} (par ${cd.par}, SI ${cd.si}) · ${aLabel} · ${bLabel} → ${outcome}</div>`;
-      }
-    }
+    // v5.63: per-hole stroke heads-up + outcome moved inline into the
+    // match-container on the Stableford scoring grid. Banner is now a clean
+    // status-only summary so the two don't duplicate the same line of text.
+    const hintHtml = '';
     return `<div class="mp-row">
       <span class="mp-tag">M${m.matchNum}</span>
       <span class="mp-pair"><span class="mp-sn">#${m.seedA}</span>${m.playerA} vs ${m.playerB}<span class="mp-sn">#${m.seedB}</span></span>
@@ -6944,7 +6953,73 @@ function renderDay2(){
         </div>
       </div>
     `;
-  }).join('\n');
+  });
+  // v5.63: keep playerCards as an array — renderStablefordMatchplayGroup below
+  // indexes into it by player position; falls back to .join('\n') when no
+  // matchplay matches apply to this group.
+
+  // v5.63: when playoffs are active and the current group contains R16 matches,
+  // group the per-player scoring cards into match-pair containers. Each container
+  // shows match #, the two opponents, live status, the pre-hole stroke heads-up,
+  // and the post-score net-compare outcome — all inline, so the scorer's eyes
+  // never leave the matchup they're scoring. Non-matchplay players (Fireball Cup
+  // joiners, pure-Stableford attendees) render as standalone cards below.
+  // Falls back to flat layout when no matchplay matches apply to this group.
+  function renderStablefordMatchplayGroup(){
+    const activeMatches = (typeof getActiveMatchPlayMatches === 'function') ? getActiveMatchPlayMatches() : [];
+    if(!activeMatches.length) return playerCards.join('\n');
+
+    const used = new Set();
+    const matchHtml = activeMatches.map(m => {
+      const idxA = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerA || '').trim());
+      const idxB = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerB || '').trim());
+      if(idxA < 0 || idxB < 0) return ''; // fall through; standalone fallback catches them
+      used.add(idxA); used.add(idxB);
+
+      const s = m.status;
+      let statusLbl, statusCls;
+      if(s.closed){ statusLbl = `🏆 ${s.label}`; statusCls = 'mp-closed'; }
+      else if(s.dormie){ const ldr = s.leader === 'a' ? m.playerA : m.playerB; statusLbl = `⚠ ${ldr} · ${s.label}`; statusCls = 'mp-dormie'; }
+      else if(s.allSquare && s.played > 0){ statusLbl = `⚖ ${s.label}`; statusCls = 'mp-square'; }
+      else if(s.lead > 0){ const ldr = s.leader === 'a' ? m.playerA : m.playerB; statusLbl = `${ldr} · ${s.label}`; statusCls = 'mp-lead'; }
+      else { statusLbl = '— not started —'; statusCls = 'mp-idle'; }
+
+      let chipHtml = '', outcomeHtml = '';
+      if(m.currentHole && !s.closed){
+        const cd = m.currentHole;
+        if(cd.preHole && cd.strokesToHigher > 0){
+          const sp = cd.aHigher ? m.playerA : m.playerB;
+          const sLbl = cd.strokesToHigher === 1 ? '1 stroke' : `${cd.strokesToHigher} strokes`;
+          chipHtml = `<div class="mc-stroke">⬇ ${escHtml(sp)} gets ${sLbl} on this hole · par ${cd.par} · SI ${cd.si}</div>`;
+        } else if(!cd.preHole){
+          let outcome, cls = 'mc-outcome';
+          if(cd.winner === 'a'){ outcome = `${escHtml(m.playerA)} wins H${cd.idx+1}`; cls += ' win-a'; }
+          else if(cd.winner === 'b'){ outcome = `${escHtml(m.playerB)} wins H${cd.idx+1}`; cls += ' win-b'; }
+          else { outcome = `H${cd.idx+1} halved`; }
+          const aShots = cd.aHigher ? cd.strokesToHigher : 0;
+          const bShots = cd.aHigher ? 0 : cd.strokesToHigher;
+          const aMath = `${escHtml(m.playerA)}: ${cd.grossA}${aShots ? '−'+aShots : ''}=${cd.netA}n`;
+          const bMath = `${escHtml(m.playerB)}: ${cd.grossB}${bShots ? '−'+bShots : ''}=${cd.netB}n`;
+          outcomeHtml = `<div class="${cls}">${aMath} · ${bMath} → <span class="mc-win">${outcome}</span></div>`;
+        }
+      }
+
+      return `<div class="match-container">
+        <div class="mc-head">
+          <span class="mc-tag">M${m.matchNum}</span>
+          <span class="mc-pair"><span class="seed">#${m.seedA}</span> ${escHtml(m.playerA)} <span class="vs">vs</span> ${escHtml(m.playerB)} <span class="seed">#${m.seedB}</span></span>
+          <span class="mc-status ${statusCls}">${statusLbl}</span>
+        </div>
+        ${chipHtml}
+        <div class="mc-grid">${playerCards[idxA]}${playerCards[idxB]}</div>
+        ${outcomeHtml}
+      </div>`;
+    }).filter(Boolean).join('\n');
+
+    // Non-matchplay players in this group render as standalone cards below
+    const standalone = playerCards.map((html, i) => used.has(i) ? '' : html).filter(Boolean).join('\n');
+    return matchHtml + (standalone ? `<div class="mc-standalone">${standalone}</div>` : '');
+  }
 
   const pokerSetupCard = renderPokerSetupCard();
   const stableLock = getScoreLockStatus('stableford');
@@ -6982,7 +7057,7 @@ function renderDay2(){
       const pct=total?Math.round((allDone?100:(scored/total*50+puttsDone/total*50))):0;
       return allDone?'':`<div class="hole-progress"><div class="hp-bar"><div class="hp-fill ${scored===total?'partial':'done'}" style="width:${pct}%"></div></div><span>${scored}/${total} scored${state.options.threePuttPoker?' · '+puttsDone+'/'+total+' putts':''}</span></div>`;
     })()}
-    <div class="stack${d2ViewOnly?' view-only':''}">${playerCards}</div>
+    <div class="stack${d2ViewOnly?' view-only':''}">${renderStablefordMatchplayGroup()}</div>
 
     <!-- NEXT HOLE — bottom of player cards for natural flow -->
     <div style="display:flex;gap:8px;margin:4px 0 8px">
@@ -7606,9 +7681,9 @@ function renderFooter(){
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.82) and does NOT need to match.
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.83) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.62';
+const APP_VERSION = '5.63';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
