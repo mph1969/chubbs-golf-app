@@ -1209,6 +1209,54 @@ function detectPalmFrontBack(line){
   return null;
 }
 
+// ── WeChat parser helpers (T3: challenge-hole assignments) ─────────────
+
+// Maps challenge keywords → (day, dropdown-id-key). The admin form has 4
+// scramble challenge selects (ch-scramble-*) and 5 stableford selects
+// (ch-stableford-*). Pattern order matters: more-specific names first to
+// avoid "Longest Putt" matching against "Longest Drive" by partial overlap.
+const CHALLENGE_KEYWORDS = [
+  { day: 'scramble',   key: 'dickputter',    patterns: [/\bdick\s*putter\b/i] },
+  { day: 'scramble',   key: 'buddyballs',    patterns: [/\bbuddy\s*balls?\b/i] },
+  { day: 'scramble',   key: 'shortestdrive', patterns: [/\bbaby\s*drivers?\b/i, /\bshortest\s*drive\b/i] },
+  { day: 'scramble',   key: 'oneiron',       patterns: [/\bone\s*iron\b/i] },
+  { day: 'stableford', key: 'littlechubby',  patterns: [/\blittle\s*chubby\b/i] },
+  { day: 'stableford', key: 'ctp',           patterns: [/\bctp\b/i, /\bclosest\s*to\s*(?:the\s*)?pin\b/i] },
+  { day: 'stableford', key: 'moneyhole',     patterns: [/\bmoney\s*hole\b/i] },
+  { day: 'stableford', key: 'longestputt',   patterns: [/\blongest\s*putt\b/i] },
+  { day: 'stableford', key: 'longestdrive',  patterns: [/\blongest\s*drive\b/i] }
+];
+
+// Returns { day, key, hole } or null.
+// Recognised hole markers: "H18", "h18", "Hole 18", "#18".
+function detectChallengeAssignment(line){
+  const holeMatch = line.match(/\bH\s*(\d{1,2})\b/i)
+                 || line.match(/\bhole\s+(\d{1,2})\b/i)
+                 || line.match(/#\s*(\d{1,2})\b/);
+  if(!holeMatch) return null;
+  const hole = parseInt(holeMatch[1], 10);
+  if(hole < 1 || hole > 18) return null;
+  for(const ch of CHALLENGE_KEYWORDS){
+    for(const re of ch.patterns){
+      if(re.test(line)) return { day: ch.day, key: ch.key, hole };
+    }
+  }
+  return null;
+}
+
+// Convert a plain 1–18 hole number to the dropdown value for the current
+// course. Palm Island composite values look like "A5"/"B7"; everything
+// else is just the plain number.
+function dropdownValueForHole(prefix, hole){
+  const courseId = document.getElementById(`${prefix}-course`).value;
+  if(courseId !== 'palmIsland') return String(hole);
+  const front = document.getElementById(`${prefix}-front`).value || 'A';
+  const back  = document.getElementById(`${prefix}-back`).value  || 'B';
+  if(hole >= 1 && hole <= 9)  return `${front}${hole}`;
+  if(hole >= 10 && hole <= 18) return `${back}${hole - 9}`;
+  return String(hole);
+}
+
 // Decide if a line looks like a bare team-member name.
 // Strips parenthetical comments, trailing "- 24" handicap markers, and
 // slash-aliases ("Hanson/HANDON" → "Hanson"). Returns the cleaned name or null.
@@ -1264,6 +1312,10 @@ function parseWeChatText() {
   let day1TimeFound = false;
   let day2TimeFound = false;
   let palmFrontBackFound = false;
+  // Buffer challenge assignments — we apply them after the loop so the
+  // dropdowns are first repopulated against the final course + front/back
+  // state. Setting `.value` before repopulation would be clobbered.
+  const challengeAssignments = [];
   // Scramble-team block state machine. A team is opened when we see a header
   // line ("Team Hcp 90", "With a Handicap of 89"). Subsequent name-only lines
   // become members. The block closes when we hit another header or a line
@@ -1410,6 +1462,12 @@ function parseWeChatText() {
       }
     }
 
+    // Challenge-hole assignments (specialty/challenge blocks). Buffered;
+    // applied after the loop once course + front/back are settled. Challenge
+    // keys themselves identify the day, so no need to gate on section.
+    const ch = detectChallengeAssignment(line);
+    if(ch){ challengeAssignments.push(ch); return; }
+
     if (!datesFound) {
         const dateMatch1 = line.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?/i);
         const dateMatch2 = line.match(/(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i);
@@ -1500,6 +1558,18 @@ function parseWeChatText() {
   });
   // Final flush — an open team block at end of input still gets pushed.
   closeCurrentTeam();
+
+  // Apply buffered challenge-hole assignments. Repopulate first so the
+  // dropdown options match the final course + front/back state (especially
+  // Palm Island, which uses "A5"/"B7" composite values).
+  if(challengeAssignments.length){
+    populateChallengeHoles('scramble');
+    populateChallengeHoles('stableford');
+    challengeAssignments.forEach(ch => {
+      const sel = document.getElementById(`ch-${ch.day}-${ch.key}`);
+      if(sel) sel.value = dropdownValueForHole(ch.day, ch.hole);
+    });
+  }
 
   renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
   alert("WeChat list parsed successfully!" + (unassignedCount > 0 ? `\n\nAdded ${unassignedCount} new players.` : ""));
