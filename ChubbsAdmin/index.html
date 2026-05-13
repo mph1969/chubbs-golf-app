@@ -1697,7 +1697,12 @@ function _poAggregate(season){
   return Object.values(agg).map(a => {
     const evs = perPlayerEvents[a.name] || [];
     const seedPoints = evs.reduce((s,e) => s + e.seasonPts, 0);
-    return { ...a, seedPoints, qualified: a.played >= _PO_PLAYOFF_MIN };
+    // Mirrors mobile aggregateSeason() — roundAvg = best-7 / played.
+    // Needed for the Terry-locked seeding tiebreak (2026-05-10): seedPoints
+    // desc → roundAvg desc → stableford desc.
+    const best7 = evs.map(e => e.seasonPts).sort((x,y) => y - x).slice(0, 7).reduce((s,v) => s+v, 0);
+    const roundAvg = a.played ? (best7 / a.played) : 0;
+    return { ...a, seedPoints, best7, roundAvg, qualified: a.played >= _PO_PLAYOFF_MIN };
   });
 }
 
@@ -1727,8 +1732,13 @@ async function loadPoSeasonData(){
   }
   _poSeasonData._loadSource = source;
   const rows = _poAggregate(_poSeasonData);
+  // Terry-locked seeding tiebreak (2026-05-10): seedPoints desc → roundAvg desc
+  // → stableford desc. Kept in lock-step with mobile _poTop16 at
+  // ChubbsMobileApp_v5/index.html:2422.
   _poStandings = rows.filter(r => r.qualified).sort((a,b) =>
-    (b.seedPoints - a.seedPoints) || (b.stableford - a.stableford)
+    (b.seedPoints - a.seedPoints)
+    || (b.roundAvg - a.roundAvg)
+    || (b.stableford - a.stableford)
   );
   return _poSeasonData;
 }
