@@ -157,23 +157,35 @@
 <body>
 
   <div id="player-modal" class="modal-overlay">
-    <div class="card" style="width: 400px; border-color: var(--gold);">
+    <div class="card" style="width: 420px; border-color: var(--gold); max-height:90vh; overflow-y:auto;">
       <h2 class="card-title" id="modal-title">Edit Player</h2>
       <input type="hidden" id="modal-pid">
-      
+
       <label>Display Name (Short)</label>
       <input type="text" id="modal-dname" placeholder="e.g. Jordan🇨🇦">
-      
+
       <label>Full Name</label>
       <input type="text" id="modal-fname" placeholder="e.g. Jordan Smith">
-      
+
       <div class="grid-2">
          <div><label>Handicap</label><input type="number" id="modal-hcp"></div>
          <div><label>Scramble Wins 🏆</label><input type="number" id="modal-scram"></div>
          <div><label>Gold Jackets 🧥</label><input type="number" id="modal-gold"></div>
          <div><label>Clown Jackets 🤡</label><input type="number" id="modal-clown"></div>
       </div>
-      
+
+      <label style="margin-top:12px">Aliases <span style="color:var(--muted);font-weight:normal;text-transform:none;letter-spacing:0">— other spellings WeChat imports should match to this player</span></label>
+      <textarea id="modal-aliases" rows="3" placeholder="Comma or newline separated. e.g. Handon, Mike H" style="width:100%;font-family:inherit;font-size:13px;padding:8px;border-radius:8px;border:1px solid var(--line);background:rgba(0,0,0,0.2);color:var(--ink);resize:vertical"></textarea>
+
+      <div id="modal-merge-block" style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px;display:none">
+        <label style="font-size:11px;color:var(--gold2);margin:0">Merge into another player</label>
+        <div style="font-size:11px;color:var(--muted);margin:4px 0 8px;line-height:1.4">This player will be deleted; the chosen target inherits the display name + aliases, and any teams/groups are re-pointed.</div>
+        <div style="display:flex;gap:6px">
+          <select id="modal-merge-target" style="flex:1"><option value="">— Pick player to merge into —</option></select>
+          <button class="ghost small" onclick="mergeIntoTarget()" style="white-space:nowrap;border-color:#d62020;color:#d62020">Merge</button>
+        </div>
+      </div>
+
       <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
         <button class="ghost" onclick="closePlayerModal()">Cancel</button>
         <button class="primary" onclick="savePlayerModal()">Save Player</button>
@@ -554,6 +566,115 @@ const baseRosterData = [
   {name:'GEORGE', hcp:24, gold:0, clown:0, scram:0}, {name:'RYAN', hcp:12, gold:0, clown:0, scram:0}
 ];
 
+// ── Roster identity layer ───────────────────────────────────────────────
+// normalizeName + alias-aware matcher. Without this, every re-import of a
+// WeChat list with a misspelling (Greame, HANDON, Peng Lei, Stuartom…) creates
+// a fresh duplicate player at hcp=0 because the substring matcher can't see
+// past typos. Aliases live on the canonical player record; the matcher
+// cascades exact → alias → Levenshtein ≤ 2.
+function normalizeName(raw){
+  return String(raw || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+}
+
+function levenshtein(a, b){
+  if(a === b) return 0;
+  if(!a || !a.length) return b ? b.length : 0;
+  if(!b || !b.length) return a.length;
+  const m = a.length, n = b.length;
+  const dp = new Array(n + 1);
+  for(let j = 0; j <= n; j++) dp[j] = j;
+  for(let i = 1; i <= m; i++){
+    let prev = dp[0];
+    dp[0] = i;
+    for(let j = 1; j <= n; j++){
+      const tmp = dp[j];
+      dp[j] = a[i-1] === b[j-1]
+        ? prev
+        : Math.min(prev, dp[j], dp[j-1]) + 1;
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+// Seeded from CLAUDE.md (Chubbs player-name normalization rules). Keys are
+// normalizeName(canonical displayName); values are alias spellings. Backfilled
+// onto every player on roster load so older saved rosters inherit these.
+const DEFAULT_ALIASES = {
+  'hanson':  ['Handon', 'HANDON', 'Mike H'],
+  'graeme':  ['Greame'],
+  'stuart':  ['Stuartom'],
+  'matthew': ['Other Matt', 'Mathew'],
+  'ryann':   ['Ryan N.', 'RyanN'],
+  'mikew':   ['Mike W.']
+  // NOTE: bare "Ryan" / "Mike" / "Matt" are deliberately NOT seeded —
+  // ambiguity (3 Matts, multiple Ryans in baseRoster) means the user must
+  // attach them manually via the modal's Aliases field once they've decided
+  // which canonical player owns the bare form for their group.
+};
+
+function ensurePlayerAliases(p){
+  if(!Array.isArray(p.aliases)) p.aliases = [];
+  const key = normalizeName(p.displayName);
+  const seed = DEFAULT_ALIASES[key];
+  if(seed){
+    seed.forEach(a => {
+      const an = normalizeName(a);
+      if(an && !p.aliases.some(x => normalizeName(x) === an)) p.aliases.push(a);
+    });
+  }
+  return p;
+}
+
+// Cascade: exact display/full → exact alias → Levenshtein ≤ 2 (≥4 chars).
+// Returns the matched player object or null.
+function findPlayerByAnyName(raw){
+  const target = normalizeName(raw);
+  if(!target) return null;
+
+  // Tier 1: exact display/full
+  for(const p of masterRoster){
+    if(normalizeName(p.displayName) === target) return p;
+    if(normalizeName(p.fullName) === target) return p;
+  }
+  // Tier 2: exact alias
+  for(const p of masterRoster){
+    if(Array.isArray(p.aliases) && p.aliases.some(a => normalizeName(a) === target)) return p;
+  }
+  // Tier 3: Levenshtein ≤ 2 — only on names ≥ 4 chars to avoid "Pos"/"Ros"
+  // false positives. Length-delta gate keeps it cheap.
+  if(target.length >= 4){
+    let best = null, bestDist = 3;
+    for(const p of masterRoster){
+      const candidates = [p.displayName, p.fullName, ...(p.aliases || [])];
+      for(const c of candidates){
+        const cn = normalizeName(c);
+        if(!cn || cn.length < 4) continue;
+        if(Math.abs(cn.length - target.length) > 2) continue;
+        const d = levenshtein(cn, target);
+        if(d < bestDist){ bestDist = d; best = p; }
+      }
+    }
+    if(best) return best;
+  }
+  return null;
+}
+
+// Stable, deterministic playerId for auto-added players. Prevents the old
+// Date.now()-suffix bug where re-parsing "Greame" twice created two separate
+// records that accumulated forever.
+function makeStablePlayerId(displayName){
+  let base = String(displayName || 'PLAYER').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 12);
+  if(!base) base = 'PLAYER';
+  let candidate = base;
+  let n = 2;
+  while(masterRoster.some(p => p.playerId === candidate)){
+    candidate = base + n;
+    n++;
+  }
+  return candidate;
+}
+
 const ADMIN_STORAGE_KEY = 'chubbsAdmin_state';
 const ADMIN_ROSTER_KEY = 'chubbsAdmin_roster';
 const CLOUD_ADMIN_PATH = '/admin'; // Firebase path for admin persistence
@@ -561,16 +682,24 @@ let _cloudSaveTimer = null;
 let _cloudLoaded = false;
 
 function defaultRoster(){
-  return baseRosterData.map(r => ({
+  return baseRosterData.map(r => ensurePlayerAliases({
     playerId: r.name.replace(/\s+/g,'').slice(0,12),
     displayName: r.name, fullName: r.name, playingHandicap: r.hcp,
-    goldJackets: r.gold || 0, clownJackets: r.clown || 0, scrambleWins: r.scram || 0
+    goldJackets: r.gold || 0, clownJackets: r.clown || 0, scrambleWins: r.scram || 0,
+    aliases: []
   }));
 }
 function loadAdminRoster(){
   try{
     const raw = localStorage.getItem(ADMIN_ROSTER_KEY);
-    if(raw){ const arr = JSON.parse(raw); if(Array.isArray(arr) && arr.length) return arr; }
+    if(raw){
+      const arr = JSON.parse(raw);
+      if(Array.isArray(arr) && arr.length){
+        // Backfill aliases on older saved rosters so CLAUDE.md seed map applies
+        arr.forEach(ensurePlayerAliases);
+        return arr;
+      }
+    }
   }catch(e){}
   return defaultRoster();
 }
@@ -616,6 +745,7 @@ function loadFromCloud(callback){
       const cloudTs = data.savedAt || 0;
       if(cloudTs > localTs || !localStorage.getItem(ADMIN_STORAGE_KEY)){
         masterRoster = data.roster;
+        if(Array.isArray(masterRoster)) masterRoster.forEach(ensurePlayerAliases);
         state = data.state;
         // Sync to localStorage
         try{
@@ -776,6 +906,17 @@ function addMinutesToTime(timeStr, mins) {
 }
 
 // --- PLAYER ADD / EDIT MODAL ---
+function _populateMergeTargets(currentPid){
+  const sel = document.getElementById('modal-merge-target');
+  if(!sel) return;
+  const opts = masterRoster
+    .filter(o => o.playerId !== currentPid)
+    .sort((a,b) => String(a.displayName||'').localeCompare(String(b.displayName||'')))
+    .map(o => `<option value="${o.playerId}">${o.displayName} (hcp ${o.playingHandicap||0})</option>`);
+  sel.innerHTML = '<option value="">— Pick player to merge into —</option>' + opts.join('');
+  sel.value = '';
+}
+
 function openAddPlayer() {
   document.getElementById('modal-title').textContent = "Add Player";
   document.getElementById('modal-pid').value = "";
@@ -785,6 +926,8 @@ function openAddPlayer() {
   document.getElementById('modal-gold').value = "0";
   document.getElementById('modal-clown').value = "0";
   document.getElementById('modal-scram').value = "0";
+  document.getElementById('modal-aliases').value = "";
+  document.getElementById('modal-merge-block').style.display = "none";
   document.getElementById('player-modal').style.display = "flex";
 }
 
@@ -799,11 +942,29 @@ function openEditPlayer(pid) {
   document.getElementById('modal-gold').value = p.goldJackets || 0;
   document.getElementById('modal-clown').value = p.clownJackets || 0;
   document.getElementById('modal-scram').value = p.scrambleWins || 0;
+  document.getElementById('modal-aliases').value = Array.isArray(p.aliases) ? p.aliases.join(', ') : '';
+  document.getElementById('modal-merge-block').style.display = "block";
+  _populateMergeTargets(p.playerId);
   document.getElementById('player-modal').style.display = "flex";
 }
 
 function closePlayerModal() {
   document.getElementById('player-modal').style.display = "none";
+}
+
+function _parseAliasesField(){
+  const raw = document.getElementById('modal-aliases').value || '';
+  const seen = new Set();
+  const out = [];
+  raw.split(/[,\n]/).forEach(s => {
+    const v = s.trim();
+    if(!v) return;
+    const key = normalizeName(v);
+    if(!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(v);
+  });
+  return out;
 }
 
 function savePlayerModal() {
@@ -814,6 +975,7 @@ function savePlayerModal() {
   const gold = parseInt(document.getElementById('modal-gold').value) || 0;
   const clown = parseInt(document.getElementById('modal-clown').value) || 0;
   const scram = parseInt(document.getElementById('modal-scram').value) || 0;
+  const aliases = _parseAliasesField();
 
   if (pid) {
      const p = masterRoster.find(x => x.playerId === pid);
@@ -824,17 +986,253 @@ function savePlayerModal() {
         p.goldJackets = gold;
         p.clownJackets = clown;
         p.scrambleWins = scram;
+        p.aliases = aliases;
+        ensurePlayerAliases(p);  // re-apply seed defaults in case displayName changed
      }
   } else {
-     const newId = dname.replace(/\s+/g,'').slice(0,12) + Date.now().toString().slice(-4);
-     masterRoster.push({
+     const newId = makeStablePlayerId(dname);
+     masterRoster.push(ensurePlayerAliases({
         playerId: newId, displayName: dname, fullName: fname,
-        playingHandicap: hcp, goldJackets: gold, clownJackets: clown, scrambleWins: scram, roles: []
-     });
+        playingHandicap: hcp, goldJackets: gold, clownJackets: clown, scrambleWins: scram,
+        aliases: aliases, roles: []
+     }));
      state.attendance[newId] = 'none';
   }
   closePlayerModal();
   renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+}
+
+// Merge currently-edited player INTO the chosen target. Transfers display name
+// and aliases to target's alias list, re-points attendance/teams/groups, and
+// deletes the source record. Persistence happens via renderRoster() which
+// calls saveAdminRoster/saveAdminState.
+function mergeIntoTarget(){
+  const srcPid = document.getElementById('modal-pid').value;
+  const tgtPid = document.getElementById('modal-merge-target').value;
+  if(!srcPid){ showToast('Save the player first', 'err'); return; }
+  if(!tgtPid){ showToast('Pick a target player', 'err'); return; }
+  const src = masterRoster.find(x => x.playerId === srcPid);
+  const tgt = masterRoster.find(x => x.playerId === tgtPid);
+  if(!src || !tgt) return;
+  if(!confirm(`Merge "${src.displayName}" → "${tgt.displayName}"?\n\n• "${tgt.displayName}" gains "${src.displayName}" as an alias\n• All aliases on "${src.displayName}" transfer over\n• Attendance, scramble teams, and stableford groups get re-pointed\n• "${src.displayName}" is deleted from the roster\n\nThis is reversible only by re-adding the player manually.`)) return;
+
+  tgt.aliases = tgt.aliases || [];
+  const addAlias = (a) => {
+    if(!a) return;
+    const an = normalizeName(a);
+    if(!an || an === normalizeName(tgt.displayName) || an === normalizeName(tgt.fullName)) return;
+    if(!tgt.aliases.some(x => normalizeName(x) === an)) tgt.aliases.push(a);
+  };
+  addAlias(src.displayName);
+  if(src.fullName) addAlias(src.fullName);
+  (src.aliases || []).forEach(addAlias);
+
+  // Re-point attendance — keep the wider status if both had one
+  const attendOrder = { none: 0, scramble: 1, stableford: 1, both: 2 };
+  const srcStatus = state.attendance[srcPid];
+  const tgtStatus = state.attendance[tgtPid] || 'none';
+  if(srcStatus){
+    if((attendOrder[srcStatus] || 0) > (attendOrder[tgtStatus] || 0)){
+      state.attendance[tgtPid] = srcStatus;
+    } else if(srcStatus !== tgtStatus && srcStatus !== 'none' && tgtStatus !== 'none' && srcStatus !== tgtStatus){
+      // scramble + stableford → both
+      state.attendance[tgtPid] = 'both';
+    }
+  }
+  delete state.attendance[srcPid];
+
+  state.scrambleTeams.forEach(t => {
+    t.players = [...new Set(t.players.map(id => id === srcPid ? tgtPid : id))];
+    if(t.scorerId === srcPid) t.scorerId = tgtPid;
+  });
+  state.stablefordGroups.forEach(g => {
+    g.players = [...new Set(g.players.map(id => id === srcPid ? tgtPid : id))];
+    if(g.scorerId === srcPid) g.scorerId = tgtPid;
+  });
+  state.captains = [...new Set(state.captains.map(id => id === srcPid ? tgtPid : id))];
+
+  masterRoster = masterRoster.filter(p => p.playerId !== srcPid);
+
+  closePlayerModal();
+  renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
+  showToast(`Merged "${src.displayName}" into "${tgt.displayName}"`, 'ok');
+}
+
+// ── WeChat parser helpers (T1) ──────────────────────────────────────────
+
+// "7:07PM" / "12:07" / "7am" / "19:07" → "HH:MM" 24h. null on parse fail.
+function parseFlexTime(str){
+  if(!str) return null;
+  const m = String(str).trim().match(/(\d{1,2})(?::(\d{2}))?\s*([ap]\.?m\.?)?/i);
+  if(!m) return null;
+  let h = parseInt(m[1], 10);
+  const mins = m[2] ? parseInt(m[2], 10) : 0;
+  const ampm = m[3] ? m[3].toLowerCase().replace(/\./g, '') : null;
+  if(ampm === 'pm' && h < 12) h += 12;
+  else if(ampm === 'am' && h === 12) h = 0;
+  if(h < 0 || h > 23 || mins < 0 || mins > 59) return null;
+  return `${String(h).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+}
+
+// Pull a clock-style time from anywhere on a line. Requires ":" or am/pm
+// to disambiguate from bare day-of-month numbers.
+function extractClockTime(line){
+  const m = line.match(/\b\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?\b/i)
+         || line.match(/\b\d{1,2}:\d{2}\b/);
+  return m ? parseFlexTime(m[0]) : null;
+}
+
+// Pull an inline handicap off a player-roster line. 0 if not detected.
+function parseInlineHandicap(line){
+  // "(24)" — explicit parens always wins
+  let m = line.match(/\((\d{1,2})\)/);
+  if(m){ const n = parseInt(m[1],10); if(n >= 0 && n <= 54) return n; }
+  // "hc 24" / "hcp 24" / "h.c. 24"
+  m = line.match(/\bh\.?\s*c\.?\s*p?\.?\s*[:=]?\s*(\d{1,2})\b/i);
+  if(m){ const n = parseInt(m[1],10); if(n >= 0 && n <= 54) return n; }
+  // "- 24" / "· 24" / "• 24" — separator + bare digits, NOT followed by `:` `/` or another digit
+  m = line.match(/[\-·•]\s+(\d{1,2})(?![\d:\/])/);
+  if(m){ const n = parseInt(m[1],10); if(n >= 0 && n <= 54) return n; }
+  return 0;
+}
+
+// 'both' | 'scramble' | 'stableford' | 'none'. Default 'both'.
+function parseStatus(line){
+  const l = ' ' + line.toLowerCase() + ' ';
+  // Explicit opt-outs come first
+  if(/\b(out|withdrew|withdrawn|skip|tbd|no|skin\s*only|skins?\s*only)\b/.test(l)) return 'none';
+  if(/[✗❌]/.test(line)) return 'none';
+  const isScramble = /\b(scramble|scram|saturday|sat|friday|fri|day\s*1|d1|night)\b/.test(l);
+  const isStable   = /\b(stableford|stable|sunday|sun|match\s*play|matchplay|mp|day\s*2|d2)\b/.test(l);
+  if(isScramble && isStable) return 'both';
+  if(isScramble) return 'scramble';
+  if(isStable) return 'stableford';
+  if(/\b(both|all|yes|paid|in)\b/.test(l)) return 'both';
+  if(/[✓✅]/.test(line)) return 'both';
+  return 'both';
+}
+
+// Chat-app sender quote prefix like "Diego Wells:" alone on its own line.
+function isSenderPrefixLine(line){
+  return /^[A-Z][a-zA-Z\s.'\-]{0,30}:\s*$/.test(line);
+}
+
+// Identify which day-section anchor a line represents. null = not a header.
+//   day1 = scramble / Friday / Saturday-without-other-event
+//   day2 = stableford / matchplay/MP / Sunday-without-other-event
+//
+// Player roster lines ("1. Matt - Sat only") aren't headers even when they
+// contain a day-of-week keyword — they describe per-player attendance, not
+// the day they apply to. Same for chat-quote prefixes.
+function detectDaySection(line){
+  if(/^\d+\.\s/.test(line)) return null;          // numbered roster line
+  if(isSenderPrefixLine(line)) return null;        // "Diego Wells:" noise
+  const l = line.toLowerCase();
+  const hasScramble  = /\bscramble\b/.test(l);
+  const hasStable    = /\bstableford\b/.test(l);
+  const hasMatchplay = /\bmatch\s*play\b|\bmatchplay\b|\bmp\b/.test(l);
+  if(hasScramble) return 'day1';
+  if(hasStable || hasMatchplay) return 'day2';
+  if(/\b(saturday|sat|friday|fri)\b/.test(l)) return 'day1';
+  if(/\b(sunday|sun)\b/.test(l)) return 'day2';
+  return null;
+}
+
+// ── WeChat parser helpers (T2: teams, groups, Palm A/B) ─────────────────
+
+// Scramble team header. Returns { teamHcp, teamName? } or null.
+// Recognised forms:
+//   "with a team Handicap of 90"
+//   "With a Handicap of 89"
+//   "Team Hcp 88"
+//   "Team 1:" / "Team 1 - Captain X"
+function detectTeamHeader(line){
+  let m = line.match(/\bteam\s+(?:handicap|hc?p?)\s+(?:of\s+)?(\d{2,3})\b/i);
+  if(m) return { teamHcp: parseInt(m[1], 10) };
+  m = line.match(/\bwith\s+a\s+(?:team\s+)?(?:handicap|hc?p?)\s+of\s+(\d{2,3})\b/i);
+  if(m) return { teamHcp: parseInt(m[1], 10) };
+  m = line.match(/^team\s+(\d+|[a-z])\s*[:.\-]/i);
+  if(m) return { teamHcp: 0, teamName: `Team ${m[1]}` };
+  return null;
+}
+
+// Stableford group line. Returns { time, names[] } or null.
+//   "Group 1 @ 8:00 - Terry, Matt, Jordan, Hanson"
+//   "Group 2 - 8:08 - Diego, Jamie, Jack"
+//   "8:00am  Terry / Matt / Jordan / Hanson"
+function detectStablefordGroup(line){
+  // Pattern 1: explicit "Group N" prefix
+  let m = line.match(/^(?:group|grp|g)\s*\d+\s*[@\-:]?\s*(\d{1,2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?)\s*[-:]?\s*(.+)$/i);
+  if(m){
+    const t = parseFlexTime(m[1]);
+    if(t){
+      const names = m[2].split(/[,/·•]| and /i).map(s => s.trim()).filter(s => s);
+      if(names.length >= 2) return { time: t, names };
+    }
+  }
+  // Pattern 2: time-first
+  m = line.match(/^(\d{1,2}(?::\d{2})?\s*[ap]\.?m\.?|\d{1,2}:\d{2})\s*[-:]?\s+([A-Z].+)$/i);
+  if(m){
+    const t = parseFlexTime(m[1]);
+    if(t){
+      const rest = m[2];
+      if(/[,/·•]|\band\b/i.test(rest)){
+        const names = rest.split(/[,/·•]| and /i).map(s => s.trim()).filter(s => s);
+        if(names.length >= 2) return { time: t, names };
+      }
+    }
+  }
+  return null;
+}
+
+// Palm Island A/B/C front-back. Returns { front, back } or null.
+//   "A/B", "A-B", "A and B" (letter pair)
+//   "Lychee / Lake", "Lychee + River" (name pair)
+//   "Course A and Course B"
+function detectPalmFrontBack(line){
+  const wordToLetter = { lychee: 'A', lake: 'B', river: 'C' };
+  // Word names — most specific, try first
+  const wordMatches = [...line.toLowerCase().matchAll(/\b(lychee|lake|river)\b/g)].map(x => x[1]);
+  if(wordMatches.length >= 2){
+    return { front: wordToLetter[wordMatches[0]], back: wordToLetter[wordMatches[1]] };
+  }
+  // Course-letter pair: "Course A and Course B"
+  let m = line.match(/\bcourse\s+([abc])\b.*?\bcourse\s+([abc])\b/i);
+  if(m){ return { front: m[1].toUpperCase(), back: m[2].toUpperCase() }; }
+  // Bare letter pair: "A/B", "A-B", "A and B" — require both letters to be
+  // *standalone* (preceded by start-of-string or non-letter, followed by
+  // separator) to avoid grabbing letters out of words like "(1v16)" or names.
+  m = line.match(/(?:^|[^A-Za-z])([ABC])\s*[\/\-+&]\s*([ABC])(?:[^A-Za-z]|$)/);
+  if(m){ return { front: m[1].toUpperCase(), back: m[2].toUpperCase() }; }
+  m = line.match(/(?:^|[^A-Za-z])([ABC])\s+and\s+([ABC])(?:[^A-Za-z]|$)/i);
+  if(m){ return { front: m[1].toUpperCase(), back: m[2].toUpperCase() }; }
+  return null;
+}
+
+// Decide if a line looks like a bare team-member name.
+// Strips parenthetical comments, trailing "- 24" handicap markers, and
+// slash-aliases ("Hanson/HANDON" → "Hanson"). Returns the cleaned name or null.
+function extractMemberCandidate(line){
+  let s = String(line || '').trim();
+  if(!s) return null;
+  // Strip trailing parenthetical (PLZ and the place to be!)
+  s = s.replace(/\s*\([^)]*\)\s*$/, '').trim();
+  // Strip trailing "- 24" / "(24)" handicap marker
+  s = s.replace(/\s*[\-·•]\s*\d{1,2}\s*$/, '').trim();
+  s = s.replace(/\s*\(\d+\)\s*$/, '').trim();
+  // Slash-alias: use first fragment
+  if(s.includes('/')) s = s.split('/')[0].trim();
+  if(!s) return null;
+  if(s.length > 60) return null;
+  if(/[:]/.test(s)) return null;
+  if(/^\d/.test(s)) return null;
+  if(!/^[A-Za-z]/.test(s)) return null;
+  // Reject bracket-style "A v B"
+  if(/\s+v\s+|\s+vs\s+|\s+versus\s+/i.test(s)) return null;
+  // Word count — names are 1-4 words ("Peng Lei", "Matty B", "John B")
+  const words = s.split(/\s+/);
+  if(words.length > 4) return null;
+  return s;
 }
 
 // --- WECHAT QUICK IMPORT ---
@@ -846,14 +1244,72 @@ function parseWeChatText() {
 
   masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
   state.scrambleTeams = []; state.stablefordGroups = []; state.captains = [];
-  
+
+  // Pre-scan: tag each line with its day-section ('global' / 'day1' / 'day2').
+  // A section header switches the tag for itself AND every following line until
+  // the next header. Lets us bind tee times + (later) challenge holes to the
+  // right day even when the time is on a different line than the header.
+  const lineSections = [];
+  let curSection = 'global';
+  lines.forEach(line => {
+    const day = detectDaySection(line);
+    if(day) curSection = day;
+    lineSections.push(curSection);
+  });
+  const hasDay1Section = lineSections.includes('day1');
+  const hasDay2Section = lineSections.includes('day2');
+
   let unassignedCount = 0;
   let datesFound = false;
-  let satTimeFound = false;
-  let sunTimeFound = false;
+  let day1TimeFound = false;
+  let day2TimeFound = false;
+  let palmFrontBackFound = false;
+  // Scramble-team block state machine. A team is opened when we see a header
+  // line ("Team Hcp 90", "With a Handicap of 89"). Subsequent name-only lines
+  // become members. The block closes when we hit another header or a line
+  // that isn't a bare name.
+  let currentTeam = null;
+  let teamCount = 0;
+  let groupCount = 0;
+  const closeCurrentTeam = () => {
+    if(currentTeam && currentTeam.players.length > 0){
+      state.scrambleTeams.push(currentTeam);
+    }
+    currentTeam = null;
+  };
+  // Auto-add helper for team/group member lines (no `^N.` prefix).
+  // Returns the matched/created player object.
+  const resolveOrAddPlayer = (rawName) => {
+    const matched = findPlayerByAnyName(rawName);
+    if(matched) return matched;
+    const newId = makeStablePlayerId(rawName);
+    const newP = ensurePlayerAliases({
+      playerId: newId, displayName: rawName, fullName: rawName,
+      playingHandicap: 0, goldJackets: 0, clownJackets: 0, scrambleWins: 0,
+      aliases: []
+    });
+    masterRoster.push(newP);
+    unassignedCount++;
+    return newP;
+  };
+  // Bumps a player's attendance up to `want` if currently below it.
+  // Combines scramble + stableford → both.
+  const upgradeAttendance = (pid, want) => {
+    const cur = state.attendance[pid] || 'none';
+    if(cur === want) return;
+    if(cur === 'none'){ state.attendance[pid] = want; return; }
+    if(cur === 'both' || want === 'both'){ state.attendance[pid] = 'both'; return; }
+    if((cur === 'scramble' && want === 'stableford') ||
+       (cur === 'stableford' && want === 'scramble')){
+      state.attendance[pid] = 'both';
+    }
+  };
   const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 
   lines.forEach((line, idx) => {
+    // Skip chat-app sender prefixes ("Diego Wells:") — they're noise.
+    if(isSenderPrefixLine(line)) return;
+
     if (idx === 0 && !/^\d/.test(line) && !line.toLowerCase().includes('cost')) {
       document.getElementById('ev-display').value = line;
       const lowerL = line.toLowerCase();
@@ -883,36 +1339,132 @@ function parseWeChatText() {
       }
     }
 
+    // Scramble-team header — opens a new team block. Any open team closes first.
+    const teamHdr = detectTeamHeader(line);
+    if(teamHdr){
+      closeCurrentTeam();
+      teamCount++;
+      currentTeam = {
+        id: `sat-import-${Date.now()}-${teamCount}`,
+        name: teamHdr.teamName || `Team ${teamCount}`,
+        scorerId: '',
+        startingHole: 1,
+        players: []
+      };
+      return;
+    }
+
+    // Inside an active team block: a bare-name line becomes a member. A
+    // non-name line closes the block and falls through to normal handlers.
+    if(currentTeam){
+      const memberName = extractMemberCandidate(line);
+      if(memberName){
+        const p = resolveOrAddPlayer(memberName);
+        if(!currentTeam.players.includes(p.playerId) && currentTeam.players.length < 4){
+          currentTeam.players.push(p.playerId);
+          upgradeAttendance(p.playerId, 'scramble');
+        }
+        return;
+      } else {
+        closeCurrentTeam();
+      }
+    }
+
+    // Stableford group line ("Group 1 @ 8:00 - A, B, C" or "8:00 - A / B / C").
+    const groupHdr = detectStablefordGroup(line);
+    if(groupHdr){
+      groupCount++;
+      const grp = {
+        id: `sun-import-${Date.now()}-${groupCount}`,
+        name: `Group ${groupCount}`,
+        time: groupHdr.time,
+        scorerId: '',
+        startingHole: 1,
+        players: []
+      };
+      groupHdr.names.forEach(n => {
+        const cleaned = extractMemberCandidate(n) || n;
+        const p = resolveOrAddPlayer(cleaned);
+        if(!grp.players.includes(p.playerId) && grp.players.length < 4){
+          grp.players.push(p.playerId);
+          upgradeAttendance(p.playerId, 'stableford');
+        }
+      });
+      if(grp.players.length > 0) state.stablefordGroups.push(grp);
+      return;
+    }
+
+    // Palm Island A/B/C front-back — apply to whichever day(s) are on Palm.
+    if(!palmFrontBackFound){
+      const pf = detectPalmFrontBack(line);
+      if(pf){
+        if(document.getElementById('scramble-course').value === 'palmIsland'){
+          document.getElementById('scramble-front').value = pf.front;
+          document.getElementById('scramble-back').value = pf.back;
+        }
+        if(document.getElementById('stableford-course').value === 'palmIsland'){
+          document.getElementById('stableford-front').value = pf.front;
+          document.getElementById('stableford-back').value = pf.back;
+        }
+        palmFrontBackFound = true;
+      }
+    }
+
     if (!datesFound) {
         const dateMatch1 = line.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?/i);
         const dateMatch2 = line.match(/(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i);
-        
+
         if (dateMatch1 || dateMatch2) {
           let mStr, d1Str, d2Str;
-          if (dateMatch1) { mStr = dateMatch1[1]; d1Str = dateMatch1[2]; d2Str = dateMatch1[3]; } 
+          if (dateMatch1) { mStr = dateMatch1[1]; d1Str = dateMatch1[2]; d2Str = dateMatch1[3]; }
           else { d1Str = dateMatch2[1]; d2Str = dateMatch2[2]; mStr = dateMatch2[3]; }
-          
+
           const mStr3 = mStr.substring(0, 3).toLowerCase();
           const monthIdx = monthNames.indexOf(mStr3);
           if (monthIdx > -1) {
-            const day1 = parseInt(d1Str, 10);
-            const day2 = d2Str ? parseInt(d2Str, 10) : day1 + 1;
+            const day1Num = parseInt(d1Str, 10);
+            // Only default day2 = day1+1 when text has both day sections (legacy
+            // Sat+Sun) or neither. Single-day events (one section detected, no
+            // explicit dd-dd range) leave the other day blank.
+            const isSingleDay = (hasDay1Section !== hasDay2Section);
+            let day2Num = d2Str ? parseInt(d2Str, 10) : null;
+            if(day2Num === null && !isSingleDay) day2Num = day1Num + 1;
             const year = new Date().getFullYear();
             const fmtDate = (y, m, d) => `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-            document.getElementById('scramble-date').value = fmtDate(year, monthIdx, day1);
-            document.getElementById('stableford-date').value = fmtDate(year, monthIdx, day2);
-            datesFound = true; 
+            // If only day2 section was detected, bind the single date to stableford
+            // (e.g. Saturday-only matchplay event).
+            const onlyDay2 = hasDay2Section && !hasDay1Section;
+            if(onlyDay2){
+              document.getElementById('stableford-date').value = fmtDate(year, monthIdx, day1Num);
+            } else {
+              document.getElementById('scramble-date').value = fmtDate(year, monthIdx, day1Num);
+              if(day2Num !== null) document.getElementById('stableford-date').value = fmtDate(year, monthIdx, day2Num);
+            }
+            datesFound = true;
           }
         }
     }
 
-    if (!satTimeFound) {
-        const satTimeMatch = line.match(/(?:Saturday|Scramble).*?(\d{1,2}:\d{2})/i);
-        if(satTimeMatch) { document.getElementById('scramble-time').value = satTimeMatch[1].padStart(5, '0'); satTimeFound = true; }
-    }
-    if (!sunTimeFound) {
-        const sunTimeMatch = line.match(/(?:Sunday|Stableford).*?(\d{1,2}:\d{2})/i);
-        if(sunTimeMatch) { document.getElementById('stableford-time').value = sunTimeMatch[1].padStart(5, '0'); sunTimeFound = true; }
+    // Tee-time capture, bound to the day-section the line belongs to.
+    // Accepts: header line with inline time ("Saturday – 12:00"), explicit
+    // "Tee time: 7:07PM" lines, or any line containing a clock-style time
+    // inside a day section (defensive fallback).
+    const sect = lineSections[idx];
+    if((sect === 'day1' || sect === 'day2')){
+      const t = extractClockTime(line);
+      if(t){
+        const isHeader = detectDaySection(line) !== null;
+        const isTeeLine = /\btee\s*(time|off|up)?\b/i.test(line);
+        if(isHeader || isTeeLine){
+          if(sect === 'day1' && !day1TimeFound){
+            document.getElementById('scramble-time').value = t;
+            day1TimeFound = true;
+          } else if(sect === 'day2' && !day2TimeFound){
+            document.getElementById('stableford-time').value = t;
+            day2TimeFound = true;
+          }
+        }
+      }
     }
 
     const playerMatch = line.match(/^\d+\.\s*(.+)/);
@@ -920,37 +1472,34 @@ function parseWeChatText() {
       const rawString = playerMatch[1];
       const parts = rawString.split('-');
       let rawName = parts[0].trim();
+      // Strip any trailing parenthetical from the name itself (handicap is parsed below)
+      rawName = rawName.replace(/\s*\(\d+\)\s*$/, '').trim();
 
-      let status = 'both';
-      const lowerLine = line.toLowerCase();
-      if (lowerLine.includes('sunday') || lowerLine.includes('stableford') || lowerLine.includes(' sun ')) status = 'stableford';
-      if (lowerLine.includes('saturday') || lowerLine.includes('scramble') || lowerLine.includes(' sat ')) status = 'scramble';
-      if ((lowerLine.includes('sunday') || lowerLine.includes('stableford') || lowerLine.includes(' sun')) && 
-          (lowerLine.includes('saturday') || lowerLine.includes('scramble') || lowerLine.includes(' sat'))) status = 'both';
+      const status = parseStatus(line);
+      const inlineHcp = parseInlineHandicap(line);
 
-      const cleanName = (n) => n.replace(/[^\w\s]/gi, '').toLowerCase().trim();
-      const target = cleanName(rawName);
-
-      let matchedId = null;
-      for (const p of masterRoster) {
-        if (cleanName(p.displayName) === target || cleanName(p.fullName) === target) { matchedId = p.playerId; break; }
-      }
-      if (!matchedId) {
-         for (const p of masterRoster) {
-            if(cleanName(p.displayName).includes(target) || target.includes(cleanName(p.displayName))) { matchedId = p.playerId; break; }
-         }
-      }
-
-      if (matchedId) {
-        state.attendance[matchedId] = status;
-      } else {
-        const newId = rawName.replace(/\s+/g,'').slice(0,12) + Date.now().toString().slice(-4);
-        masterRoster.push({ playerId: newId, displayName: rawName, fullName: rawName, playingHandicap: 0, goldJackets: 0, clownJackets: 0, scrambleWins: 0 });
+      const matched = findPlayerByAnyName(rawName);
+      if (matched) {
+        if(status !== 'none') state.attendance[matched.playerId] = status;
+        else delete state.attendance[matched.playerId];
+        // Update handicap only when one is explicitly present in this line.
+        // Leaving it alone otherwise preserves the value the user set in the modal.
+        if(inlineHcp > 0) matched.playingHandicap = inlineHcp;
+      } else if(status !== 'none') {
+        const newId = makeStablePlayerId(rawName);
+        masterRoster.push(ensurePlayerAliases({
+          playerId: newId, displayName: rawName, fullName: rawName,
+          playingHandicap: inlineHcp || 0,
+          goldJackets: 0, clownJackets: 0, scrambleWins: 0,
+          aliases: []
+        }));
         state.attendance[newId] = status;
         unassignedCount++;
       }
     }
   });
+  // Final flush — an open team block at end of input still gets pushed.
+  closeCurrentTeam();
 
   renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
   alert("WeChat list parsed successfully!" + (unassignedCount > 0 ? `\n\nAdded ${unassignedCount} new players.` : ""));
@@ -966,6 +1515,7 @@ function importRoster(input) {
       const arr = JSON.parse(e.target.result);
       if(Array.isArray(arr)) {
         masterRoster = arr;
+        masterRoster.forEach(ensurePlayerAliases);
         masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
         state.scrambleTeams = []; state.stablefordGroups = []; state.captains = [];
         renderRoster(); renderCaptainSelection(); renderTeams(); renderGroups();
@@ -2145,6 +2695,7 @@ function applyConfigPayload(config){
   }
   if(Array.isArray(config.roster) && config.roster.length){
     masterRoster = config.roster;
+    masterRoster.forEach(ensurePlayerAliases);
     saveAdminRoster();
   }
   if(config.state){
