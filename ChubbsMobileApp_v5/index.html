@@ -159,6 +159,13 @@
     .mc-outcome .mc-win{font-weight:800}
     .mc-outcome.win-a .mc-win{color:#a5f0c5}
     .mc-outcome.win-b .mc-win{color:#ffb5ae}
+    /* v5.64: stroke tag inside player card next to HCP badge */
+    .stroke-tag{padding:2px 7px;border-radius:999px;background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.5);color:#a5f0c5;font-size:10px;font-weight:800;flex-shrink:0}
+    /* Compact player card overrides inside a matchplay container —
+       hide jackets/score-status icons and the Spenny button to make room
+       for the stroke tag + side-by-side layout. */
+    .mc-grid > .player-card .player-extras{display:none}
+    .mc-grid > .player-card .spenny-btn{display:none}
     @media (max-width:380px){
       .mc-grid>.player-card .stepper{grid-template-columns:32px 1fr 32px;gap:3px}
       .mc-grid>.player-card .stepper button{height:36px;font-size:16px}
@@ -867,7 +874,7 @@ const DEFAULT_STATE = {
   day1TeamId:'',
   day2GroupId:'',
   options:{
-    threePuttPoker:true,
+    threePuttPoker:false,  // v5.64 — off by default; matchplay is the headline format. Toggle in Setup if running 3-Putt Poker as a side game.
     pokerMode:'digital',
     ante:50,
     penalty3:10,
@@ -6885,7 +6892,30 @@ function renderDay2(){
     return playPos < 17 ? String(order[playPos + 1] + 1) : '✓';
   })();
   const importedGroup = activeEventDay2Group();
-  const importedNote = hasImportedEvent() ? `<div class="status info tight">${importedGroup ? ((importedGroup.groupName || importedGroup.groupId || 'Group') + (importedGroup.teeTime ? ' · ' + importedGroup.teeTime : '')) : 'Not assigned'} · ${stablePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedGroup, state.eventBundle)}</span><span class="small"> · Course · ${course.name}</span></div>` : '';
+
+  // v5.64: pre-compute matchplay context so each player card can show the
+  // stroke they're receiving on this hole inline (next to HCP), and so the
+  // outer scorecard chrome can suppress redundant info when matchplay is the
+  // primary scoring view.
+  const _activeMatchesForGrid = (typeof getActiveMatchPlayMatches === 'function') ? getActiveMatchPlayMatches() : [];
+  const isMatchplayMode = _activeMatchesForGrid.length > 0;
+  const matchplayStrokesByIdx = {};
+  _activeMatchesForGrid.forEach(m => {
+    const idxA = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerA || '').trim());
+    const idxB = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerB || '').trim());
+    if(idxA < 0 || idxB < 0) return;
+    const cd = m.currentHole;
+    if(!cd) return;
+    const strokes = cd.strokesToHigher || 0;
+    if(strokes <= 0) return;
+    if(cd.aHigher) matchplayStrokesByIdx[idxA] = strokes;
+    else matchplayStrokesByIdx[idxB] = strokes;
+  });
+
+  // importedNote suppressed in matchplay mode — the matchplay banner already
+  // shows the scorer and the per-match container shows the players. Pure
+  // duplication otherwise.
+  const importedNote = (hasImportedEvent() && !isMatchplayMode) ? `<div class="status info tight">${importedGroup ? ((importedGroup.groupName || importedGroup.groupId || 'Group') + (importedGroup.teeTime ? ' · ' + importedGroup.teeTime : '')) : 'Not assigned'} · ${stablePlayers.map((p, idx) => fmtName(p.name, idx)).join(' / ')}<br/><span class="small">Scorer · ${lineupScorerName(importedGroup, state.eventBundle)}</span><span class="small"> · Course · ${course.name}</span></div>` : '';
 
   const playerCards = stablePlayers.map((p, idx) => {
     const gross = hole.gross[idx];
@@ -6917,12 +6947,17 @@ function renderDay2(){
     const partialScored = hasGross && needsPutts && !hasPutts;
     const cardState = fullyScored ? ' scored' : (partialScored ? ' partial' : '');
 
+    // v5.64: matchplay stroke for this hole — rendered as a small tag next to HCP
+    // so the scorer sees who's getting strokes without leaving the player card.
+    const mpStrokes = matchplayStrokesByIdx[idx] || 0;
+    const strokeTag = mpStrokes > 0 ? `<span class="stroke-tag" title="Receiving ${mpStrokes} stroke${mpStrokes!==1?'s':''} on this hole (SI ${meta.si})">+${mpStrokes}</span>` : '';
     return `
       <div class="player-card p${idx}${cardState}${!hasGross?' needs-score':''}">
         <div class="player-head">
-          <div class="player-name">${fmtName(p.name, idx)}${jacketDots(p.name)}${fullyScored ? ' <span style="color:#2aa36a;font-size:11px">✓</span>' : (!hasGross ? ' <span style="font-size:10px;color:#d6b05a">⬤ score</span>' : (partialScored ? ' <span style="font-size:10px;color:#d6b05a">⬤ putts</span>' : ''))}</div>
+          <div class="player-name">${fmtName(p.name, idx)}<span class="player-extras">${jacketDots(p.name)}${fullyScored ? ' <span style="color:#2aa36a;font-size:11px">✓</span>' : (!hasGross ? ' <span style="font-size:10px;color:#d6b05a">⬤ score</span>' : (partialScored ? ' <span style="font-size:10px;color:#d6b05a">⬤ putts</span>' : ''))}</span></div>
           <div class="toolbar tight">
             ${showFlag ? `<button class="flag-btn ${flagOn ? 'on' : 'safe'}" onclick="setLastPenaltyFlag(${idx})">🚩 ${flagOn ? 'Last 3-putt+' : 'Mark last 3-putt+'}</button>` : ''}
+            ${strokeTag}
             <div class="hcp-badge">HCP ${p.hcp}</div>
           </div>
         </div>
@@ -6949,7 +6984,7 @@ function renderDay2(){
         </div>` : ''}
         <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:11px;color:var(--muted)">
           <span>${hasGross ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${shots?' · +'+shots+' shots':''}` : ''}</span>
-          <button class="btn slim" style="font-size:11px;padding:6px 12px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter double-par (max allowed score per Chubbs rules) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
+          <button class="btn slim spenny-btn" style="font-size:11px;padding:6px 12px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter double-par (max allowed score per Chubbs rules) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
         </div>
       </div>
     `;
@@ -7034,9 +7069,9 @@ function renderDay2(){
     ${renderPlayoffIntro()}
     ${renderMatchPlayBanner()}
     ${!state.options.threePuttPoker ? pokerSetupCard : ''}
-    <div class="card">
-      <div class="section-title">Stableford</div>
-      ${d2ViewOnly?'<div class="status info tight">👁 View only — scores are entered by your group\'s scorer</div>':''}
+    <div class="card${isMatchplayMode ? ' mp-mode' : ''}">
+      ${isMatchplayMode ? '' : '<div class="section-title">Stableford</div>'}
+      ${d2ViewOnly && !isMatchplayMode?'<div class="status info tight">👁 View only — scores are entered by your group\'s scorer</div>':''}
       ${importedNote}
       ${stableLockHtml}
       ${complete ? '' : `<div class="status warn tight">Complete the scorecard on Setup first. Stableford needs par and stroke index for all 18 holes.</div>`}
@@ -7681,9 +7716,9 @@ function renderFooter(){
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.83) and does NOT need to match.
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.84) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.63';
+const APP_VERSION = '5.64';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
