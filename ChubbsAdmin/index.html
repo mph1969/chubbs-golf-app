@@ -855,12 +855,30 @@ function parseWeChatText() {
   lines.forEach((line, idx) => {
     if (idx === 0 && !/^\d/.test(line) && !line.toLowerCase().includes('cost')) {
       document.getElementById('ev-display').value = line;
-      if (line.toLowerCase().includes('palm island')) {
+      const lowerL = line.toLowerCase();
+      if (lowerL.includes('palm island')) {
         document.getElementById('scramble-course').value = 'palmIsland'; document.getElementById('stableford-course').value = 'palmIsland';
         togglePalmSelectors('scramble'); togglePalmSelectors('stableford');
-      } else if (line.toLowerCase().includes('nansha')) {
+      } else if (lowerL.includes('nansha')) {
         document.getElementById('scramble-course').value = 'mountain'; document.getElementById('stableford-course').value = 'valley';
         togglePalmSelectors('scramble'); togglePalmSelectors('stableford');
+      } else {
+        // Match any other course in COURSE_LIBRARY by display name.
+        // palmIsland is a composite (user picks A/B/C); mountain+valley are the Nansha pair —
+        // both handled above. Everything else is a single-course event with both day-dropdowns set the same.
+        const norm = s => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const normLine = norm(line);
+        for (const [id, course] of Object.entries(COURSE_LIBRARY)) {
+          if (id === 'palmIsland' || id === 'mountain' || id === 'valley') continue;
+          const baseName = course.name.replace(/\s*\([^)]*\)\s*/g, ''); // strip "(Par 63)" etc.
+          const normName = norm(baseName);
+          if (normName.length >= 4 && normLine.includes(normName)) {
+            document.getElementById('scramble-course').value = id;
+            document.getElementById('stableford-course').value = id;
+            togglePalmSelectors('scramble'); togglePalmSelectors('stableford');
+            break;
+          }
+        }
       }
     }
 
