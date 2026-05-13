@@ -1257,6 +1257,35 @@ function dropdownValueForHole(prefix, hole){
   return String(hole);
 }
 
+// ── WeChat parser helpers (T5: playoff-event harvest) ──────────────────
+
+// Playoff bracket line: "M1  Matt v Jamie  (1v16)" / "M5: A v B" /
+// "M3. A v B". Returns { matchNum, player1, player2, seed1?, seed2? } or
+// null. Seed prefill is deferred (T4); we only use this for player harvest.
+function detectBracketMatch(line){
+  const m = line.match(/^M(\d+)[\s:.\-]+(.+?)\s+v\s+(.+?)(?:\s+\((\d+)\s*v\s*(\d+)\))?\s*$/i);
+  if(!m) return null;
+  return {
+    matchNum: parseInt(m[1], 10),
+    player1: m[2].trim(),
+    player2: m[3].trim(),
+    seed1: m[4] ? parseInt(m[4], 10) : null,
+    seed2: m[5] ? parseInt(m[5], 10) : null
+  };
+}
+
+// "Fireball Cup: Pos · Diego · Matthew · Penglei · Andy" → list of names.
+// Tolerates a chat-app sender prefix accidentally concatenated to the end
+// of the line ("…Andy  Diego Wells:") by stripping it before splitting.
+function detectFireballCup(line){
+  const m = line.match(/^fireball\s*cup\s*[:\-]?\s*(.+)$/i);
+  if(!m) return null;
+  let rest = m[1].replace(/\s{2,}[A-Z][a-zA-Z\s.'\-]+:\s*$/, '').trim();
+  if(!rest) return null;
+  const names = rest.split(/[,·•/]| and /i).map(s => s.trim()).filter(s => s);
+  return names.length ? names : null;
+}
+
 // Decide if a line looks like a bare team-member name.
 // Strips parenthetical comments, trailing "- 24" handicap markers, and
 // slash-aliases ("Hanson/HANDON" → "Hanson"). Returns the cleaned name or null.
@@ -1420,6 +1449,30 @@ function parseWeChatText() {
       } else {
         closeCurrentTeam();
       }
+    }
+
+    // Playoff bracket line ("M1 A v B (1v16)") — harvest names into the
+    // stableford attendance bucket. Bracket seed locking is deferred (T4),
+    // so we ignore the (XvY) capture for now.
+    const br = detectBracketMatch(line);
+    if(br){
+      [br.player1, br.player2].forEach(name => {
+        const cleaned = extractMemberCandidate(name) || name;
+        const p = resolveOrAddPlayer(cleaned);
+        upgradeAttendance(p.playerId, 'stableford');
+      });
+      return;
+    }
+
+    // Fireball Cup roster — non-playoff side game on the matchplay day.
+    const fb = detectFireballCup(line);
+    if(fb){
+      fb.forEach(name => {
+        const cleaned = extractMemberCandidate(name) || name;
+        const p = resolveOrAddPlayer(cleaned);
+        upgradeAttendance(p.playerId, 'stableford');
+      });
+      return;
     }
 
     // Stableford group line ("Group 1 @ 8:00 - A, B, C" or "8:00 - A / B / C").
