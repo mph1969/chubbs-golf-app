@@ -2895,7 +2895,12 @@ function _doApplyBundle(bundle, requestedPlayerId){
     state.challengeWinners = {};
   }
   state.eventBundle = normalized;
-  state.eventPlayerId = String(selectedPlayerId || '');
+  // v5.64: preserve previously-selected player on bundle re-applications
+  // (Firebase listener pushes, admin re-pushes, etc). Was: state.eventPlayerId
+  // = String(selectedPlayerId || '') — wiped the selection on every bundle
+  // update, causing isCurrentPlayerScorer to fall back to "you're the scorer"
+  // for everyone (legacy pid-not-set branch).
+  state.eventPlayerId = String(selectedPlayerId || state.eventPlayerId || '');
   state.day1TeamId = day1Team ? String(day1Team.teamId || '') : '';
   state.day2GroupId = day2Group ? String(day2Group.groupId || '') : '';
   state.day1Players = hydrateLineupPlayers(day1Team ? day1Team.playerIds : [], normalized);
@@ -7068,7 +7073,6 @@ function renderDay2(){
   document.getElementById('day2').innerHTML = `
     ${renderPlayoffIntro()}
     ${renderMatchPlayBanner()}
-    ${!state.options.threePuttPoker ? pokerSetupCard : ''}
     <div class="card${isMatchplayMode ? ' mp-mode' : ''}">
       ${isMatchplayMode ? '' : '<div class="section-title">Stableford</div>'}
       ${d2ViewOnly && !isMatchplayMode?'<div class="status info tight">👁 View only — scores are entered by your group\'s scorer</div>':''}
@@ -7100,6 +7104,7 @@ function renderDay2(){
       <button class="btn gold slim" onclick="navHole('stableford',1)" style="flex:2;padding:12px;font-size:13px;font-weight:800">Next → Hole ${nextHoleLabel}</button>
     </div>
 
+    ${!state.options.threePuttPoker ? pokerSetupCard : ''}
     ${state.options.threePuttPoker ? `
     <details${poker.pot > (poker.players.length * state.options.ante) ? ' open' : ''}>
       <summary style="list-style:none;cursor:pointer">
@@ -7716,9 +7721,9 @@ function renderFooter(){
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.84) and does NOT need to match.
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.85) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.64';
+const APP_VERSION = '5.65';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
