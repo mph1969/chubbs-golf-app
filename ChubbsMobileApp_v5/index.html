@@ -159,6 +159,13 @@
     .mc-outcome .mc-win{font-weight:800}
     .mc-outcome.win-a .mc-win{color:#a5f0c5}
     .mc-outcome.win-b .mc-win{color:#ffb5ae}
+    /* v5.67: Match-play list rows on the Leaderboard tab */
+    .mp-lb-list{display:grid;gap:4px}
+    .mp-lb-row{display:grid;grid-template-columns:36px 1fr auto;gap:8px;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;font-size:12px}
+    .mp-lb-tag{background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.28);color:var(--gold2);padding:2px 6px;border-radius:6px;font-size:10px;font-weight:800;text-align:center}
+    .mp-lb-pair{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:700}
+    .mp-lb-pair .mp-lb-seed{color:var(--muted);font-size:10px;font-weight:600}
+    .mp-lb-pair .mp-lb-vs{color:var(--muted);font-weight:500;margin:0 3px;font-size:10px}
     /* v5.64: stroke tag inside player card next to HCP badge */
     .stroke-tag{padding:2px 7px;border-radius:999px;background:rgba(76,175,80,0.15);border:1px solid rgba(76,175,80,0.5);color:#a5f0c5;font-size:10px;font-weight:800;flex-shrink:0}
     /* Compact player card overrides inside a matchplay container —
@@ -7368,6 +7375,84 @@ function renderSponsorTile(){
   </div>`;
 }
 
+// v5.67: cross-group helpers used by the Leaderboard tab's matchplay status
+// table and the Standings tab's bracket viz. hasAnyMatchplayScores triggers
+// the Scramble→Matchplay swap on the Leaderboard. getAllPlayoffMatchStatuses
+// computes all 8 R16 statuses regardless of which group each player is in,
+// pulling per-hole grosses from local state or SYNC.remoteGroups (Firebase).
+function hasAnyMatchplayScores(){
+  if(state.stableford && Array.isArray(state.stableford.holes) &&
+     state.stableford.holes.some(h => Array.isArray(h.gross) && h.gross.some(g => typeof g === 'number'))){
+    return true;
+  }
+  const remotes = (SYNC && SYNC.remoteGroups) ? SYNC.remoteGroups : {};
+  for(const g of Object.values(remotes)){
+    if(Array.isArray(g.holes) && g.holes.some(h => Array.isArray(h.gross) && h.gross.some(v => typeof v === 'number'))){
+      return true;
+    }
+  }
+  return false;
+}
+
+function getAllPlayoffMatchStatuses(){
+  if(!hasImportedEvent()) return [];
+  let store; try { store = ensureActiveSeason(); } catch(e){ return []; }
+  const season = store && store.seasons && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
+  const seeds = season && season.playoffs && Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
+  if(!seeds || seeds.length < 16) return [];
+
+  const course = activeCourse('day2');
+  if(!course || !Array.isArray(course.holes)) return [];
+
+  const R16_PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
+  const localPlayers = currentPlayers('stableford') || [];
+
+  function lookup(name){
+    const t = String(name || '').trim();
+    if(!t) return null;
+    const li = localPlayers.findIndex(p => String(p.name||'').trim() === t);
+    if(li >= 0){
+      return {
+        hcp: localPlayers[li].hcp || 0,
+        grosses: state.stableford.holes.map(h => Array.isArray(h.gross) ? h.gross[li] : null)
+      };
+    }
+    for(const gd of Object.values((SYNC && SYNC.remoteGroups) || {})){
+      const players = Array.isArray(gd.players) ? gd.players : [];
+      const pi = players.findIndex(p => String(p.displayName || p.name || '').trim() === t);
+      if(pi >= 0){
+        return {
+          hcp: players[pi].hcp || 0,
+          grosses: (Array.isArray(gd.holes) ? gd.holes : []).map(h => Array.isArray(h.gross) ? h.gross[pi] : null)
+        };
+      }
+    }
+    return null;
+  }
+
+  const matchHoleIdxs = [0,1,2,3,4,5,6,7,8]; // R16 = front 9
+  return R16_PAIRS.map((pair, mIdx) => {
+    const seedA = pair[0]+1, seedB = pair[1]+1;
+    const nameA = seeds[pair[0]] || '?';
+    const nameB = seeds[pair[1]] || '?';
+    const a = lookup(nameA);
+    const b = lookup(nameB);
+    if(!a || !b){
+      return { matchNum: mIdx+1, seedA, seedB, playerA: nameA, playerB: nameB,
+               status: { label: '— not started —', closed:false, played:0, lead:0, allSquare:true, dormie:false, leader:null },
+               available: false };
+    }
+    const winners = matchHoleIdxs.map(i => {
+      const ch = course.holes[i];
+      const ga = a.grosses[i], gb = b.grosses[i];
+      if(!ch || !ch.si || ga == null || gb == null) return null;
+      return matchPlayHoleWinner(ga, a.hcp, gb, b.hcp, ch.si);
+    });
+    return { matchNum: mIdx+1, seedA, seedB, playerA: nameA, playerB: nameB,
+             status: matchPlayStatus(winners, 9), available: true };
+  });
+}
+
 function renderLeaderboard(){
   const scramblePlayers = currentPlayers('scramble');
   const day1Course = activeCourse('day1');
@@ -7576,16 +7661,43 @@ function renderLeaderboard(){
     return `${promptBanner}${renderPokerDeal()}`;
   })();
 
-  // Between events (event date is past or no event loaded), the live scoring
-  // widgets show stale/empty data — hide them so the Final Two intermission
-  // card stands alone. Auto-restored when next event bundle is published.
+  // v5.67: Leaderboard tab swap — once any matchplay/Stableford gross
+  // shows up locally or in any synced remote group, the Scramble card
+  // tucks away and the Match-play R16 status table takes its place.
+  // Stableford "Golden Jacket board" + Partners sponsor tile removed —
+  // matchplay is the headline format on Saturday and the Standings
+  // tab is the home for bracket-driven visuals.
+  const isMatchplayPhase = hasAnyMatchplayScores();
+  const mpStatuses = isMatchplayPhase ? getAllPlayoffMatchStatuses() : [];
+  let matchplayCard = '';
+  if(isMatchplayPhase && mpStatuses.length){
+    const rows = mpStatuses.map(m => {
+      const s = m.status;
+      let statusLbl, statusCls;
+      if(s.closed){ statusLbl = '🏆 ' + s.label; statusCls = 'mp-closed'; }
+      else if(s.dormie){ const ldr = s.leader === 'a' ? m.playerA : m.playerB; statusLbl = '⚠ ' + ldr + ' · ' + s.label; statusCls = 'mp-dormie'; }
+      else if(s.allSquare && s.played > 0){ statusLbl = '⚖ ' + s.label; statusCls = 'mp-square'; }
+      else if(s.lead > 0){ const ldr = s.leader === 'a' ? m.playerA : m.playerB; statusLbl = ldr + ' · ' + s.label; statusCls = 'mp-lead'; }
+      else { statusLbl = '— not started —'; statusCls = 'mp-idle'; }
+      return `<div class="mp-lb-row">
+        <span class="mp-lb-tag">M${m.matchNum}</span>
+        <span class="mp-lb-pair"><span class="mp-lb-seed">#${m.seedA}</span> ${escHtml(m.playerA)} <span class="mp-lb-vs">v</span> ${escHtml(m.playerB)} <span class="mp-lb-seed">#${m.seedB}</span></span>
+        <span class="mp-status ${statusCls}">${statusLbl}</span>
+      </div>`;
+    }).join('');
+    matchplayCard = `<div class="card">
+      <div class="section-title">🥊 Match-play · R16</div>
+      <div class="mp-lb-list">${rows}</div>
+    </div>`;
+  }
+
   const eventOver = _isEventOver();
   document.getElementById('leaderboard').innerHTML = `
     ${renderIntermissionCard()}
 
-    ${eventOver ? '' : scrambleCard}
+    ${eventOver || isMatchplayPhase ? '' : scrambleCard}
 
-    ${eventOver ? '' : stablefordCard}
+    ${eventOver ? '' : matchplayCard}
 
     ${eventOver ? '' : pokerSection}
 
@@ -7595,7 +7707,6 @@ function renderLeaderboard(){
 
     ${eventOver ? '' : renderChallengesCard()}
 
-    ${renderSponsorTile()}
     <div onclick="copyText('MPH_SIC').then(()=>showToast('WeChat ID copied — open WeChat and paste','ok'))"
       style="background:rgba(214,176,90,0.06);border:1px solid rgba(214,176,90,0.2);border-radius:12px;
              padding:12px 14px;margin-top:4px;margin-bottom:8px;cursor:pointer">
@@ -7711,9 +7822,9 @@ function renderFooter(){
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.86) and does NOT need to match.
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.87) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.66';
+const APP_VERSION = '5.67';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
