@@ -2572,8 +2572,11 @@ function renderPlayoffs(){
   // Live seeds when not locked; locked seeds otherwise
   const seeds = isLocked ? pd.seeds : top16Live.map(r => r.name);
 
-  // Standard 16-bracket positions — chalk path for #1: M1(1v16) → CQ1(8) → CS1(4or5) → CF(2)
-  const r16Pairs = [[0,15],[7,8],[4,11],[3,12],[2,13],[5,10],[6,9],[1,14]];
+  // Standard 16-bracket positions, numbered to match the printed bracket graphic
+  // top-to-bottom: M1..M4 = top half; M5..M8 = bottom half. Adjacent pairs
+  // (M1+M2, M3+M4, M5+M6, M7+M8) feed the four QFs. Chalk path for #1:
+  // M1(1v16) → CQ1(M1w v M2w) → CS1(top-half) → CF(bottom-half SF winner).
+  const r16Pairs = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
   const pe = state.ui.playoffEntry || {};
 
   // Round-graph: each round derives players from a prior round + role (winner/loser).
@@ -3473,8 +3476,9 @@ function getActiveMatchPlayMatches(){
   const course = activeCourse('day2');
   const holes = state.stableford && state.stableford.holes;
   if(!course || !course.holes || !holes) return [];
-  // R16 pairings — kept in lock-step with the bracket viewer (index.html:2619).
-  const R16_PAIRS = [[0,15],[7,8],[4,11],[3,12],[2,13],[5,10],[6,9],[1,14]];
+  // R16 pairings — kept in lock-step with the bracket viewer r16Pairs above.
+  // Order follows the printed bracket graphic top-to-bottom; see r16Pairs comment.
+  const R16_PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
   const norm = s => String(s||'').trim().toUpperCase();
   const playerSeeds = players.map(p => seeds.findIndex(s => norm(s) === norm(p && p.name)));
   const order = (typeof getHoleOrder === 'function') ? getHoleOrder('stableford') : null;
@@ -7602,9 +7606,9 @@ function renderFooter(){
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.81) and does NOT need to match.
+// it has historically run ahead of APP_VERSION (currently chubbs-v5.82) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.61';
+const APP_VERSION = '5.62';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
