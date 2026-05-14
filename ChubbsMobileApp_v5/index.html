@@ -163,11 +163,16 @@
     .bracket-tree-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x mandatory;padding:4px 2px;margin:0 -2px}
     .bracket-tree-wrap::-webkit-scrollbar{height:6px}
     .bracket-tree-wrap::-webkit-scrollbar-thumb{background:rgba(214,176,90,0.3);border-radius:3px}
-    .bracket-tree{display:grid;grid-template-columns:repeat(5,140px);gap:10px}
-    .bt-col{display:grid;align-content:start;gap:8px;scroll-snap-align:start}
-    .bt-head{font-size:10px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:0.08em;padding:5px 6px 6px;border-bottom:1px solid rgba(214,176,90,0.3);text-align:center;margin-bottom:2px}
-    .bt-cell{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:7px;padding:7px 8px;display:grid;gap:3px;min-height:54px}
-    .bt-cell.bt-tall{align-content:center;min-height:74px}
+    /* Flex layout w/ stretch — every column inherits the R16 column's height,
+       so distributing children with justify-content:space-around lands QF cells
+       at the visual midpoint between their two R16 feeders (and SF cells at the
+       midpoint between QF feeders, etc.). Pure-CSS bracket alignment. */
+    .bracket-tree{display:flex;gap:10px;align-items:stretch;min-width:fit-content}
+    .bt-col{display:flex;flex-direction:column;flex:0 0 140px;scroll-snap-align:start}
+    .bt-head{flex:0 0 auto;font-size:10px;font-weight:800;color:var(--gold2);text-transform:uppercase;letter-spacing:0.08em;padding:5px 6px 6px;border-bottom:1px solid rgba(214,176,90,0.3);text-align:center;margin-bottom:6px}
+    .bt-cells{flex:1 1 auto;display:flex;flex-direction:column;justify-content:space-around;gap:4px}
+    .bt-cell{background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:7px;padding:7px 8px;display:flex;flex-direction:column;justify-content:center;gap:3px;min-height:54px}
+    .bt-cell.bt-tall{min-height:74px}
     .bt-name{font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#e0e0e0;line-height:1.3}
     .bt-name.win{color:var(--gold2);font-weight:800}
     .bt-name.loss{color:var(--muted);text-decoration:line-through;opacity:0.55}
@@ -2358,11 +2363,11 @@ function renderBracketTree(season){
   return `
     <div class="bracket-tree-wrap">
       <div class="bracket-tree">
-        <div class="bt-col"><div class="bt-head">R16 · May</div>${r16Col}</div>
-        <div class="bt-col"><div class="bt-head">QF · May</div>${qfCol}</div>
-        <div class="bt-col"><div class="bt-head">SF · June</div>${sfCol}</div>
-        <div class="bt-col"><div class="bt-head">Final · June</div>${finalCell}</div>
-        <div class="bt-col"><div class="bt-head">🏆 Champion</div>${championCell}</div>
+        <div class="bt-col"><div class="bt-head">R16 · May</div><div class="bt-cells">${r16Col}</div></div>
+        <div class="bt-col"><div class="bt-head">QF · May</div><div class="bt-cells">${qfCol}</div></div>
+        <div class="bt-col"><div class="bt-head">SF · June</div><div class="bt-cells">${sfCol}</div></div>
+        <div class="bt-col"><div class="bt-head">Final · June</div><div class="bt-cells">${finalCell}</div></div>
+        <div class="bt-col"><div class="bt-head">🏆 Champion</div><div class="bt-cells">${championCell}</div></div>
       </div>
     </div>
     <div class="small tight" style="color:var(--muted);text-align:center;margin:4px 0 12px">← swipe to see later rounds →</div>`;
@@ -7914,7 +7919,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.68';
+const APP_VERSION = '5.69';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
