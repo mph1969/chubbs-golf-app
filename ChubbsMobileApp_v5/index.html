@@ -2885,24 +2885,30 @@ function savePoResult(round, idx){
 // Auto-push from the score-view match-play banner. No DOM dependency, no modal —
 // called with values already determined by matchPlayStatus when a match closes.
 // Confirms before overwriting an existing different-winner entry.
-function pushMatchToBracket(matchIdx, winnerName, resultLabel){
-  // Allow admin OR the designated scorer (in event-bundle mode) to save.
-  // Scorer save writes locally; admin's phone picks it up via Firebase score
-  // sync and can re-push the bundle to propagate. Manual mode = open access.
+//
+// matchType extends the original r16-only contract: 'r16' (default, 8 matches),
+// 'cup_qf' (4 matches, back-9 winners path), 'plate_qf' (4 matches, back-9
+// losers path). Each type writes to its own season.playoffs[type] array.
+function pushMatchToBracket(matchIdx, winnerName, resultLabel, matchType){
+  const type = matchType || 'r16';
   const canSave = masterMode || (typeof isCurrentPlayerScorer === 'function' && isCurrentPlayerScorer('stableford'));
   if(!canSave){ alert('Only admin or the designated scorer can save bracket results'); return; }
   if(!winnerName || matchIdx == null) return;
   const {store, season} = _poCtx();
   if(!season) return;
   if(!season.playoffs) season.playoffs = {};
-  if(!Array.isArray(season.playoffs.r16)){
-    season.playoffs.r16 = Array.from({length:8}, () => ({winner:null,result:null}));
+  const TYPE_SIZE = { r16: 8, cup_qf: 4, plate_qf: 4 };
+  const TYPE_LABEL = { r16: 'M', cup_qf: 'Cup QF', plate_qf: 'Plate QF' };
+  const size = TYPE_SIZE[type] || 0;
+  if(!size){ alert('Unknown matchType: ' + type); return; }
+  if(!Array.isArray(season.playoffs[type])){
+    season.playoffs[type] = Array.from({length: size}, () => ({winner:null,result:null}));
   }
-  const existing = season.playoffs.r16[matchIdx] || {};
+  const existing = season.playoffs[type][matchIdx] || {};
   if(existing.winner && existing.winner !== winnerName){
-    if(!confirm(`Overwrite M${matchIdx+1}? Currently saved: ${existing.winner} ${existing.result || ''}`)) return;
+    if(!confirm(`Overwrite ${TYPE_LABEL[type]}${matchIdx+1}? Currently saved: ${existing.winner} ${existing.result || ''}`)) return;
   }
-  season.playoffs.r16[matchIdx] = { winner: winnerName, result: resultLabel || '' };
+  season.playoffs[type][matchIdx] = { winner: winnerName, result: resultLabel || '' };
   saveSeasonStore(store);
   try { renderAll(); } catch(e){}
   try { if(typeof renderPlayoffs === 'function') renderPlayoffs(); } catch(e){}
@@ -3922,7 +3928,10 @@ function matchPlayHoleWinner(grossA, hcpA, grossB, hcpB, si){
 
 // Pick the matches active in the current scoring group. Returns [] when
 // no playoff seeds are locked or no R16 pairs are present in this foursome.
+// On back 9 with R16 complete and viewer in a back-9 foursome, returns
+// the foursome's 2 simultaneous matches (Cup QF or Plate QF) instead.
 function getActiveMatchPlayMatches(){
+  if(isBackNineSwapActive()) return getActiveBackNineMatches();
   const players = currentPlayers('stableford') || [];
   if(players.length < 2) return [];
   let store; try { store = ensureActiveSeason(); } catch(e){ return []; }
@@ -4030,8 +4039,118 @@ function getActiveMatchPlayMatches(){
     }
     matches.push({
       matchNum: matchIdx + 1,
+      matchType: 'r16',
+      matchLabel: `M${matchIdx + 1}`,
       seedA: pair[0] + 1, playerA: playerA.name, idxA,
       seedB: pair[1] + 1, playerB: playerB.name, idxB,
+      status, currentHole, tiebreak,
+    });
+  });
+  return matches;
+}
+
+// Back-9 variant: returns the 2 simultaneous matches (Cup QF X + Cup QF X+1
+// OR Plate QF X + Plate QF X+1) for the back-9 foursome containing the viewer.
+// Pulls gross scores from state.stableford.holes[9..17] using the back-9
+// foursome's player ordering (which currentPlayers returns on hole 10+).
+function getActiveBackNineMatches(){
+  const foursome = getViewerBackNineFoursome();
+  if(!foursome || !Array.isArray(foursome.matches)) return [];
+  const players = currentPlayers('stableford') || [];   // back-9 foursome's 4
+  if(players.length < 2) return [];
+  const course = activeCourse('day2');
+  const holes = state.stableford && state.stableford.holes;
+  if(!course || !course.holes || !holes) return [];
+  // Back 9 = course holes 9..17 (0-indexed). 9-hole match window.
+  const matchHoleIdxs = [9, 10, 11, 12, 13, 14, 15, 16, 17];
+  const norm = s => String(s || '').trim().toUpperCase();
+  const matches = [];
+
+  foursome.matches.forEach(m => {
+    const idxA = players.findIndex(p => p && norm(p.name) === norm(m.p1));
+    const idxB = players.findIndex(p => p && norm(p.name) === norm(m.p2));
+    if(idxA < 0 || idxB < 0) return;
+    const playerA = players[idxA];
+    const playerB = players[idxB];
+
+    const winners = matchHoleIdxs.map(i => {
+      const h = holes[i]; if(!h) return null;
+      const ch = course.holes[i]; if(!ch || !ch.si) return null;
+      return matchPlayHoleWinner(h.gross[idxA], playerA.hcp, h.gross[idxB], playerB.hcp, ch.si);
+    });
+
+    let currentHole = null;
+    const curIdx = state.stableford.hole;
+    if(matchHoleIdxs.indexOf(curIdx) >= 0){
+      const ch = course.holes[curIdx];
+      const h  = holes[curIdx];
+      if(ch && ch.si){
+        const grossA = h && h.gross[idxA];
+        const grossB = h && h.gross[idxB];
+        const strokes = matchPlayStrokes(playerA.hcp, playerB.hcp, ch.si);
+        const aHigher = parseInt(playerA.hcp || 0, 10) > parseInt(playerB.hcp || 0, 10);
+        if(grossA != null && grossB != null){
+          const netA = grossA - (aHigher ? strokes : 0);
+          const netB = grossB - (aHigher ? 0 : strokes);
+          currentHole = {
+            idx: curIdx, par: ch.par, si: ch.si,
+            grossA, grossB, netA, netB,
+            winner: matchPlayHoleWinner(grossA, playerA.hcp, grossB, playerB.hcp, ch.si),
+            strokesToHigher: strokes, aHigher,
+          };
+        } else if(strokes > 0){
+          currentHole = { idx: curIdx, par: ch.par, si: ch.si, strokesToHigher: strokes, aHigher, preHole: true };
+        }
+      }
+    }
+
+    // Freeze status at close
+    let status = null;
+    const winnersSoFar = [];
+    for(let i = 0; i < winners.length; i++){
+      winnersSoFar.push(winners[i]);
+      if(winners[i] === null || winners[i] === undefined) continue;
+      const s = matchPlayStatus(winnersSoFar, 9);
+      if(s.closed){ status = s; break; }
+    }
+    if(!status) status = matchPlayStatus(winners, 9);
+
+    // §11 tiebreak when all square thru back-9 9-hole match
+    let tiebreak = null;
+    if(status.allSquare && status.played === 9){
+      let sbA = 0, sbB = 0;
+      matchHoleIdxs.forEach(i => {
+        const h = holes[i]; if(!h) return;
+        const ch = course.holes[i]; if(!ch || ch.si == null) return;
+        const grossA = h.gross[idxA];
+        const grossB = h.gross[idxB];
+        if(grossA != null){
+          const pts = stablefordPoints(grossA, ch.par, shotsReceived(playerA.hcp, ch.si));
+          if(pts != null) sbA += pts;
+        }
+        if(grossB != null){
+          const pts = stablefordPoints(grossB, ch.par, shotsReceived(playerB.hcp, ch.si));
+          if(pts != null) sbB += pts;
+        }
+      });
+      const hcpA = parseInt(playerA.hcp || 0, 10);
+      const hcpB = parseInt(playerB.hcp || 0, 10);
+      let winner = null, method = null;
+      if(sbA > sbB){ winner = 'a'; method = 'sb'; }
+      else if(sbB > sbA){ winner = 'b'; method = 'sb'; }
+      else if(hcpA < hcpB){ winner = 'a'; method = 'hcp'; }
+      else if(hcpB < hcpA){ winner = 'b'; method = 'hcp'; }
+      else { winner = 'tied'; method = 'arm'; }
+      tiebreak = { sbA, sbB, hcpA, hcpB, winner, method };
+    }
+
+    const label = (m.type === 'cup_qf' ? 'Cup QF' : 'Plate QF') + (m.index + 1);
+    matches.push({
+      matchNum: m.index + 1,
+      matchType: m.type,    // 'cup_qf' | 'plate_qf'
+      matchLabel: label,
+      seedA: null, playerA: playerA.name, idxA,
+      seedB: null, playerB: playerB.name, idxB,
       status, currentHole, tiebreak,
     });
   });
@@ -4079,12 +4198,17 @@ function renderMatchPlayBanner(){
   const matches = getActiveMatchPlayMatches();
   if(!matches.length) return '';
   // Detect already-saved bracket entries so admin sees "Saved" not "Save".
-  let r16 = [];
+  // Track all 3 bucket types — banner now serves R16 (front 9) and
+  // Cup QF / Plate QF (back 9).
+  let r16 = [], cupQf = [], plateQf = [];
   try {
     const store = ensureActiveSeason();
     const season = store && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
-    r16 = (season && season.playoffs && Array.isArray(season.playoffs.r16)) ? season.playoffs.r16 : [];
+    r16     = (season && season.playoffs && Array.isArray(season.playoffs.r16))      ? season.playoffs.r16      : [];
+    cupQf   = (season && season.playoffs && Array.isArray(season.playoffs.cup_qf))   ? season.playoffs.cup_qf   : [];
+    plateQf = (season && season.playoffs && Array.isArray(season.playoffs.plate_qf)) ? season.playoffs.plate_qf : [];
   } catch(e){}
+  const savedArrayFor = (type) => type === 'cup_qf' ? cupQf : (type === 'plate_qf' ? plateQf : r16);
   // Scorer header — when in event-bundle mode, surface who's scoring this
   // group. Lets the scorer know they're the entry point; lets others know
   // their phone is read-only and who to ping if a score is wrong.
@@ -4104,17 +4228,21 @@ function renderMatchPlayBanner(){
   // Permission for the "Save to bracket" button — admin or designated scorer.
   const canSave = masterMode || (typeof isCurrentPlayerScorer === 'function' && isCurrentPlayerScorer('stableford'));
   const rowHtml = matches.map(m => {
+    const matchType = m.matchType || 'r16';
+    const matchLabel = m.matchLabel || `M${m.matchNum}`;
+    const savedArr = savedArrayFor(matchType);
+    const matchIdx = m.matchNum - 1;
     const s = m.status;
     let status, cls, actionHtml = '';
     if(s.closed){
       const winner = s.leader === 'a' ? m.playerA : m.playerB;
       status = `🏆 ${winner} · ${s.label}`; cls = 'mp-status mp-closed';
-      const saved = r16[m.matchNum - 1] || {};
+      const saved = savedArr[matchIdx] || {};
       const isSaved = saved.winner === winner && saved.result === s.label;
       if(canSave){
         actionHtml = isSaved
           ? `<div class="mp-action"><span class="mp-saved">✓ Saved to bracket</span></div>`
-          : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${m.matchNum-1}, ${JSON.stringify(winner)}, ${JSON.stringify(s.label)})'>📌 Save M${m.matchNum} to bracket</button></div>`;
+          : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winner)}, ${JSON.stringify(s.label)}, ${JSON.stringify(matchType)})'>📌 Save ${matchLabel} to bracket</button></div>`;
       } else if(saved.winner){
         actionHtml = `<div class="mp-action"><span class="mp-saved">✓ ${saved.winner} ${saved.result}</span></div>`;
       }
@@ -4148,26 +4276,33 @@ function renderMatchPlayBanner(){
       tiebreakHtml = `<div class="mp-tiebreak">⚖ ${detail}</div>`;
       // Override the action area for the tiebreak winner
       if(canSave && winnerName && resultLabel){
-        const saved = r16[m.matchNum - 1] || {};
+        const saved = savedArr[matchIdx] || {};
         const isSaved = saved.winner === winnerName && saved.result === resultLabel;
         actionHtml = isSaved
           ? `<div class="mp-action"><span class="mp-saved">✓ Saved to bracket (${resultLabel})</span></div>`
-          : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${m.matchNum-1}, ${JSON.stringify(winnerName)}, ${JSON.stringify(resultLabel)})'>📌 Save M${m.matchNum} (Tiebreak)</button></div>`;
+          : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winnerName)}, ${JSON.stringify(resultLabel)}, ${JSON.stringify(matchType)})'>📌 Save ${matchLabel} (Tiebreak)</button></div>`;
       }
     }
     // v5.63: per-hole stroke heads-up + outcome moved inline into the
     // match-container on the Stableford scoring grid. Banner is now a clean
     // status-only summary so the two don't duplicate the same line of text.
     const hintHtml = '';
+    // Seed badges only on R16; QF rows just show names paired with vs.
+    const pairHtml = (m.seedA != null && m.seedB != null)
+      ? `<span class="mp-sn">#${m.seedA}</span>${m.playerA} vs ${m.playerB}<span class="mp-sn">#${m.seedB}</span>`
+      : `${m.playerA} vs ${m.playerB}`;
     return `<div class="mp-row">
-      <span class="mp-tag">M${m.matchNum}</span>
-      <span class="mp-pair"><span class="mp-sn">#${m.seedA}</span>${m.playerA} vs ${m.playerB}<span class="mp-sn">#${m.seedB}</span></span>
+      <span class="mp-tag">${matchLabel}</span>
+      <span class="mp-pair">${pairHtml}</span>
       <span class="${cls}">${status}</span>
     </div>${hintHtml}${tiebreakHtml}${actionHtml}`;
   }).join('');
+  const titleLabel = isBackNineSwapActive()
+    ? '🥊 Back 9 Match-play · Cup QF + Plate QF'
+    : '🥊 Match-play · 9-hole match';
   return `
     <div class="card mp-card">
-      <div class="section-title" style="margin-bottom:4px">🥊 Match-play · 9-hole match</div>
+      <div class="section-title" style="margin-bottom:4px">${titleLabel}</div>
       ${scorerHeader}
       ${rowHtml}
     </div>`;
@@ -8241,7 +8376,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.74';
+const APP_VERSION = '5.75';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
