@@ -6086,6 +6086,17 @@ function renderTabs(){
 // section in the chosen group.
 function setGroupTab(gid){
   const groups = _getNavGroups();
+  // BEFORE swapping groups, snapshot the current section as the last sub-tab
+  // for its owning group. Covers the path where state.ui.tab landed on a
+  // section without setTab() ever being called (e.g. session restored to
+  // 'day2', or the bundle-load auto-bounce). Without this, leaving day2 via
+  // a top-tab click loses the memory and the next return defaults to
+  // sections[0].
+  const currentOwner = groups.find(g => g.sections.indexOf(state.ui.tab) >= 0);
+  if(currentOwner){
+    state.ui.lastSubTab = state.ui.lastSubTab || {};
+    state.ui.lastSubTab[currentOwner.id] = state.ui.tab;
+  }
   const g = groups.find(x => x.id === gid);
   if(g && g.sections.length){
     // Restore the last sub-tab the user had within this group, if it's
@@ -6096,6 +6107,7 @@ function setGroupTab(gid){
       ? remembered
       : g.sections[0];
     state.ui.tab = target;
+    state.ui.lastSubTab[gid] = target;
     saveState();
     renderAll();
   }
@@ -8516,7 +8528,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.83';
+const APP_VERSION = '5.84';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
