@@ -1466,7 +1466,34 @@ let state = migrateState(loadState());
 function hasImportedEvent(){
   return !!(state.eventBundle && Array.isArray(state.eventBundle.players) && state.eventBundle.players.length);
 }
+// Tier 2c — back-9 foursome swap helpers. Front-9 R16 behaviour is fully
+// preserved (return false / null when not in the swap window). The swap
+// activates when: R16 is fully saved AND the viewer's playerId is in one
+// of the 4 reshuffled foursomes AND the active hole is 10 or later
+// (state.stableford.hole is 0-indexed; >= 9 means physical hole 10+).
+function getViewerBackNineFoursome(){
+  if(!state.eventBundle || !state.eventPlayerId) return null;
+  let ctx;
+  try { ctx = (typeof _poCtx === 'function') ? _poCtx() : null; } catch(e){ return null; }
+  if(!ctx || !ctx.season) return null;
+  const groups = _buildBackNineGroups(ctx.season, state.eventBundle);
+  if(!groups) return null;
+  const pid = String(state.eventPlayerId);
+  return groups.find(g => Array.isArray(g.playerIds) && g.playerIds.includes(pid)) || null;
+}
+function isBackNineSwapActive(){
+  if(!state.stableford || state.stableford.hole < 9) return false;
+  return getViewerBackNineFoursome() != null;
+}
+
 function currentPlayers(day){
+  // Back-9 swap: on hole 10+ when the viewer is in a back-9 foursome,
+  // return that foursome's 4 player records instead of the R16 group's.
+  // Score-entry cards downstream pick this up automatically.
+  if(day === 'stableford' && isBackNineSwapActive()){
+    const f = getViewerBackNineFoursome();
+    return hydrateLineupPlayers(f.playerIds, state.eventBundle);
+  }
   const source = day === 'scramble' ? state.day1Players : state.day2Players;
   const arr = source && source.length ? source : state.players;
   return padPlayers(arr, arr.length || 4);
@@ -1538,6 +1565,22 @@ function activeEventDay1Team(){
 }
 function activeEventDay2Group(){
   if(!hasImportedEvent()) return null;
+  // Back-9 swap: return a synthetic group-like record describing the
+  // viewer's back-9 foursome. Downstream callers (lineupScorerId,
+  // isCurrentPlayerScorer, header rendering) pick this up transparently.
+  // The synthetic group carries _backNine: true and the foursome's two
+  // matches so the matchplay banner can render Cup QF + Plate QF later.
+  if(isBackNineSwapActive()){
+    const f = getViewerBackNineFoursome();
+    return {
+      groupId: f.id,
+      groupName: (f.icon ? (f.icon + ' ') : '') + f.name,
+      playerIds: f.playerIds,
+      scorerPlayerId: f.scorerPlayerId || '',
+      _backNine: true,
+      _backNineFoursome: f
+    };
+  }
   const groups = Array.isArray(state.eventBundle.day2Groups) ? state.eventBundle.day2Groups : [];
   return groups.find(g => String(g.groupId) === String(state.day2GroupId)) || groups[0] || null;
 }
@@ -8198,7 +8241,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.73';
+const APP_VERSION = '5.74';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
