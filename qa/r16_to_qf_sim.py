@@ -281,6 +281,29 @@ def stableford_player(name: str, grosses: list[int]) -> int:
     return sum(stableford_pts(grosses[h], YINLI_PAR[h], hcp, YINLI_SI[h]) for h in range(18))
 
 
+# ─── Save-to-bracket simulation (Tier 2c) ─────────────────────────────────
+# Mirrors pushMatchToBracket(matchIdx, winner, label, matchType) in mobile.
+# Writes to a Python dict shaped like the JS season.playoffs structure.
+
+def init_playoffs_state():
+    """Empty playoffs dict mirroring season.playoffs schema in mobile."""
+    return {
+        'seeds': [p.name for p in SEEDS],
+        'r16':       [{'winner': None, 'result': None} for _ in range(8)],
+        'cup_qf':    [{'winner': None, 'result': None} for _ in range(4)],
+        'plate_qf':  [{'winner': None, 'result': None} for _ in range(4)],
+    }
+
+
+def save_match_to_bracket(playoffs, match_type, match_idx, winner_name, result_label):
+    """Mirror pushMatchToBracket — write to playoffs[type][idx]."""
+    if match_type not in playoffs:
+        raise ValueError(f'Unknown match type: {match_type}')
+    if match_idx < 0 or match_idx >= len(playoffs[match_type]):
+        raise IndexError(f'Bad {match_type} idx {match_idx}')
+    playoffs[match_type][match_idx] = {'winner': winner_name, 'result': result_label}
+
+
 # ─── Scenario runners ─────────────────────────────────────────────────────
 
 def make_scenario(name: str, rng: random.Random):
@@ -361,13 +384,50 @@ def run_scenario(name: str, seed: int, verbose: bool) -> int:
         print(f"  FAIL: roster mismatch — missing={missing} extra={extra}")
         failed += 1
 
-    # Run QF matches on back 9
-    print("  ─── Back 9 QF outcomes ───")
+    # Run QF matches on back 9 + simulate save-to-bracket (Tier 2c-4)
+    print("  ─── Back 9 QF outcomes + save-to-bracket ───")
+    playoffs = init_playoffs_state()
+    # Pre-fill r16 winners (front-9 saves already happened on R16 close)
+    for i, r in enumerate(r16):
+        save_match_to_bracket(playoffs, 'r16', i, r['winner'], r['status'].get('label', ''))
+    qf_results = []
     for f in foursomes:
         for m in f['matches']:
             qf = run_qf(m, grosses)
             label = f"Cup QF{m['index']+1}" if m['type'] == 'cup_qf' else f"Plate QF{m['index']+1}"
             print(f"    {label}: {m['p1']} v {m['p2']} → {qf['winner'] or 'unresolved'} ({qf['status']['label']})")
+            qf_results.append(qf)
+            if qf['winner']:
+                save_match_to_bracket(playoffs, m['type'], m['index'], qf['winner'], qf['status'].get('label', ''))
+
+    # Bracket-state assertions (Tier 2c-4: saves land in the right buckets)
+    r16_saved   = sum(1 for r in playoffs['r16']      if r['winner'])
+    cup_saved   = sum(1 for r in playoffs['cup_qf']   if r['winner'])
+    plate_saved = sum(1 for r in playoffs['plate_qf'] if r['winner'])
+    print(f"  ─── Bracket state: r16 {r16_saved}/8 · cup_qf {cup_saved}/4 · plate_qf {plate_saved}/4 ───")
+    if r16_saved != 8:
+        print(f"    FAIL: expected 8 r16 winners, got {r16_saved}")
+        failed += 1
+    unresolved_qf = sum(1 for q in qf_results if q['winner'] is None)
+    expected_resolved = 8 - unresolved_qf
+    actual_resolved = cup_saved + plate_saved
+    if actual_resolved != expected_resolved:
+        print(f"    FAIL: bracket save count mismatch — expected {expected_resolved}, got {actual_resolved}")
+        failed += 1
+
+    # Cascade invariants: every cup_qf winner came from R16 winners; every
+    # plate_qf winner came from R16 losers. Detects routing bugs in the
+    # back-9 reshuffle.
+    r16_winners_set = {r['winner'] for r in r16}
+    r16_losers_set  = {r['loser']  for r in r16}
+    for i, cq in enumerate(playoffs['cup_qf']):
+        if cq['winner'] and cq['winner'] not in r16_winners_set:
+            print(f"    FAIL: Cup QF{i+1} winner {cq['winner']} isn't an R16 winner")
+            failed += 1
+    for i, pq in enumerate(playoffs['plate_qf']):
+        if pq['winner'] and pq['winner'] not in r16_losers_set:
+            print(f"    FAIL: Plate QF{i+1} winner {pq['winner']} isn't an R16 loser")
+            failed += 1
 
     # Stableford 18 for all 16
     print("  ─── Stableford totals (18 holes) ───")
