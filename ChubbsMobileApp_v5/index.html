@@ -8039,10 +8039,16 @@ function getAllPlayoffMatchStatuses(){
   const R16_PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
   const localPlayers = currentPlayers('stableford') || [];
 
+  // Normalised compare — seed names from playoffs.seeds are mixed-case
+  // ("Matt", "Terry") but local player records are uppercased ("MATT",
+  // "TERRY") via hydrateLineupPlayers. Without normalising both sides the
+  // Leaderboard's R16 status panel silently shows "— not started —" even
+  // when grosses are entered.
+  const norm = s => String(s || '').trim().toUpperCase();
   function lookup(name){
-    const t = String(name || '').trim();
+    const t = norm(name);
     if(!t) return null;
-    const li = localPlayers.findIndex(p => String(p.name||'').trim() === t);
+    const li = localPlayers.findIndex(p => norm(p.name) === t);
     if(li >= 0){
       return {
         hcp: localPlayers[li].hcp || 0,
@@ -8051,7 +8057,7 @@ function getAllPlayoffMatchStatuses(){
     }
     for(const gd of Object.values((SYNC && SYNC.remoteGroups) || {})){
       const players = Array.isArray(gd.players) ? gd.players : [];
-      const pi = players.findIndex(p => String(p.displayName || p.name || '').trim() === t);
+      const pi = players.findIndex(p => norm(p.displayName || p.name) === t);
       if(pi >= 0){
         return {
           hcp: players[pi].hcp || 0,
@@ -8456,7 +8462,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.80';
+const APP_VERSION = '5.81';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
