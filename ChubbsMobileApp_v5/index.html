@@ -1575,7 +1575,11 @@ function hydrateLineupPlayers(playerIds, bundle){
 function activeEventDay1Team(){
   if(!hasImportedEvent()) return null;
   const teams = Array.isArray(state.eventBundle.day1ScrambleTeams) ? state.eventBundle.day1ScrambleTeams : [];
-  return teams.find(t => String(t.teamId) === String(state.day1TeamId)) || teams[0] || null;
+  // Returns the matched team OR null if state.day1TeamId is empty (player
+  // isn't in any scramble team). Previously fell back to teams[0], which
+  // surfaced wrong rosters on the Playing-As card for Stableford-only
+  // players (Kevin et al.).
+  return teams.find(t => String(t.teamId) === String(state.day1TeamId)) || null;
 }
 function activeEventDay2Group(){
   if(!hasImportedEvent()) return null;
@@ -1596,7 +1600,10 @@ function activeEventDay2Group(){
     };
   }
   const groups = Array.isArray(state.eventBundle.day2Groups) ? state.eventBundle.day2Groups : [];
-  return groups.find(g => String(g.groupId) === String(state.day2GroupId)) || groups[0] || null;
+  // Returns null when state.day2GroupId is empty (player isn't in any
+  // stableford group — e.g. scramble-only attendees). Previous groups[0]
+  // fallback surfaced wrong rosters in the Playing-As lineup view.
+  return groups.find(g => String(g.groupId) === String(state.day2GroupId)) || null;
 }
 function currentEventPlayer(){
   if(!hasImportedEvent()) return null;
@@ -3294,8 +3301,12 @@ function _doApplyBundle(bundle, requestedPlayerId){
     '';
   const requested = requestedPlayerId || state.eventPlayerId || fallbackPlayerId;
   const selectedPlayerId = players.some(p => String(p.playerId) === String(requested)) ? String(requested) : String(fallbackPlayerId || '');
-  const day1Team = normalized.day1ScrambleTeams.find(t => Array.isArray(t.playerIds) && t.playerIds.includes(selectedPlayerId)) || normalized.day1ScrambleTeams[0] || null;
-  const day2Group = normalized.day2Groups.find(g => Array.isArray(g.playerIds) && g.playerIds.includes(selectedPlayerId)) || normalized.day2Groups[0] || null;
+  // Null when the player isn't actually in a scramble team / stableford
+  // group for this event. Previously the || teams[0] fallback surfaced
+  // wrong day rosters for single-day attendees (Stableford-only Kevin
+  // would see Team 1's scramble roster instead of nothing).
+  const day1Team = normalized.day1ScrambleTeams.find(t => Array.isArray(t.playerIds) && t.playerIds.includes(selectedPlayerId)) || null;
+  const day2Group = normalized.day2Groups.find(g => Array.isArray(g.playerIds) && g.playerIds.includes(selectedPlayerId)) || null;
 
   // Reset event-scoped challenge winners — Firebase listener will repopulate
   // from /events/{newEventId}/challengeWinners if any exist.
@@ -6376,26 +6387,42 @@ function renderSetup(){
               ${courseCard(c2,'day2',sunLabel||'Stableford',sunTime,'Stableford venue','','')}`;
     })() : '';
 
-    const myLineupCard = imported && eventPlayer ? `
-      ${locationCard}
+    // Each day-card renders ONLY if the player is actually on a team /
+    // in a group for that day. Single-day attendees (Stableford-only or
+    // Scramble-only) see only the day they're playing.
+    const scrambleCard = day1Team ? `
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div class="section-title" style="margin:0">Scramble · ${satLabel||''}</div>
           <div style="font-size:12px;color:var(--muted)">${satTime||''}</div>
         </div>
-        <div class="small" style="color:var(--muted);margin-bottom:4px">${day1Team?(day1Team.teamName||day1Team.teamId||'Team'):'Not assigned'}</div>
+        <div class="small" style="color:var(--muted);margin-bottom:4px">${day1Team.teamName||day1Team.teamId||'Team'}</div>
         <div class="small" style="color:var(--muted);margin-bottom:4px">${importedDay1Players}</div>
         <div class="small" style="color:var(--muted)">Scorer · ${day1Scorer}</div>
-      </div>
+      </div>` : '';
+    const stablefordCard = day2Group ? `
       <div class="card">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
           <div class="section-title" style="margin:0">Stableford · ${sunLabel||''}</div>
           <div style="font-size:12px;color:var(--muted)">${day2Group&&day2Group.teeTime?'Tee '+day2Group.teeTime:sunTime||''}</div>
         </div>
-        <div class="small" style="color:var(--muted);margin-bottom:4px">${day2Group?(day2Group.groupName||day2Group.groupId||'Group'):'Not assigned'}</div>
+        <div class="small" style="color:var(--muted);margin-bottom:4px">${day2Group.groupName||day2Group.groupId||'Group'}</div>
         <div class="small" style="color:var(--muted);margin-bottom:4px">${importedDay2Players}</div>
         <div class="small" style="color:var(--muted)">Scorer · ${day2Scorer}</div>
-      </div>
+      </div>` : '';
+    // Fallback note when the player isn't on either day — usually means
+    // they picked the wrong identity or the admin pushed before adding them
+    // to a team/group.
+    const notPlayingNote = (!day1Team && !day2Group) ? `
+      <div class="card" style="border-color:rgba(245,166,35,0.3);background:rgba(245,166,35,0.04)">
+        <div style="font-size:13px;color:#f5a623;font-weight:700;margin-bottom:6px">⚠ Not on a team or group</div>
+        <div class="small" style="color:var(--muted);line-height:1.5">${escHtml(eventPlayer && (eventPlayer.displayName || eventPlayer.fullName) || 'You')} isn't in any scramble team or stableford group for this event. If that's wrong, ping the organiser to add you, then tap Refresh event data below.</div>
+      </div>` : '';
+    const myLineupCard = imported && eventPlayer ? `
+      ${locationCard}
+      ${scrambleCard}
+      ${stablefordCard}
+      ${notPlayingNote}
       <div class="card">
         <div class="toolbar tight" style="flex-wrap:wrap">
           <button class="btn slim" onclick="refreshEventData()" style="font-size:11px">🔄 Refresh event data</button>
@@ -8528,7 +8555,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.84';
+const APP_VERSION = '5.85';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
