@@ -154,7 +154,9 @@
     .mc-grid>.player-card .hcp-badge{padding:2px 6px;font-size:10px}
     .mc-grid>.player-card .stepper{grid-template-columns:36px 1fr 36px;gap:4px}
     .mc-grid>.player-card .stepper button{height:38px;font-size:18px;border-radius:10px}
-    .mc-grid>.player-card .stepper .val{height:38px;font-size:16px;border-radius:10px}
+    /* Score value font matches +/− button so the number doesn't visually
+       shrink relative to the controls on narrow widths. */
+    .mc-grid>.player-card .stepper .val{height:38px;font-size:22px;font-weight:900;border-radius:10px}
     .mc-outcome{font-family:monospace;font-size:10px;color:var(--gold2);padding:6px 2px 2px;margin-top:6px;border-top:1px solid rgba(255,255,255,0.04);line-height:1.5}
     .mc-outcome .mc-win{font-weight:800}
     .mc-outcome.win-a .mc-win{color:#a5f0c5}
@@ -216,7 +218,7 @@
     @media (max-width:380px){
       .mc-grid>.player-card .stepper{grid-template-columns:32px 1fr 32px;gap:3px}
       .mc-grid>.player-card .stepper button{height:36px;font-size:16px}
-      .mc-grid>.player-card .stepper .val{height:36px;font-size:15px}
+      .mc-grid>.player-card .stepper .val{height:36px;font-size:20px;font-weight:900}
       .mc-pair{font-size:11px}
     }
     .mp-tiebreak{padding:7px 10px 7px 44px;font-size:11px;font-weight:600;color:#79b0e3;background:rgba(121,176,227,0.07);border-top:1px dashed rgba(121,176,227,0.3);line-height:1.4}
@@ -8454,7 +8456,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.79';
+const APP_VERSION = '5.80';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
