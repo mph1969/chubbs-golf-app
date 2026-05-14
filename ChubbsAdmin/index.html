@@ -543,27 +543,34 @@ const COURSE_LIBRARY = {
   bangpoo: { name: 'Bangpoo (Arnold Palmer)' }
 };
 
+// Canonical roster. Handicaps last reset against the 2026-05-22 Yinli team
+// draft. New installs get these via defaultRoster(); existing users keep
+// their localStorage and update via the WeChat parser's inline handicap
+// capture ("Ryan h13"). The stray bare "RYAN" record was removed — bare
+// "Ryan" now routes to RYAN N via the seed alias map (Ryan S stays distinct
+// because of its h28+ handicap and explicit "Ryan S" name).
 const baseRosterData = [
-  {name:'KASPER', hcp:4, gold:0, clown:0, scram:0}, {name:'DIEGO', hcp:18, gold:2, clown:0, scram:3},
-  {name:'AARON', hcp:14, gold:1, clown:0, scram:0}, {name:'AKI', hcp:15, gold:1, clown:0, scram:3}, 
-  {name:'RYAN N', hcp:13, gold:1, clown:0, scram:2}, {name:'LUKE', hcp:16, gold:4, clown:0, scram:3}, 
-  {name:'JULIUS', hcp:17, gold:0, clown:0, scram:1}, {name:'JACK S', hcp:19, gold:4, clown:1, scram:2}, 
-  {name:'MIKE W', hcp:19, gold:2, clown:1, scram:2}, {name:'KEVIN', hcp:14, gold:2, clown:1, scram:0},
-  {name:'POS', hcp:20, gold:1, clown:2, scram:1}, {name:'JAMIE', hcp:21, gold:3, clown:0, scram:2},
-  {name:'HANSON', hcp:15, gold:1, clown:0, scram:1}, {name:'DARYL', hcp:23, gold:0, clown:1, scram:0},
-  {name:'MARK', hcp:25, gold:1, clown:0, scram:0}, {name:'ADAM', hcp:25, gold:0, clown:0, scram:0}, 
-  {name:'ANTHONY', hcp:25, gold:0, clown:1, scram:2}, {name:'JAMES S', hcp:25, gold:1, clown:0, scram:0}, 
-  {name:'STUART', hcp:25, gold:0, clown:1, scram:1}, {name:'JACK M', hcp:26, gold:1, clown:0, scram:0}, 
-  {name:'SPENNY', hcp:27, gold:0, clown:0, scram:0}, {name:'JORDAN', hcp:22, gold:1, clown:0, scram:3},
-  {name:'STEVE', hcp:28, gold:0, clown:1, scram:3}, {name:'TAPAS', hcp:28, gold:0, clown:1, scram:1}, 
-  {name:'TERRY', hcp:28, gold:1, clown:1, scram:2}, {name:'MATTY B', hcp:29, gold:0, clown:0, scram:0}, 
-  {name:'ROSS', hcp:29, gold:1, clown:0, scram:1}, {name:'ANDY', hcp:30, gold:1, clown:0, scram:1}, 
-  {name:'RICARDO', hcp:30, gold:0, clown:0, scram:2}, {name:'TONY', hcp:30, gold:0, clown:0, scram:1}, 
-  {name:'RYAN S', hcp:32, gold:0, clown:3, scram:0}, {name:'DAVE P', hcp:36, gold:1, clown:0, scram:1}, 
-  {name:'MILSON', hcp:36, gold:0, clown:2, scram:1},
-  {name:'MATT', hcp:12, gold:0, clown:0, scram:0}, {name:'MATTHEW', hcp:22, gold:0, clown:0, scram:0}, 
-  {name:'NICK', hcp:25, gold:0, clown:0, scram:0}, {name:'GRAEME', hcp:28, gold:0, clown:0, scram:0}, 
-  {name:'GEORGE', hcp:24, gold:0, clown:0, scram:0}, {name:'RYAN', hcp:12, gold:0, clown:0, scram:0}
+  {name:'KASPER', hcp:4, gold:0, clown:0, scram:0}, {name:'DIEGO', hcp:16, gold:2, clown:0, scram:3},
+  {name:'AARON', hcp:14, gold:1, clown:0, scram:0}, {name:'AKI', hcp:15, gold:1, clown:0, scram:3},
+  {name:'RYAN N', hcp:13, gold:1, clown:0, scram:2}, {name:'MATT', hcp:13, gold:0, clown:0, scram:0},
+  {name:'JACK S', hcp:14, gold:4, clown:1, scram:2}, {name:'KEVIN', hcp:14, gold:2, clown:1, scram:0},
+  {name:'HANSON', hcp:15, gold:1, clown:0, scram:1}, {name:'LUKE', hcp:16, gold:4, clown:0, scram:3},
+  {name:'JULIUS', hcp:17, gold:0, clown:0, scram:1}, {name:'DUSTIN', hcp:19, gold:0, clown:0, scram:0},
+  {name:'MIKE W', hcp:19, gold:2, clown:1, scram:2}, {name:'POS', hcp:19, gold:1, clown:2, scram:1},
+  {name:'GEORGE', hcp:20, gold:0, clown:0, scram:0}, {name:'JAMIE', hcp:21, gold:3, clown:0, scram:2},
+  {name:'ANTHONY', hcp:22, gold:0, clown:1, scram:2}, {name:'JORDAN', hcp:22, gold:1, clown:0, scram:3},
+  {name:'MATTHEW', hcp:22, gold:0, clown:0, scram:0}, {name:'DARYL', hcp:23, gold:0, clown:1, scram:0},
+  {name:'NICK', hcp:24, gold:0, clown:0, scram:0}, {name:'MARK', hcp:25, gold:1, clown:0, scram:0},
+  {name:'ADAM', hcp:25, gold:0, clown:0, scram:0}, {name:'JAMES S', hcp:25, gold:1, clown:0, scram:0},
+  {name:'STUART', hcp:25, gold:0, clown:1, scram:1}, {name:'JACK M', hcp:26, gold:1, clown:0, scram:0},
+  {name:'RICARDO', hcp:27, gold:0, clown:0, scram:2}, {name:'SPENNY', hcp:27, gold:0, clown:0, scram:0},
+  {name:'STEVE', hcp:28, gold:0, clown:1, scram:3}, {name:'TAPAS', hcp:28, gold:0, clown:1, scram:1},
+  {name:'TERRY', hcp:28, gold:1, clown:1, scram:2}, {name:'GRAEME', hcp:28, gold:0, clown:0, scram:0},
+  {name:'MATTY B', hcp:29, gold:0, clown:0, scram:0}, {name:'ROSS', hcp:29, gold:1, clown:0, scram:1},
+  {name:'ANDY', hcp:30, gold:1, clown:0, scram:1}, {name:'TONY', hcp:30, gold:0, clown:0, scram:1},
+  {name:'RYAN S', hcp:32, gold:0, clown:3, scram:0}, {name:'DAVE P', hcp:36, gold:1, clown:0, scram:1},
+  {name:'MILSON', hcp:36, gold:0, clown:2, scram:1}, {name:'PENGLEI', hcp:36, gold:0, clown:1, scram:0},
+  {name:'PAUL', hcp:36, gold:0, clown:0, scram:0}
 ];
 
 // ── Roster identity layer ───────────────────────────────────────────────
@@ -604,13 +611,13 @@ const DEFAULT_ALIASES = {
   'hanson':  ['Handon', 'HANDON', 'Mike H'],
   'graeme':  ['Greame'],
   'stuart':  ['Stuartom'],
-  'matthew': ['Other Matt', 'Mathew'],
-  'ryann':   ['Ryan N.', 'RyanN'],
-  'mikew':   ['Mike W.']
-  // NOTE: bare "Ryan" / "Mike" / "Matt" are deliberately NOT seeded —
-  // ambiguity (3 Matts, multiple Ryans in baseRoster) means the user must
-  // attach them manually via the modal's Aliases field once they've decided
-  // which canonical player owns the bare form for their group.
+  'matthew': ['Other Matt', 'Mathew', 'Matthew SA'],
+  'ryann':   ['Ryan', 'Ryan N.', 'RyanN'],  // bare "Ryan" = Ryan N; Ryan S stays distinct
+  'jacks':   ['Jack', 'Jack S.'],             // bare "Jack" = Jack S; Jack M inactive
+  'mikew':   ['Mike W.'],
+  'penglei': ['Peng Lei', 'PLZ', 'plz']
+  // NOTE: bare "Matt" / "Mike" are deliberately NOT seeded — three-Matts
+  // ambiguity (Matt D / Matthew SA / Matty B) means context resolves it.
 };
 
 function ensurePlayerAliases(p){
@@ -658,6 +665,46 @@ function findPlayerByAnyName(raw){
     if(best) return best;
   }
   return null;
+}
+
+// One-time migration: the original baseRosterData seeded both "RYAN"
+// (hcp 12) and "RYAN N" (hcp 13) as separate players. Per the team draft
+// confirmation, bare "Ryan" is Ryan N — the stray was a data error. This
+// merges any existing localStorage "RYAN" record into "RYAN N", re-points
+// attendance/teams/groups/captains, and adds "Ryan" as an alias on RYAN N.
+// Idempotent: silently skips if either record is missing.
+function migrateStrayRyan(){
+  if(!Array.isArray(masterRoster)) return;
+  const ryan = masterRoster.find(p =>
+    normalizeName(p.displayName) === 'ryan' && p.playerId !== 'RYANN'
+  );
+  const ryanN = masterRoster.find(p => normalizeName(p.displayName) === 'ryann');
+  if(!ryan || !ryanN) return;
+  if(!Array.isArray(ryanN.aliases)) ryanN.aliases = [];
+  if(!ryanN.aliases.some(a => normalizeName(a) === 'ryan')) ryanN.aliases.push('Ryan');
+  if(state && state.attendance && state.attendance[ryan.playerId]){
+    const order = { none:0, scramble:1, stableford:1, both:2 };
+    const cur = state.attendance[ryanN.playerId] || 'none';
+    const inc = state.attendance[ryan.playerId];
+    if((order[inc]||0) > (order[cur]||0)) state.attendance[ryanN.playerId] = inc;
+    else if(inc !== cur && inc !== 'none' && cur !== 'none') state.attendance[ryanN.playerId] = 'both';
+    delete state.attendance[ryan.playerId];
+  }
+  if(state && state.scrambleTeams) state.scrambleTeams.forEach(t => {
+    t.players = [...new Set(t.players.map(id => id === ryan.playerId ? ryanN.playerId : id))];
+    if(t.scorerId === ryan.playerId) t.scorerId = ryanN.playerId;
+  });
+  if(state && state.stablefordGroups) state.stablefordGroups.forEach(g => {
+    g.players = [...new Set(g.players.map(id => id === ryan.playerId ? ryanN.playerId : id))];
+    if(g.scorerId === ryan.playerId) g.scorerId = ryanN.playerId;
+  });
+  if(state && state.captains){
+    state.captains = [...new Set(state.captains.map(id => id === ryan.playerId ? ryanN.playerId : id))];
+  }
+  masterRoster = masterRoster.filter(p => p.playerId !== ryan.playerId);
+  saveAdminRoster();
+  saveAdminState();
+  console.log('[Chubbs] Auto-merged stray "RYAN" → "RYAN N"');
 }
 
 // Stable, deterministic playerId for auto-added players. Prevents the old
@@ -787,6 +834,7 @@ let state = loadAdminState();
 
 // --- INITIALIZATION ---
 function init() {
+  migrateStrayRyan();
   const c1 = document.getElementById('scramble-course');
   const c2 = document.getElementById('stableford-course');
   const courseGroups = [
@@ -1087,8 +1135,8 @@ function parseInlineHandicap(line){
   // "(24)" — explicit parens always wins
   let m = line.match(/\((\d{1,2})\)/);
   if(m){ const n = parseInt(m[1],10); if(n >= 0 && n <= 54) return n; }
-  // "hc 24" / "hcp 24" / "h.c. 24"
-  m = line.match(/\bh\.?\s*c\.?\s*p?\.?\s*[:=]?\s*(\d{1,2})\b/i);
+  // "h13" / "hcp 24" / "hc 24" / "h.c. 24" — middle letters all optional
+  m = line.match(/\bh\.?\s*(?:c\.?\s*)?(?:p\.?\s*)?[:=]?\s*(\d{1,2})\b/i);
   if(m){ const n = parseInt(m[1],10); if(n >= 0 && n <= 54) return n; }
   // "- 24" / "· 24" / "• 24" — separator + bare digits, NOT followed by `:` `/` or another digit
   m = line.match(/[\-·•]\s+(\d{1,2})(?![\d:\/])/);
@@ -1145,13 +1193,16 @@ function detectDaySection(line){
 //   "with a team Handicap of 90"
 //   "With a Handicap of 89"
 //   "Team Hcp 88"
-//   "Team 1:" / "Team 1 - Captain X"
+//   "Team 1 (Hcp 93):" / "Team 1 (Handicap 93):"
+//   "Team 1:" / "Team 1 - Captain X" / "Team 1 — Hcp 90"
 function detectTeamHeader(line){
   let m = line.match(/\bteam\s+(?:handicap|hc?p?)\s+(?:of\s+)?(\d{2,3})\b/i);
   if(m) return { teamHcp: parseInt(m[1], 10) };
   m = line.match(/\bwith\s+a\s+(?:team\s+)?(?:handicap|hc?p?)\s+of\s+(\d{2,3})\b/i);
   if(m) return { teamHcp: parseInt(m[1], 10) };
-  m = line.match(/^team\s+(\d+|[a-z])\s*[:.\-]/i);
+  m = line.match(/^team\s+(\d+|[a-z])\s*\(\s*(?:hc?p?|handicap)\s+(\d{2,3})\s*\)/i);
+  if(m) return { teamHcp: parseInt(m[2], 10), teamName: `Team ${m[1]}` };
+  m = line.match(/^team\s+(\d+|[a-z])\s*[:.\-–—]/i);
   if(m) return { teamHcp: 0, teamName: `Team ${m[1]}` };
   return null;
 }
@@ -1287,14 +1338,19 @@ function detectFireballCup(line){
 }
 
 // Decide if a line looks like a bare team-member name.
-// Strips parenthetical comments, trailing "- 24" handicap markers, and
-// slash-aliases ("Hanson/HANDON" → "Hanson"). Returns the cleaned name or null.
+// Strips parenthetical comments, trailing "- 24" handicap markers,
+// inline "h13" / "hcp 13" handicaps, trailing "– 40c B3" stat blocks
+// (age/booze level), and slash-aliases ("Hanson/HANDON" → "Hanson").
+// Returns the cleaned name or null.
 function extractMemberCandidate(line){
   let s = String(line || '').trim();
   if(!s) return null;
   // Strip trailing parenthetical (PLZ and the place to be!)
   s = s.replace(/\s*\([^)]*\)\s*$/, '').trim();
-  // Strip trailing "- 24" / "(24)" handicap marker
+  // Strip trailing "– 40c B3" stat tail (dash + age + booze)
+  s = s.replace(/\s+[\-–—]\s+.+$/, '').trim();
+  // Strip trailing inline handicaps
+  s = s.replace(/\s+h\.?c?\.?p?\.?\s*\d{1,2}\b/i, '').trim();
   s = s.replace(/\s*[\-·•]\s*\d{1,2}\s*$/, '').trim();
   s = s.replace(/\s*\(\d+\)\s*$/, '').trim();
   // Slash-alias: use first fragment
@@ -1306,6 +1362,8 @@ function extractMemberCandidate(line){
   if(!/^[A-Za-z]/.test(s)) return null;
   // Reject bracket-style "A v B"
   if(/\s+v\s+|\s+vs\s+|\s+versus\s+/i.test(s)) return null;
+  // Reject summary/total lines
+  if(/^(avg|average|total)\b/i.test(s)) return null;
   // Word count — names are 1-4 words ("Peng Lei", "Matty B", "John B")
   const words = s.split(/\s+/);
   if(words.length > 4) return null;
@@ -1441,6 +1499,10 @@ function parseWeChatText() {
       const memberName = extractMemberCandidate(line);
       if(memberName){
         const p = resolveOrAddPlayer(memberName);
+        // Capture inline handicap on the same line ("Ryan h13", "PLZ h36").
+        // Only overwrite when we found one; otherwise preserve roster value.
+        const teamHcp = parseInlineHandicap(line);
+        if(teamHcp > 0) p.playingHandicap = teamHcp;
         if(!currentTeam.players.includes(p.playerId) && currentTeam.players.length < 4){
           currentTeam.players.push(p.playerId);
           upgradeAttendance(p.playerId, 'scramble');
@@ -2817,9 +2879,23 @@ function applyConfigPayload(config){
     return;
   }
   if(Array.isArray(config.roster) && config.roster.length){
-    masterRoster = config.roster;
-    masterRoster.forEach(ensurePlayerAliases);
+    // Merge — never wholesale-replace. Cloning an old event used to wipe
+    // the current roster including any players added since the export
+    // snapshot. We now only ADD missing players (matched by playerId or
+    // normalised displayName) so manual additions + handicap edits stick.
+    let added = 0;
+    config.roster.forEach(p => {
+      const exists = masterRoster.some(x =>
+        x.playerId === p.playerId ||
+        normalizeName(x.displayName) === normalizeName(p.displayName)
+      );
+      if(!exists){
+        masterRoster.push(ensurePlayerAliases({ ...p, aliases: Array.isArray(p.aliases) ? p.aliases : [] }));
+        added++;
+      }
+    });
     saveAdminRoster();
+    if(added) console.log(`[Chubbs] Imported config added ${added} new player(s) (existing players preserved).`);
   }
   if(config.state){
     state = config.state;
