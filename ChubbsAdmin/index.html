@@ -226,7 +226,7 @@
         <div style="position:relative;display:inline-block">
           <button class="ghost" onclick="toggleCleanupMenu()" style="border-color:#d16b5d;color:#d16b5d" title="Cleanup tools: clear setup, purge tests, nuclear reset">🧹 Cleanup ▾</button>
         <div id="cleanup-menu" style="display:none;position:absolute;top:100%;right:0;z-index:100;background:#12251b;border:1px solid #d16b5d;border-radius:10px;padding:4px;box-shadow:0 12px 32px rgba(0,0,0,0.6);min-width:200px;margin-top:4px">
-          <button onclick="confirmReset();toggleCleanupMenu()" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--text,#f4efe2);font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Clear roster, teams, groups. Does not affect Firebase.">🗑 Clear Setup</button>
+          <button onclick="confirmReset();toggleCleanupMenu()" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:var(--text,#f4efe2);font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Clear event state (attendance, teams, groups). Roster + cloud-saved data are preserved.">🗑 Clear Setup</button>
           <button onclick="btnLoading(document.getElementById('btn-purge-inner'));purgeTestEvents();toggleCleanupMenu()" id="btn-purge-inner" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:#f5d85c;font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Delete TEST-flagged events from Firebase.">🧹 Purge Test Events</button>
           <button onclick="btnLoading(document.getElementById('btn-nuke-inner'));showNuclearReset();toggleCleanupMenu()" id="btn-nuke-inner" style="display:block;width:100%;text-align:left;padding:10px 12px;background:transparent;border:none;color:#f55c5c;font-size:12px;font-family:inherit;cursor:pointer;border-radius:6px" onmouseenter="this.style.background='rgba(255,255,255,0.05)'" onmouseleave="this.style.background='transparent'" title="Full Firebase event manager. Select and delete events.">☢️ Nuclear Reset</button>
         </div>
@@ -870,18 +870,24 @@ function init() {
   populateChallengeHoles('stableford');
 }
 
+// Clear the event setup ONLY — attendance, teams, groups, form fields back
+// to defaults. The roster (handicaps, aliases, manual additions) is
+// PRESERVED, both locally and in the Firebase /admin node. Previously this
+// also nuked masterRoster + the cloud admin record, which silently undid
+// any manual roster edits (handicap adjustments, new player additions).
+// To fully wipe the local roster, use a fresh browser profile or clear
+// localStorage manually; to wipe Firebase events, use ☢️ Nuclear Reset.
 function confirmReset() {
-  if(confirm("Are you sure you want to clear all data and start from scratch? This also clears cloud-saved admin data.")) {
-    masterRoster = defaultRoster();
-    state = { attendance:{}, captains:[], scrambleTeams:[], stablefordGroups:[] };
-    saveAdminRoster();
-    saveAdminState();
-    // Also clear cloud
-    if(db) db.ref(CLOUD_ADMIN_PATH).remove().catch(()=>{});
-    document.getElementById('ev-name').value = "Chubbs Peterson Invitational";
-    document.getElementById('ev-display').value = "Weekend Golf";
-    init();
-  }
+  if(!confirm("Clear the event setup?\n\nAttendance, scramble teams, stableford groups, and the event-rules form will reset.\n\nYour roster (handicaps, aliases, manual additions) is preserved.")) return;
+  state = { attendance:{}, captains:[], scrambleTeams:[], stablefordGroups:[] };
+  masterRoster.forEach(p => state.attendance[p.playerId] = 'none');
+  saveAdminState();
+  document.getElementById('ev-name').value = "Chubbs Peterson Invitational";
+  document.getElementById('ev-display').value = "Weekend Golf";
+  ['scramble-date','scramble-time','stableford-date','stableford-time'].forEach(id => {
+    const el = document.getElementById(id); if(el) el.value = '';
+  });
+  init();
 }
 
 function togglePalmSelectors(prefix) {
