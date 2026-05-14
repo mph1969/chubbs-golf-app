@@ -2309,15 +2309,15 @@ function appendCurrentEventToActiveSeason(){
 }
 
 // v5.68: horizontal bracket tree shown at the top of the Standings tab.
-// Renders the full §11 4-tier cascade as four stacked ladders:
-//   🏆 Cup    — R16 winners → Cup QF → Cup SF → Cup Final → Champion
-//   🍽️ Plate  — R16 losers  → Plate QF → Plate SF → Plate Final
-//   🛡️ Shield — Cup QF losers → Shield SF → Shield Final
-//   🥄 Spoon  — Plate QF losers → Spoon SF → Spoon Final
-// Each ladder is independently horizontally scrollable on phone widths.
-// Renders nothing when seeds aren't locked. Per-cell content shows the
-// actual feeder names where decided (winner/loser of upstream matches),
-// "TBD" otherwise.
+// Renders the §11 4-tier cascade as up to four stacked ladders. Each lower
+// ladder is hidden until the upstream round produces its first result —
+// otherwise the standings tab is dominated by TBD-only brackets on event
+// morning. Each ladder starts at its own first round (paired feeders),
+// mirroring how Cup's QF column pairs R16 winners.
+//   🏆 Cup    (always when seeds locked) — R16 → Cup QF → Cup SF → Cup Final → Champion
+//   🍽️ Plate  (≥1 R16 result)           — Plate QF → Plate SF → Plate Final → Winner
+//   🛡️ Shield (≥1 Cup QF result)        — Shield SF → Shield Final → Winner
+//   🥄 Spoon  (≥1 Plate QF result)      — Spoon SF → Spoon Final → Winner
 function renderBracketTree(season){
   if(!season || !season.playoffs) return '';
   const seeds = Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
@@ -2350,14 +2350,6 @@ function renderBracketTree(season){
       <div class="bt-name ${cls2}">${name2}</div>
       ${result ? `<div class="bt-result">${escHtml(result)}</div>` : ''}
     </div>`;
-  };
-
-  // Single-name "feeder" cell — used for Plate's R16-losers column and for
-  // Shield/Spoon's QF-losers columns. Shows the name once it's known, or a
-  // TBD placeholder with a "from MN" hint until the upstream match resolves.
-  const feederCell = (name, fromLabel) => {
-    if(name) return `<div class="bt-cell"><div class="bt-name">${escHtml(name)}</div><div class="bt-from">from ${fromLabel}</div></div>`;
-    return `<div class="bt-cell"><div class="bt-tbd">TBD</div><div class="bt-from">loser of ${fromLabel}</div></div>`;
   };
 
   const loserOf = (match, p1, p2) => {
@@ -2427,9 +2419,8 @@ function renderBracketTree(season){
     { head: '🏆 Champion', cells: [trophyCell('🏆', (cupFinal[0] || {}).winner)] }
   ];
 
-  // ── 🍽️ Plate ladder ───────────────────────────────────────────────────
+  // ── 🍽️ Plate ladder (4 cols — starts at QF, paired R16 losers) ────────
   const plateCols = [
-    { head: 'R16 Losers · May', cells: [0,1,2,3,4,5,6,7].map(i => feederCell(r16Loser(i), `M${i+1}`)) },
     { head: 'Plate QF · May', cells: [0,1,2,3].map(qi => {
         const m = plateQf[qi] || {};
         return cell(r16Loser(qi*2), r16Loser(qi*2+1), m.winner, m.result, null, null, {tall:true});
@@ -2449,9 +2440,8 @@ function renderBracketTree(season){
     { head: '🍽️ Plate Winner', cells: [trophyCell('🍽️', (plateFinal[0] || {}).winner)] }
   ];
 
-  // ── 🛡️ Shield ladder (4 cols — no QF round, Cup QF losers go straight to SF)
+  // ── 🛡️ Shield ladder (3 cols — starts at SF, paired Cup QF losers) ────
   const shieldCols = [
-    { head: 'Cup QF Losers', cells: [0,1,2,3].map(qi => feederCell(cupQfLoser(qi), `Cup QF${qi+1}`)) },
     { head: 'Shield SF · June', cells: [0,1].map(si => {
         const m = shieldSf[si] || {};
         return cell(cupQfLoser(si*2), cupQfLoser(si*2+1), m.winner, m.result, null, null, {tall:true});
@@ -2465,9 +2455,8 @@ function renderBracketTree(season){
     { head: '🛡️ Shield Winner', cells: [trophyCell('🛡️', (shieldFinal[0] || {}).winner)] }
   ];
 
-  // ── 🥄 Spoon ladder (4 cols — same shape as Shield)
+  // ── 🥄 Spoon ladder (3 cols — same shape as Shield, Plate QF losers) ──
   const spoonCols = [
-    { head: 'Plate QF Losers', cells: [0,1,2,3].map(qi => feederCell(plateQfLoser(qi), `Plate QF${qi+1}`)) },
     { head: 'Spoon SF · June', cells: [0,1].map(si => {
         const m = spoonSf[si] || {};
         return cell(plateQfLoser(si*2), plateQfLoser(si*2+1), m.winner, m.result, null, null, {tall:true});
@@ -2481,11 +2470,20 @@ function renderBracketTree(season){
     { head: '🥄 Spoon Winner', cells: [trophyCell('🥄', (spoonFinal[0] || {}).winner)] }
   ];
 
-  return renderLadder('🏆 Cup',    'R16 winners path',     true,  cupCols)
-       + renderLadder('🍽️ Plate',  'R16 losers path',      false, plateCols)
-       + renderLadder('🛡️ Shield', 'Cup QF losers path',   false, shieldCols)
-       + renderLadder('🥄 Spoon',  'Plate QF losers path', false, spoonCols)
-       + `<div class="small tight" style="color:var(--muted);text-align:center;margin:8px 0 12px">← swipe each ladder to see later rounds →</div>`;
+  // Visibility gates — only show a lower ladder once the round that feeds
+  // its first matches has produced at least one result. Keeps the page from
+  // being a wall of TBDs on event morning before anything has been played.
+  const hasResult = arr => Array.isArray(arr) && arr.some(m => m && m.winner);
+  const showPlate  = hasResult(r16);
+  const showShield = hasResult(cupQf);
+  const showSpoon  = hasResult(plateQf);
+
+  let out = renderLadder('🏆 Cup', 'R16 winners path', true, cupCols);
+  if(showPlate)  out += renderLadder('🍽️ Plate',  'R16 losers path',      false, plateCols);
+  if(showShield) out += renderLadder('🛡️ Shield', 'Cup QF losers path',   false, shieldCols);
+  if(showSpoon)  out += renderLadder('🥄 Spoon',  'Plate QF losers path', false, spoonCols);
+  out += `<div class="small tight" style="color:var(--muted);text-align:center;margin:8px 0 12px">← swipe each ladder to see later rounds →</div>`;
+  return out;
 }
 
 function renderSeason(){
@@ -8034,7 +8032,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.70';
+const APP_VERSION = '5.71';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
