@@ -47,7 +47,7 @@ Plus:
 | R16 + back-9 reshuffle math | ✅ 3/3 scenarios pass (qa/r16_to_qf_sim.py) |
 | Cascade invariants (cup_qf winner ∈ R16 winners; plate_qf winner ∈ R16 losers) | ✅ asserted by harness |
 | Pre-event readiness audit (2026-05-10) | ✅ A1–A8 done, A4 bug fixed in v5.58 |
-| Firebase rules + indexOn | ⏳ User publishes (still pending — see below) |
+| Firebase rules + indexOn | ✅ Confirmed published 2026-05-14 — matches docs/firebase-rules.md |
 | End-to-end dry-run on phone w/ v5.84 | ⏳ Pending; v5.83 + v5.84 dry-run confirmed sub-tab memory works |
 
 ## OPEN ITEMS — pick up here
@@ -55,16 +55,13 @@ Plus:
 ### 1. Send WeChat blast (~May 16 — 2 days)
 Draft in `NewFeatures/wechat-blast-may23-playoffs.md`. Attach 2-3 screenshots from dry-run.
 
-### 2. Publish Firebase rules
-Paste in Firebase Console → Realtime Database → Rules (rules JSON in `docs/firebase-rules.md`).
-
-### 3. Final phone dry-run before May 23
+### 2. Final phone dry-run before May 23 — Brain Trust testing
 - Multi-phone test: at least 2 devices loading the same event as different players
 - Verify Firebase sync of back-9 group nodes across phones
 - Stress-test: enter through hole 18 + save all Cup QF + Plate QF results
 - Verify Standings tab bracket tree updates live as results land
 
-### 4. Production push of May 23 event (LIVE flag, not TEST)
+### 3. Production push of May 23 event (LIVE flag, not TEST)
 Currently testing with "(TEST) May Chubbs at Yinli" event. Day-of: switch admin Event Mode → LIVE EVENT, push fresh.
 
 ## Deferred to post-May 23
