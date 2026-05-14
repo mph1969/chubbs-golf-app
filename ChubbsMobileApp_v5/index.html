@@ -3708,9 +3708,10 @@ function courseConfigForDay(day){
     palmIsland: safePalmCombo(raw.palmIsland)
   };
 }
-// Brain trust per handbook §3 — used as the default scorer when the admin
-// bundle didn't specify one. Priority order matches the admin app.
-const BRAIN_TRUST_NAMES = ['Luke', 'Terry', 'Jack', 'Ryan N', 'Mike W'];
+// Brain trust — used as the default scorer when the admin bundle didn't
+// specify one. Priority order applies to both R16 foursome default-scorer
+// pick AND the back-9 foursome auto-assignment. Last updated 2026-05-14.
+const BRAIN_TRUST_NAMES = ['Terry', 'Jack S', 'Ryan N', 'Nick', 'Hanson', 'Matt'];
 
 // Never auto-pick these names as a scorer for the post-R16 back-nine
 // foursomes — they're playing too tight a match to be also doing entry.
@@ -8197,7 +8198,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.72';
+const APP_VERSION = '5.73';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

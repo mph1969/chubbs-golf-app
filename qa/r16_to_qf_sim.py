@@ -83,7 +83,7 @@ SEEDS = [
 NAME_TO_HCP = {p.name: p.hcp for p in SEEDS}
 
 PAIRS = [(0, 15), (7, 8), (3, 12), (4, 11), (1, 14), (6, 9), (2, 13), (5, 10)]
-BRAIN_TRUST = ["Luke", "Terry", "Jack S", "Ryan N", "Mike W"]   # Jack→Jack S
+BRAIN_TRUST = ["Terry", "Jack S", "Ryan N", "Nick", "Hanson", "Matt"]   # updated 2026-05-14
 BACKNINE_EXCLUDE = {"Diego"}
 
 # Yinli stroke-index placeholder (1-18). Real SI would come from the course

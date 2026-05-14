@@ -2326,12 +2326,11 @@ function initFirebase() {
   }
 }
 
-// Brain trust per handbook §3 — Luke (chair), Terry (scramble chair), Jack
-// (Sanders), Ryan N (Nimmo), Mike W (Warford). When the admin hasn't manually
-// picked a scorer for a foursome, we default to the first brain-trust member
-// in this priority order, then fall back to lowest handicap. Easier to manage:
-// the brain trust knows the format, the handbook, and Luke can chase them.
-const BRAIN_TRUST_NAMES = ['Luke', 'Terry', 'Jack', 'Ryan N', 'Mike W'];
+// Brain trust — priority order for default scorer pick when the admin hasn't
+// manually chosen one. Falls back to lowest handicap. Last updated 2026-05-14.
+// Mirror this list in the mobile app's BRAIN_TRUST_NAMES (index.html) when
+// changing.
+const BRAIN_TRUST_NAMES = ['Terry', 'Jack S', 'Ryan N', 'Nick', 'Hanson', 'Matt'];
 
 function pickDefaultScorerId(playerIds) {
   if (!Array.isArray(playerIds) || !playerIds.length) return '';
