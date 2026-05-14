@@ -2581,13 +2581,22 @@ function _buildBackNineGroups(season, bundle){
   const build = (id, name, icon, playerNames, matches) => {
     const playerIds = playerNames.map(idForName).filter(Boolean);
     const scorer = _pickBackNineScorerId(playerIds);
+    // Resolve playerIds on each match too so downstream code (back-9 banner
+    // matcher) can match by ID instead of fragile name comparison — covers
+    // the case where a seed name ("John B") differs from the roster
+    // displayName ("John") after manual edits.
+    const matchesWithIds = matches.map(m => ({
+      ...m,
+      p1Id: idForName(m.p1),
+      p2Id: idForName(m.p2)
+    }));
     return {
       id, name, icon, playerNames, playerIds,
       scorerPlayerId: scorer.pid,
       scorerName: scorer.name,
       scorerFallback: scorer.fallback,
       scorerReason: scorer.reason,
-      matches
+      matches: matchesWithIds
     };
   };
 
@@ -4067,8 +4076,13 @@ function getActiveBackNineMatches(){
   const matches = [];
 
   foursome.matches.forEach(m => {
-    const idxA = players.findIndex(p => p && norm(p.name) === norm(m.p1));
-    const idxB = players.findIndex(p => p && norm(p.name) === norm(m.p2));
+    // Prefer playerId match — robust to displayName edits / aliases.
+    // Fall back to name match for legacy data without p1Id/p2Id.
+    let idxA = -1, idxB = -1;
+    if(m.p1Id) idxA = players.findIndex(p => p && String(p.playerId) === String(m.p1Id));
+    if(m.p2Id) idxB = players.findIndex(p => p && String(p.playerId) === String(m.p2Id));
+    if(idxA < 0) idxA = players.findIndex(p => p && norm(p.name) === norm(m.p1));
+    if(idxB < 0) idxB = players.findIndex(p => p && norm(p.name) === norm(m.p2));
     if(idxA < 0 || idxB < 0) return;
     const playerA = players[idxA];
     const playerB = players[idxB];
@@ -8376,7 +8390,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.75';
+const APP_VERSION = '5.76';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
