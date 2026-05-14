@@ -7590,7 +7590,9 @@ function renderDay2(){
             <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
           </div>
           <button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear" style="visibility:${hasGross?'visible':'hidden'}" aria-hidden="${hasGross?'false':'true'}">✕</button>
-          ${typeof gross==='number' && typeof meta.par==='number' ? `<span style="font-size:12px;font-weight:700;color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'};min-width:50px;text-align:right">${fmtToPar(gross - meta.par)}</span>` : ''}
+          ${(typeof gross==='number' && typeof meta.par==='number')
+            ? `<span style="font-size:12px;font-weight:700;color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'};min-width:50px;text-align:right;flex:0 0 50px">${fmtToPar(gross - meta.par)}</span>`
+            : `<span style="min-width:50px;flex:0 0 50px" aria-hidden="true"></span>`}
         </div>
         ${needsPutts ? `<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--line)">
           <span style="font-size:10px;color:var(--muted);min-width:32px">🃏 Putts</span>
@@ -8312,7 +8314,14 @@ function renderLeaderboard(){
     const rows = mpStatuses.map(m => {
       const s = m.status;
       let statusLbl, statusCls;
-      if(s.closed){ statusLbl = '🏆 ' + s.label; statusCls = 'mp-closed'; }
+      if(s.closed){
+        // Surface the winner's name alongside the closing score so the
+        // Leaderboard row reads "🏆 Matt · 2&1" — matches the dormie / lead
+        // branches and avoids a "who won?" ambiguity.
+        const winner = s.leader === 'a' ? m.playerA : m.playerB;
+        statusLbl = '🏆 ' + winner + ' · ' + s.label;
+        statusCls = 'mp-closed';
+      }
       else if(s.dormie){ const ldr = s.leader === 'a' ? m.playerA : m.playerB; statusLbl = '⚠ ' + ldr + ' · ' + s.label; statusCls = 'mp-dormie'; }
       else if(s.allSquare && s.played > 0){ statusLbl = '⚖ ' + s.label; statusCls = 'mp-square'; }
       else if(s.lead > 0){ const ldr = s.leader === 'a' ? m.playerA : m.playerB; statusLbl = ldr + ' · ' + s.label; statusCls = 'mp-lead'; }
@@ -8462,7 +8471,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.81';
+const APP_VERSION = '5.82';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

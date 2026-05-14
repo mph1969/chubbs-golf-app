@@ -153,11 +153,29 @@
     fmt('spoon_sf', 2, s.playoffs.spoon_sf);
   }
 
+  // Inject seeds ONLY — leaves r16 / cup_qf / plate_qf / etc. empty so a
+  // live scoring test starts clean. Use this instead of chalk/upsets when
+  // you actually want to score through the round; chalk pre-populates the
+  // saved bracket and triggers "Overwrite Mn?" prompts on first save.
+  function seedsOnly() {
+    const store = loadStore();
+    const season = ensureSeason(store);
+    season.playoffs.seeds = SEEDS.slice();
+    ['r16','cup_qf','plate_qf','cup_sf','plate_sf','cup_final','plate_final',
+     'shield_sf','shield_final','spoon_sf','spoon_final']
+      .forEach(k => delete season.playoffs[k]);
+    store.viewingSeasonId = 'season-4';
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    console.log('[Chubbs test] Seeds injected, R16 + downstream cleared. Score live to fill the bracket.');
+    tryRender();
+  }
+
   window.chubbsTest = {
     chalk: () => inject([0,0,0,0,0,0,0,0]),
     upsets: () => inject([0,1,0,0,1,0,1,0]),
     allUpsets: () => inject([1,1,1,1,1,1,1,1]),
     custom: (w) => inject(w),
+    seedsOnly: seedsOnly,
     status: () => {
       const store = loadStore();
       const season = store.seasons && store.seasons['season-4'];
@@ -182,6 +200,7 @@
   };
 
   console.log('[Chubbs test] Fixture loaded. Try:');
+  console.log('  chubbsTest.seedsOnly()     — inject seeds ONLY (clean for live test)');
   console.log('  chubbsTest.chalk()         — inject all-chalk R16 winners');
   console.log('  chubbsTest.upsets()        — M2/M5/M7 upsets');
   console.log('  chubbsTest.allUpsets()     — every lower seed wins');
@@ -189,5 +208,5 @@
   console.log('  chubbsTest.status()        — show local seeds + r16');
   console.log('  chubbsTest.bracketStatus() — show all saved bracket buckets');
   console.log('  chubbsTest.firebaseGroups()— list /events/{eid}/groups/ nodes');
-  console.log('  chubbsTest.clear()         — wipe and restore TBD');
+  console.log('  chubbsTest.clear()         — wipe seeds + bracket (full reset)');
 })();
