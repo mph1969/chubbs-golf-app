@@ -153,6 +153,34 @@
     fmt('spoon_sf', 2, s.playoffs.spoon_sf);
   }
 
+  // Fill any EMPTY R16 slots with chalk winners. Preserves any actually-
+  // saved Mn results so you can solo-test the back-9 swap: score 1-2
+  // foursomes live, save those Mn winners normally, then run this to fill
+  // the remaining matches with chalk → R16 hits 8/8 saved → back-9
+  // foursomes form → swap fires when you advance to hole 10.
+  function fillEmptyR16() {
+    const store = loadStore();
+    const season = ensureSeason(store);
+    if (!Array.isArray(season.playoffs.seeds) || season.playoffs.seeds.length < 16) {
+      console.error('[Chubbs test] no seeds — run chubbsTest.seedsOnly() first');
+      return;
+    }
+    if (!Array.isArray(season.playoffs.r16)) {
+      season.playoffs.r16 = Array.from({length:8}, () => ({winner:null,result:null}));
+    }
+    let filled = 0, preserved = 0;
+    PAIRS.forEach((p, i) => {
+      const cur = season.playoffs.r16[i];
+      if (cur && cur.winner) { preserved++; return; }
+      season.playoffs.r16[i] = { winner: SEEDS[p[0]], result: '3&2' };
+      filled++;
+    });
+    localStorage.setItem(STORE_KEY, JSON.stringify(store));
+    console.log('[Chubbs test] Filled ' + filled + ' empty R16 slot(s); preserved ' + preserved + ' existing save(s).');
+    console.log('[Chubbs test] R16 total saved: ' + season.playoffs.r16.filter(m => m && m.winner).length + '/8 — back-9 swap should now fire on hole 10+.');
+    tryRender();
+  }
+
   // Inject seeds ONLY — leaves r16 / cup_qf / plate_qf / etc. empty so a
   // live scoring test starts clean. Use this instead of chalk/upsets when
   // you actually want to score through the round; chalk pre-populates the
@@ -176,6 +204,7 @@
     allUpsets: () => inject([1,1,1,1,1,1,1,1]),
     custom: (w) => inject(w),
     seedsOnly: seedsOnly,
+    fillEmptyR16: fillEmptyR16,
     status: () => {
       const store = loadStore();
       const season = store.seasons && store.seasons['season-4'];
@@ -201,6 +230,7 @@
 
   console.log('[Chubbs test] Fixture loaded. Try:');
   console.log('  chubbsTest.seedsOnly()     — inject seeds ONLY (clean for live test)');
+  console.log('  chubbsTest.fillEmptyR16()  — chalk-fill missing R16 (preserves saves) → unlock back-9');
   console.log('  chubbsTest.chalk()         — inject all-chalk R16 winners');
   console.log('  chubbsTest.upsets()        — M2/M5/M7 upsets');
   console.log('  chubbsTest.allUpsets()     — every lower seed wins');

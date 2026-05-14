@@ -3072,6 +3072,25 @@ function showExportConfirmation(action) {
         <div>📊 Leaderboard: ${opts.leaderboardAccess || 'open'}</div>
       </div>
 
+      ${(() => {
+        // Surface the playoffs payload at confirmation time so the user knows
+        // whether seeds are about to ship with the bundle. Quietly omitted
+        // before, which made "Why aren't there seeds on mobile?" hard to debug.
+        const pl = bundle.playoffs;
+        const ok = pl && Array.isArray(pl.seeds) && pl.seeds.length;
+        if(ok){
+          const dropped = (pl.droppedFromTop16 && pl.droppedFromTop16.length)
+            ? ` · dropped from top-16: <strong>${pl.droppedFromTop16.join(', ')}</strong>`
+            : '';
+          return `<div style="background:rgba(214,176,90,0.08);border:1px solid rgba(214,176,90,0.3);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:#f4efe2">
+            🏆 <strong style="color:var(--gold2,#c9a84c)">Playoffs:</strong> ${pl.seeds.length}/16 seeds · ${(pl.stage || 'r16').toUpperCase()} stage${dropped}
+          </div>`;
+        }
+        return `<div style="background:rgba(245,166,35,0.08);border:1px solid rgba(245,166,35,0.35);border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:11px;color:#f5a623">
+          🏆 <strong>Playoffs: NOT included.</strong> Toggle Section 6 (Playoff Setup) on if this event should carry locked seeds for the matchplay banner.
+        </div>`;
+      })()}
+
       <div style="font-size:11px;font-weight:700;color:var(--gold2,#c9a84c);margin-bottom:6px">Scramble Teams (${teams.length})</div>
       ${teamRows || '<div style="font-size:11px;color:#a8b8ad">None</div>'}
 
