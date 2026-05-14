@@ -181,6 +181,10 @@
     .bt-tbd{font-size:10px;color:var(--muted);opacity:0.55;font-style:italic}
     .bt-cell.bt-champion{background:linear-gradient(135deg,rgba(214,176,90,0.16),rgba(255,235,170,0.04));border:1px solid rgba(214,176,90,0.45);display:flex;align-items:center;justify-content:center;text-align:center;min-height:74px}
     .bt-cell.bt-champion .bt-name{font-size:13px}
+    .ladder-title{font-size:13px;font-weight:800;color:var(--gold2);margin:18px 4px 6px;letter-spacing:0.02em}
+    .ladder-title.first{margin-top:4px}
+    .ladder-sub{font-size:10px;color:var(--muted);font-weight:600;margin-left:6px}
+    .bt-cell .bt-from{font-size:9px;color:var(--muted);font-style:italic;margin-top:2px}
     /* v5.67: Match-play list rows on the Leaderboard tab */
     .mp-lb-list{display:grid;gap:4px}
     .mp-lb-row{display:grid;grid-template-columns:36px 1fr auto;gap:8px;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;font-size:12px}
@@ -2305,18 +2309,35 @@ function appendCurrentEventToActiveSeason(){
 }
 
 // v5.68: horizontal bracket tree shown at the top of the Standings tab.
-// 5 columns: R16 (8) → QF (4) → SF (2) → Final (1) → Champion. Each downstream
-// column derives feeders from the saved winners of the prior round; "TBD"
-// shows until upstream resolves. Renders nothing when seeds aren't locked.
-// Scrolls horizontally on phone widths via the wrapper's overflow-x.
+// Renders the full §11 4-tier cascade as four stacked ladders:
+//   🏆 Cup    — R16 winners → Cup QF → Cup SF → Cup Final → Champion
+//   🍽️ Plate  — R16 losers  → Plate QF → Plate SF → Plate Final
+//   🛡️ Shield — Cup QF losers → Shield SF → Shield Final
+//   🥄 Spoon  — Plate QF losers → Spoon SF → Spoon Final
+// Each ladder is independently horizontally scrollable on phone widths.
+// Renders nothing when seeds aren't locked. Per-cell content shows the
+// actual feeder names where decided (winner/loser of upstream matches),
+// "TBD" otherwise.
 function renderBracketTree(season){
   if(!season || !season.playoffs) return '';
   const seeds = Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
   if(!seeds || seeds.length < 16) return '';
   const pd = season.playoffs;
-  const r16 = pd.r16 || [], cupQf = pd.cup_qf || [], cupSf = pd.cup_sf || [], cupFinal = pd.cup_final || [];
+  const r16        = pd.r16          || [];
+  const cupQf      = pd.cup_qf       || [];
+  const cupSf      = pd.cup_sf       || [];
+  const cupFinal   = pd.cup_final    || [];
+  const plateQf    = pd.plate_qf     || [];
+  const plateSf    = pd.plate_sf     || [];
+  const plateFinal = pd.plate_final  || [];
+  const shieldSf   = pd.shield_sf    || [];
+  const shieldFinal= pd.shield_final || [];
+  const spoonSf    = pd.spoon_sf     || [];
+  const spoonFinal = pd.spoon_final  || [];
   const PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]]; // v5.62 visual order
 
+  // Standard two-name match cell, optionally with seed tags + tall mode for
+  // downstream columns where the cell stretches to align with two feeders.
   const cell = (p1, p2, winner, result, seedA, seedB, opts) => {
     const cls1 = winner === p1 ? 'win' : (winner ? 'loss' : '');
     const cls2 = winner === p2 ? 'win' : (winner ? 'loss' : '');
@@ -2331,46 +2352,140 @@ function renderBracketTree(season){
     </div>`;
   };
 
-  const r16Col = PAIRS.map((pair, i) => {
-    const m = r16[i] || {};
-    return cell(seeds[pair[0]], seeds[pair[1]], m.winner, m.result, pair[0]+1, pair[1]+1);
-  }).join('');
+  // Single-name "feeder" cell — used for Plate's R16-losers column and for
+  // Shield/Spoon's QF-losers columns. Shows the name once it's known, or a
+  // TBD placeholder with a "from MN" hint until the upstream match resolves.
+  const feederCell = (name, fromLabel) => {
+    if(name) return `<div class="bt-cell"><div class="bt-name">${escHtml(name)}</div><div class="bt-from">from ${fromLabel}</div></div>`;
+    return `<div class="bt-cell"><div class="bt-tbd">TBD</div><div class="bt-from">loser of ${fromLabel}</div></div>`;
+  };
 
-  const qfCol = [0,1,2,3].map(qi => {
+  const loserOf = (match, p1, p2) => {
+    if(!match || !match.winner) return null;
+    if(match.winner === p1) return p2;
+    if(match.winner === p2) return p1;
+    return null;
+  };
+
+  // R16-loser by match index (0..7) — used for Plate QF feeders + Spoon trace
+  const r16Loser = (i) => loserOf(r16[i] || {}, seeds[PAIRS[i][0]], seeds[PAIRS[i][1]]);
+
+  // Cup QF loser — feeds Shield SF
+  const cupQfLoser = (qi) => {
+    const m = cupQf[qi] || {};
     const w1 = (r16[qi*2] || {}).winner || null;
     const w2 = (r16[qi*2+1] || {}).winner || null;
-    const m = cupQf[qi] || {};
-    return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
-  }).join('');
+    return loserOf(m, w1, w2);
+  };
 
-  const sfCol = [0,1].map(si => {
-    const w1 = (cupQf[si*2] || {}).winner || null;
-    const w2 = (cupQf[si*2+1] || {}).winner || null;
-    const m = cupSf[si] || {};
-    return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
-  }).join('');
+  // Plate QF loser — feeds Spoon SF
+  const plateQfLoser = (qi) => {
+    const m = plateQf[qi] || {};
+    const l1 = r16Loser(qi*2);
+    const l2 = r16Loser(qi*2+1);
+    return loserOf(m, l1, l2);
+  };
 
-  const finalM = cupFinal[0] || {};
-  const w1 = (cupSf[0] || {}).winner || null;
-  const w2 = (cupSf[1] || {}).winner || null;
-  const finalCell = cell(w1, w2, finalM.winner, finalM.result, null, null, {tall:true});
-
-  const champion = finalM.winner;
-  const championCell = champion
-    ? `<div class="bt-cell bt-champion"><div class="bt-name win">🏆 ${escHtml(champion)}</div></div>`
+  // Champion (trophy) cell renderer
+  const trophyCell = (icon, name) => name
+    ? `<div class="bt-cell bt-champion"><div class="bt-name win">${icon} ${escHtml(name)}</div></div>`
     : `<div class="bt-cell bt-champion"><div class="bt-tbd">TBD</div></div>`;
 
-  return `
+  // Renders a single ladder given an array of {head, cells[]} columns.
+  const renderLadder = (title, sub, firstFlag, columns) => `
+    <div class="ladder-title${firstFlag ? ' first' : ''}">${title}${sub ? `<span class="ladder-sub">${sub}</span>` : ''}</div>
     <div class="bracket-tree-wrap">
       <div class="bracket-tree">
-        <div class="bt-col"><div class="bt-head">R16 · May</div><div class="bt-cells">${r16Col}</div></div>
-        <div class="bt-col"><div class="bt-head">QF · May</div><div class="bt-cells">${qfCol}</div></div>
-        <div class="bt-col"><div class="bt-head">SF · June</div><div class="bt-cells">${sfCol}</div></div>
-        <div class="bt-col"><div class="bt-head">Final · June</div><div class="bt-cells">${finalCell}</div></div>
-        <div class="bt-col"><div class="bt-head">🏆 Champion</div><div class="bt-cells">${championCell}</div></div>
+        ${columns.map(c => `<div class="bt-col"><div class="bt-head">${c.head}</div><div class="bt-cells">${c.cells.join('')}</div></div>`).join('')}
       </div>
-    </div>
-    <div class="small tight" style="color:var(--muted);text-align:center;margin:4px 0 12px">← swipe to see later rounds →</div>`;
+    </div>`;
+
+  // ── 🏆 Cup ladder ─────────────────────────────────────────────────────
+  const cupCols = [
+    { head: 'R16 · May', cells: PAIRS.map((pair, i) => {
+        const m = r16[i] || {};
+        return cell(seeds[pair[0]], seeds[pair[1]], m.winner, m.result, pair[0]+1, pair[1]+1);
+      }) },
+    { head: 'Cup QF · May', cells: [0,1,2,3].map(qi => {
+        const w1 = (r16[qi*2] || {}).winner || null;
+        const w2 = (r16[qi*2+1] || {}).winner || null;
+        const m = cupQf[qi] || {};
+        return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
+      }) },
+    { head: 'Cup SF · June', cells: [0,1].map(si => {
+        const w1 = (cupQf[si*2] || {}).winner || null;
+        const w2 = (cupQf[si*2+1] || {}).winner || null;
+        const m = cupSf[si] || {};
+        return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
+      }) },
+    { head: 'Cup Final · June', cells: [(() => {
+        const m = cupFinal[0] || {};
+        const w1 = (cupSf[0] || {}).winner || null;
+        const w2 = (cupSf[1] || {}).winner || null;
+        return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
+      })()] },
+    { head: '🏆 Champion', cells: [trophyCell('🏆', (cupFinal[0] || {}).winner)] }
+  ];
+
+  // ── 🍽️ Plate ladder ───────────────────────────────────────────────────
+  const plateCols = [
+    { head: 'R16 Losers · May', cells: [0,1,2,3,4,5,6,7].map(i => feederCell(r16Loser(i), `M${i+1}`)) },
+    { head: 'Plate QF · May', cells: [0,1,2,3].map(qi => {
+        const m = plateQf[qi] || {};
+        return cell(r16Loser(qi*2), r16Loser(qi*2+1), m.winner, m.result, null, null, {tall:true});
+      }) },
+    { head: 'Plate SF · June', cells: [0,1].map(si => {
+        const w1 = (plateQf[si*2] || {}).winner || null;
+        const w2 = (plateQf[si*2+1] || {}).winner || null;
+        const m = plateSf[si] || {};
+        return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
+      }) },
+    { head: 'Plate Final · June', cells: [(() => {
+        const m = plateFinal[0] || {};
+        const w1 = (plateSf[0] || {}).winner || null;
+        const w2 = (plateSf[1] || {}).winner || null;
+        return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
+      })()] },
+    { head: '🍽️ Plate Winner', cells: [trophyCell('🍽️', (plateFinal[0] || {}).winner)] }
+  ];
+
+  // ── 🛡️ Shield ladder (4 cols — no QF round, Cup QF losers go straight to SF)
+  const shieldCols = [
+    { head: 'Cup QF Losers', cells: [0,1,2,3].map(qi => feederCell(cupQfLoser(qi), `Cup QF${qi+1}`)) },
+    { head: 'Shield SF · June', cells: [0,1].map(si => {
+        const m = shieldSf[si] || {};
+        return cell(cupQfLoser(si*2), cupQfLoser(si*2+1), m.winner, m.result, null, null, {tall:true});
+      }) },
+    { head: 'Shield Final · June', cells: [(() => {
+        const m = shieldFinal[0] || {};
+        const w1 = (shieldSf[0] || {}).winner || null;
+        const w2 = (shieldSf[1] || {}).winner || null;
+        return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
+      })()] },
+    { head: '🛡️ Shield Winner', cells: [trophyCell('🛡️', (shieldFinal[0] || {}).winner)] }
+  ];
+
+  // ── 🥄 Spoon ladder (4 cols — same shape as Shield)
+  const spoonCols = [
+    { head: 'Plate QF Losers', cells: [0,1,2,3].map(qi => feederCell(plateQfLoser(qi), `Plate QF${qi+1}`)) },
+    { head: 'Spoon SF · June', cells: [0,1].map(si => {
+        const m = spoonSf[si] || {};
+        return cell(plateQfLoser(si*2), plateQfLoser(si*2+1), m.winner, m.result, null, null, {tall:true});
+      }) },
+    { head: 'Spoon Final · June', cells: [(() => {
+        const m = spoonFinal[0] || {};
+        const w1 = (spoonSf[0] || {}).winner || null;
+        const w2 = (spoonSf[1] || {}).winner || null;
+        return cell(w1, w2, m.winner, m.result, null, null, {tall:true});
+      })()] },
+    { head: '🥄 Spoon Winner', cells: [trophyCell('🥄', (spoonFinal[0] || {}).winner)] }
+  ];
+
+  return renderLadder('🏆 Cup',    'R16 winners path',     true,  cupCols)
+       + renderLadder('🍽️ Plate',  'R16 losers path',      false, plateCols)
+       + renderLadder('🛡️ Shield', 'Cup QF losers path',   false, shieldCols)
+       + renderLadder('🥄 Spoon',  'Plate QF losers path', false, spoonCols)
+       + `<div class="small tight" style="color:var(--muted);text-align:center;margin:8px 0 12px">← swipe each ladder to see later rounds →</div>`;
 }
 
 function renderSeason(){
@@ -7919,7 +8034,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.69';
+const APP_VERSION = '5.70';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
