@@ -935,7 +935,7 @@ const DEFAULT_STATE = {
     stampCounter:0,
     digitalDeal:null
   },
-  ui:{tab:'setup', locationLang:'zh', courseEditorTarget:'day1', day1Revealed:false, adminTab:'players'},
+  ui:{tab:'setup', locationLang:'zh', courseEditorTarget:'day1', day1Revealed:false, adminTab:'players', lastSubTab:{}},
   // My Card tab (v5.43): personal real-time scoring panel.
   // manualSlot is used only in non-imported (manual) mode where there's no
   // "Playing as" identity to bind — player picks themselves once.
@@ -5235,7 +5235,21 @@ function adminBumpStartingHole(kind, lid, delta){
   if(next > 18) next = 1;
   adminSetStartingHole(kind, lid, next);
 }
-function setTab(tab){ state.ui.tab = tab; saveState(); renderAll(); }
+function setTab(tab){
+  state.ui.tab = tab;
+  // Remember which sub-section was last selected within each top-level
+  // group, so toggling Round → Leaderboard → Round restores Stableford
+  // instead of bouncing back to Scramble (whichever sections[0] is).
+  try {
+    const groups = _getNavGroups();
+    const owner = groups.find(g => g.sections.indexOf(tab) >= 0);
+    if(owner){
+      state.ui.lastSubTab = state.ui.lastSubTab || {};
+      state.ui.lastSubTab[owner.id] = tab;
+    }
+  } catch(e){}
+  saveState(); renderAll();
+}
 
 function applyRosterName(slot, value){
   const found = ROSTER.find(r => r.name.toLowerCase() === String(value || '').trim().toLowerCase());
@@ -6015,6 +6029,23 @@ const SUB_TAB_LABELS = {
   season:'Season', playoffs:'Playoffs',
 };
 
+// Sub-tab label resolver — on matchplay events (playoff seeds present in the
+// active season), the Day 2 sub-pill flips from "Stableford" to "Match-Play"
+// so the active brain-trust sees the format they're scoring, not the
+// underlying point system. Falls back to SUB_TAB_LABELS for everything else.
+function subTabLabel(sectionId){
+  if(sectionId === 'day2'){
+    try {
+      const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
+      const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
+      if(season && season.playoffs && Array.isArray(season.playoffs.seeds) && season.playoffs.seeds.length){
+        return 'Match-Play';
+      }
+    } catch(e){}
+  }
+  return SUB_TAB_LABELS[sectionId] || sectionId;
+}
+
 function renderTabs(){
   // About page is a "modal" — hides the nav chrome until user taps Back.
   if(state.ui.tab === 'about'){
@@ -6041,7 +6072,7 @@ function renderTabs(){
   const subEl = document.getElementById('sub-tabs');
   if(activeGroup && activeGroup.sections.length > 1){
     subEl.innerHTML = activeGroup.sections.map(s =>
-      `<button class="seg-pill ${state.ui.tab===s?'active':''}" onclick="setTab('${s}')">${SUB_TAB_LABELS[s] || s}</button>`
+      `<button class="seg-pill ${state.ui.tab===s?'active':''}" onclick="setTab('${s}')">${subTabLabel(s)}</button>`
     ).join('');
   } else {
     subEl.innerHTML = '';
@@ -6057,7 +6088,14 @@ function setGroupTab(gid){
   const groups = _getNavGroups();
   const g = groups.find(x => x.id === gid);
   if(g && g.sections.length){
-    state.ui.tab = g.sections[0];
+    // Restore the last sub-tab the user had within this group, if it's
+    // still valid (a previously-visible section that's currently hidden
+    // — e.g. My Card off-event — bounces back to sections[0]).
+    const remembered = state.ui.lastSubTab && state.ui.lastSubTab[gid];
+    const target = (remembered && g.sections.indexOf(remembered) >= 0)
+      ? remembered
+      : g.sections[0];
+    state.ui.tab = target;
     saveState();
     renderAll();
   }
@@ -7603,8 +7641,8 @@ function renderDay2(){
           </div>
           <button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear" style="visibility:${hasPutts?'visible':'hidden'}" aria-hidden="${hasPutts?'false':'true'}">✕</button>
         </div>` : ''}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:11px;color:var(--muted)">
-          <span>${hasGross ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${shots?' · +'+shots+' shots':''}` : ''}</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:11px;color:var(--muted);min-height:32px">
+          <span>${hasGross ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${shots?' · +'+shots+' shots':''}` : '<span aria-hidden="true">&nbsp;</span>'}</span>
           <button class="btn slim spenny-btn" style="font-size:11px;padding:6px 12px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter double-par (max allowed score per Chubbs rules) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
         </div>
       </div>
@@ -7676,15 +7714,22 @@ function renderDay2(){
       const tagLabel = m.matchLabel || `M${m.matchNum}`;
       const seedAHtml = (m.seedA != null) ? `<span class="seed">#${m.seedA}</span> ` : '';
       const seedBHtml = (m.seedB != null) ? ` <span class="seed">#${m.seedB}</span>` : '';
+      // Reserve the chip + outcome slots even when they're empty. Without this,
+      // the chip vanishing between pre-hole and post-hole states would shift
+      // the score cards up by ~33px mid-tap; the outcome appearing would
+      // shift the next match container down by ~28px. Fixed slots keep every
+      // +/− button at the same screen position throughout score-entry.
+      const chipSlot = chipHtml || `<div class="mc-stroke" style="visibility:hidden" aria-hidden="true">&nbsp;</div>`;
+      const outcomeSlot = outcomeHtml || `<div class="mc-outcome" style="visibility:hidden" aria-hidden="true">&nbsp;</div>`;
       return `<div class="match-container">
         <div class="mc-head">
           <span class="mc-tag">${tagLabel}</span>
           <span class="mc-pair">${seedAHtml}${escHtml(m.playerA)} <span class="vs">vs</span> ${escHtml(m.playerB)}${seedBHtml}</span>
           <span class="mc-status ${statusCls}">${statusLbl}</span>
         </div>
-        ${chipHtml}
+        ${chipSlot}
         <div class="mc-grid">${playerCards[idxA]}${playerCards[idxB]}</div>
-        ${outcomeHtml}
+        ${outcomeSlot}
       </div>`;
     }).filter(Boolean).join('\n');
 
@@ -8471,7 +8516,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.82';
+const APP_VERSION = '5.83';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
