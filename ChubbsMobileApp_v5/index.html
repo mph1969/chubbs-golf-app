@@ -4080,8 +4080,38 @@ function getActiveBackNineMatches(){
   const players = currentPlayers('stableford') || [];   // back-9 foursome's 4
   if(players.length < 2) return [];
   const course = activeCourse('day2');
-  const holes = state.stableford && state.stableford.holes;
+  let holes = state.stableford && state.stableford.holes;
   if(!course || !course.holes || !holes) return [];
+  // ── Read-side hydration (Tier 2c-4b) ───────────────────────────────────
+  // Non-scorer phones in the back-9 foursome have an empty local
+  // state.stableford.holes for the back-9 slice. Pull the back-9 scorer's
+  // grosses from SYNC.remoteGroups[foursome.id] when present and overlay
+  // them where local data is missing. Remote player order may differ from
+  // local — map via playerId so re-orderings don't corrupt the read.
+  try {
+    const remote = (typeof SYNC !== 'undefined' && SYNC && SYNC.remoteGroups)
+      ? SYNC.remoteGroups[foursome.id] : null;
+    if(remote && Array.isArray(remote.holes) && Array.isArray(remote.players) && remote.half === 'back9'){
+      const remoteIdxFor = (localIdx) => {
+        const lp = players[localIdx];
+        const lpid = lp ? String(lp.playerId || '') : '';
+        if(!lpid) return -1;
+        return remote.players.findIndex(rp => rp && String(rp.playerId || '') === lpid);
+      };
+      holes = holes.map((h, hi) => {
+        if(hi < 9 || hi > 17) return h;
+        const rh = remote.holes[hi];
+        if(!rh || !Array.isArray(rh.gross)) return h;
+        const localGross = (h && Array.isArray(h.gross)) ? h.gross : [];
+        const mergedGross = players.map((p, i) => {
+          if(localGross[i] != null) return localGross[i];
+          const ri = remoteIdxFor(i);
+          return (ri >= 0 && rh.gross[ri] != null) ? rh.gross[ri] : null;
+        });
+        return Object.assign({}, h || {}, { gross: mergedGross });
+      });
+    }
+  } catch(e){}
   // Back 9 = course holes 9..17 (0-indexed). 9-hole match window.
   const matchHoleIdxs = [9, 10, 11, 12, 13, 14, 15, 16, 17];
   const norm = s => String(s || '').trim().toUpperCase();
@@ -8402,7 +8432,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.77';
+const APP_VERSION = '5.78';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
