@@ -1,159 +1,129 @@
-# Session Notes — last touched 2026-05-11
+# Session Notes — last touched 2026-05-14
 
-State at break. Pick up from any of the **OPEN ITEMS** below.
+State at end of day. Pick up from **OPEN ITEMS** below.
 
-## Everything shipped so far (v5.46 → v5.59)
+## Today's session (2026-05-14) — admin parser + Tier 2c shipped end-to-end
 
 | Version | What |
 |---|---|
-| v5.46 | Course-library audit vs Terry's S4 sheet — Birds par/SI fixed, Tangspring + Qingyuan loaded |
-| v5.47 | Match-play engine helpers — `matchPlayStrokes`, `matchPlayHoleWinner`, `matchPlayStatus` |
-| v5.48 | Match-play overlay banner on score view |
-| v5.49 | Auto-push closed match to bracket (admin one-tap) |
-| v5.50 | Per-hole net comparison hint |
-| v5.51 | §11 tiebreak surface when ALL SQUARE thru 9 |
-| v5.52 | Hide Playoffs tab when not relevant + emoji cleanup |
-| v5.53 | 4-tab nav restructure (Round / Leaderboard / Standings / Setup) + seg-pills |
-| v5.54 | Scorer-aware match-play banner (designated scorer flow) |
-| v5.55 | Default-scorer rule (brain trust → lowest hcp) + playoff intro card + sw.js cosmetic fix |
-| v5.56 | Header condensation + Setup → Admin label |
-| v5.57 | **Tiebreak rule flip** — round-avg per Terry 2026-05-10 (matches his spreadsheet) |
-| v5.58 | **Freeze matchplay status at close** — bug fix from readiness audit (A4) |
-| v5.59 | **Honeypot module + paths fully removed** — was v5.41 fun-gimmick, net -474 lines |
+| Admin | WeChat parser overhaul + roster identity layer (aliases, Levenshtein matcher, stable playerIds, Merge-into-existing modal UI) |
+| Admin | Parser T1 — FRI/SAT/SUN labels, Matchplay/MP keyword, 12h→24h time, inline handicaps, status synonyms, sender-prefix skip |
+| Admin | Parser T2 — scramble team blocks, stableford groups, Palm A/B (Lychee/Lake/River) |
+| Admin | Parser T3 — challenge-hole assignments for both days |
+| Admin | Parser T5 — playoff-event harvest (bracket lines + Fireball Cup roster) |
+| Admin | Date parser fix — `(?!\d)` lookahead to stop eating year digits; prefer dd-dd-month over month-first |
+| Admin | From Bracket name reconciliation uses `findPlayerByAnyName` |
+| Admin | 3-Putt Poker default flipped to OFF in `buildEventBundle` |
+| Admin | Clear Setup preserves roster + cloud data (was nuking both silently) |
+| Admin | Push-confirmation modal surfaces playoffs status ("🏆 Playoffs: 16/16 seeds" or "NOT included") |
+| v5.69 | Bracket-tree QF/SF/Final align to R16 midpoints via flex space-around |
+| v5.70 | 4 stacked ladders rendered (Cup / Plate / Shield / Spoon) |
+| v5.71 | Compact lower-tier ladders + hide until upstream results land |
+| v5.72 | Back-9 Foursomes card on Standings tab + brain-trust scorer rule |
+| v5.73 | Brain trust order updated: Terry → Jack S → Ryan N → Nick → Hanson → Matt |
+| v5.74 | **Tier 2c-1** — score view auto-swaps to back-9 foursome on hole 10+ |
+| v5.75 | **Tier 2c-2** — back-9 matchplay banner with Cup QF + Plate QF status |
+| v5.76 | Back-9 banner matches by playerId (robust to displayName edits/aliases) |
+| v5.77 | **Tier 2c-4** — Firebase sync writes back-9 to its own group node with `half:'back9'` |
+| v5.78 | **Tier 2c-4b** — back-9 banner reads via Firebase for non-scorer phones |
+| v5.79 | Pre-hole strokes chip always shows; match-container robust to null seeds |
+| v5.80 | Score number font bumped to match +/− buttons |
+| v5.81 | Leaderboard R16 status case-insensitive lookup |
+| v5.82 | Stepper +/− no-shift; Leaderboard closed-match shows winner name; `chubbsTest.seedsOnly()` |
+| v5.83 | Sub-tab memory; "Match-Play" label on day2 when seeds locked; tap-target stability for chip/outcome slots |
+| v5.84 | Sub-tab memory snapshot on group switch (fixes v5.83 missed-path bug) |
 
-Plus QA harness (`qa/season4_qa.py`, `qa/playoff_sim.py`, `qa/matchplay_engine.py`), Season 3 extractor (`extract_season3.py`), WeChat blast draft (`NewFeatures/wechat-blast-may23-playoffs.md`), and v5.52 UI plan doc.
+Plus:
+- `qa/r16_to_qf_sim.py` — front-9 → back-9 transition harness, 3 scenarios (chalk / all_square_m1 / mixed_upsets), bracket save-state + cascade invariant assertions. 3/3 pass.
+- `qa/back9_card_fixture.js` — DevTools console fixture exposing `chubbsTest.{seedsOnly, chalk, upsets, allUpsets, custom, fillEmptyR16, status, bracketStatus, firebaseGroups, clear}`
+- Roster seeds: PENGLEI / PAUL / DUSTIN added to `baseRosterData`, handicap refresh for the May 23 team draft, stray RYAN merged into RYAN N via migration
 
-## Validation status
+## Validation status (post-2026-05-14)
 
 | Layer | Status |
 |---|---|
-| Stableford scoring engine | ✅ 211/212 S3 player-events match Terry's spreadsheet (1 diff is Terry's transcription error: Jack/Oct/Mountain shows 24 in Results sheet but his own hole-by-hole PTS row sums to 35, matching app) |
-| Match-play engine | ✅ 11/11 sanity tests pass (qa/matchplay_engine.py) — includes 3 freeze tests added in v5.58 |
-| Playoff bracket cascade | ✅ Cup/Plate/Shield/Spoon resolves cleanly under chalk + all-upsets (qa/playoff_sim.py) |
-| Seeding tiebreak (round-avg) | ✅ Matches Terry's spreadsheet exactly: Dustin #7, Terry #8 |
-| Pre-event readiness audit | ✅ 8 checks ran; 1 bug found and fixed in v5.58 |
-| Firebase rules + indexOn | ⏳ User publishes the rules (see below) |
-
-## Pre-event readiness audit findings (2026-05-10)
-
-| # | Check | Result |
-|---|---|---|
-| A1 | Admin bundle build sets scorerPlayerId correctly | ✅ Clean |
-| A2 | Mobile import → matchplay banner activation | ✅ Clean |
-| A3 | Designated scorer header correctness | ✅ (cosmetic note: admin masterMode always sees "🎯 You're the scorer" even when not the actual scorer — refine later) |
-| A4 | Save to bracket round-trip | ✅ **Bug found + fixed in v5.58** — match-play label drift after close |
-| A5 | Cascade auto-population after R16 saves | ✅ Clean |
-| A6 | Hero subtitle + sub-pill at narrow widths | ✅ (cosmetic note: subtitle could ellipsize at 360px on long course names — defer to dry-run feedback) |
-| A7 | Date-based gates | ✅ Clean |
-| A8 | Tiebreak rule (round-avg) applied | ✅ Confirmed in both aggregateSeason + _poTop16 |
+| Stableford scoring engine | ✅ 211/212 S3 player-events match Terry's spreadsheet |
+| Match-play engine | ✅ 11/11 sanity tests pass (qa/matchplay_engine.py) |
+| R16 + back-9 reshuffle math | ✅ 3/3 scenarios pass (qa/r16_to_qf_sim.py) |
+| Cascade invariants (cup_qf winner ∈ R16 winners; plate_qf winner ∈ R16 losers) | ✅ asserted by harness |
+| Pre-event readiness audit (2026-05-10) | ✅ A1–A8 done, A4 bug fixed in v5.58 |
+| Firebase rules + indexOn | ⏳ User publishes (still pending — see below) |
+| End-to-end dry-run on phone w/ v5.84 | ⏳ Pending; v5.83 + v5.84 dry-run confirmed sub-tab memory works |
 
 ## OPEN ITEMS — pick up here
 
-### 1. Lock playoff seeds via admin tool
-Final participation list arriving today. Use chubbs-admin.netlify.app:
-- Load May Yinli event config
-- Mark withdrawals (Mike W / Diego / Anthony / others as needed)
-- Run "Lock Playoff Seeds"
-- Push to Firebase
+### 1. Send WeChat blast (~May 16 — 2 days)
+Draft in `NewFeatures/wechat-blast-may23-playoffs.md`. Attach 2-3 screenshots from dry-run.
 
-Default scorer rule auto-fills brain-trust-or-lowest-hcp per foursome — admin can override per group.
+### 2. Publish Firebase rules
+Paste in Firebase Console → Realtime Database → Rules (rules JSON in `docs/firebase-rules.md`).
 
-### 2. Publish Firebase rules (5 min)
-Paste this in Firebase Console → Realtime Database → Rules:
+### 3. Final phone dry-run before May 23
+- Multi-phone test: at least 2 devices loading the same event as different players
+- Verify Firebase sync of back-9 group nodes across phones
+- Stress-test: enter through hole 18 + save all Cup QF + Plate QF results
+- Verify Standings tab bracket tree updates live as results land
 
-```json
-{
-  "rules": {
-    "events": {
-      ".read": true,
-      ".indexOn": "bundle/_publishedAt",
-      "$eventId": {
-        ".write": true
-      }
-    },
-    "admin": {
-      ".read": true,
-      ".write": true
-    }
-  }
-}
-```
+### 4. Production push of May 23 event (LIVE flag, not TEST)
+Currently testing with "(TEST) May Chubbs at Yinli" event. Day-of: switch admin Event Mode → LIVE EVENT, push fresh.
 
-Effect: silences indexOn warning + removes /chubbs honeypot paths from rule surface. Existing /chubbs/* data can be deleted from Data tab (cosmetic).
+## Deferred to post-May 23
 
-### 3. Send WeChat blast (~May 16)
-Draft in `NewFeatures/wechat-blast-may23-playoffs.md`. Attach 2-3 screenshots from dry-run. Send to brain trust 1 week before May 23.
-
-### 4. Dry-run on phone
-Once seeds are locked + bundle pushed:
-- Pull-to-refresh app to v5.59+
-- Set up fake foursome with seeded names (Matt D + Andy + Nick + Jamie covers M1 + M8)
-- Enter scores → matchplay banner appears
-- Force a match close → save to bracket
-- Force ALL SQUARE thru 9 → tiebreak surface
-
-If anything looks off, flag — most likely areas are visual layout at narrow widths and any first-time scorer-mode confusion.
+- Mobile-side event-header playoffs indicator chip ("🏆 Playoffs locked · 16 seeds") — proposed for load-side mistake protection
+- John B / Mike H / case sensitivity edge cases in roster (the JOHN-with-hcp-1 quirk)
+- Bracket-via-Firebase sync (would remove admin-re-push friction)
+- Twosome detection
+- S3 history bake-in
+- Auto-Register + Auto-Load (NewFeatures/auto-register-and-auto-load-spec.md)
 
 ## Useful copy-paste snippets
 
-### Inject test playoff seeds (browser console, dry-run path)
-```javascript
-const store = JSON.parse(localStorage.getItem('chubbs_seasons_v1') || '{}');
-if (!store.seasons) store.seasons = {};
-if (!store.seasons['season-4']) store.seasons['season-4'] = { id:'season-4', name:'Season 4 (2025–2026)', events:[], status:'active' };
-store.seasons['season-4'].playoffs = {
-  seeds: ['Matt D','Nick','Jordan','George','Ryan N','Leigh','Dustin','Terry','Paul','John','Hanson','Kevin','Jack','Ricardo','Jamie','Andy'],
-  seededAt: '2026-05-11'
-};
-store.viewingSeasonId = 'season-4';
-localStorage.setItem('chubbs_seasons_v1', JSON.stringify(store));
-localStorage.setItem('cpi_master', '1');
-location.reload();
-```
-(Note: Dustin at #7, Terry at #8 — matches Terry's spreadsheet under v5.57 round-avg rule.)
+### Latest QA fixture
+See `qa/back9_card_fixture.js` for the full version (copy-paste into DevTools console).
 
-### Reset
+### Inject seeds only for live test
 ```javascript
-localStorage.removeItem('chubbs_seasons_v1');
-localStorage.removeItem('cpi_master');
-location.reload();
+chubbsTest.seedsOnly()  // clean slate, no pre-saved R16
 ```
 
-### Run QA harness
+### Fill empty R16 slots so back-9 swap activates during solo testing
+```javascript
+chubbsTest.fillEmptyR16()  // preserves any actually-saved Mn results
+```
+
+### Diagnostic during play
+```javascript
+chubbsTest.firebaseGroups()   // list all /events/{eid}/groups nodes with half flag
+chubbsTest.bracketStatus()    // r16/cup_qf/plate_qf saved buckets
+chubbsTest.status()           // local seeds + r16 state
+```
+
+### Run QA harness from repo root
 ```bash
-python qa/season4_qa.py                       # standings diff vs Terry
-python qa/season4_qa.py --per-event --exclude=apr-palm   # per-event drilldown
-python qa/playoff_sim.py                      # full bracket sim under v5.57 rule
-python qa/playoff_sim.py --best7              # alternative under best-7 primary
-python qa/matchplay_engine.py                 # 11 sanity tests on engine helpers
-python extract_season3.py                     # regenerate season-3.json from xlsx
+python qa/r16_to_qf_sim.py                       # all 3 scenarios
+python qa/r16_to_qf_sim.py --scenario=chalk      # one scenario
+python qa/matchplay_engine.py                    # 11 unit tests
+python qa/playoff_sim.py                         # bracket cascade sim
 ```
 
 ## Confirmed locked rules (2026-05-10)
 
-- Match-play model: lower NET wins each hole; full hcp differential to higher-hcp player (Terry confirmed via WeChat 2026-05-10)
+- Match-play model: lower NET wins each hole; full hcp differential to higher-hcp player
 - 9-hole match tiebreak: Stableford → lower hcp → arm wrestle (handbook §11)
-- Season-standings tiebreak: best-7 → **round-avg desc** → seedPoints desc → stableford desc (Terry 2026-05-10, supersedes 2026-04-29 played-desc)
-- Playoff seeding tiebreak: seedPoints → **round-avg desc** → stableford desc (same rule)
-- 16-player playoff field after withdrawals: Mike W / Diego / Anthony in Fireball (or out) — final list locked via admin today
-
-## Deferred to post-May 23
-
-- Bracket-via-Firebase sync (would remove admin-re-push friction)
-- Twosome detection (only if some matches play 2-some)
-- S3 history bake into app for "View past seasons"
-- Stadium mode for night golf
-- "Concede" hole/match button
-- Cosmetic refinement: admin masterMode banner label
+- Season-standings tiebreak: best-7 → round-avg desc → seedPoints desc → stableford desc
+- Playoff seeding tiebreak: seedPoints → round-avg desc → stableford desc
+- Brain trust (default scorer priority, Diego excluded from fallback): Terry → Jack S → Ryan N → Nick → Hanson → Matt
+- Back-9 reshuffle: Cup A = M1–M4 winners; Cup B = M5–M8 winners; Plate A = M1–M4 losers; Plate B = M5–M8 losers
 
 ## Files
 
-- `ChubbsMobileApp_v5/index.html` — mobile PWA (~8580 lines after honeypot removal)
-- `ChubbsAdmin/index.html` — admin portal
+- `ChubbsMobileApp_v5/index.html` — mobile PWA (~8700 lines after Tier 2c)
+- `ChubbsAdmin/index.html` — admin portal (parser overhaul + push modal + Clear-Setup fix)
 - `ChubbsMobileApp_v5/CPI Handbook.pdf` — authoritative scoring rules
-- `qa/` — Python QA harness + matchplay engine sanity tests
-- `NewFeatures/wechat-blast-may23-playoffs.md` — message draft
-- `NewFeatures/v5.52-ui-cleanup-plan.md` — UI restructure plan
+- `qa/r16_to_qf_sim.py` — R16→QF transition harness (NEW today)
+- `qa/back9_card_fixture.js` — DevTools console fixture (NEW today)
+- `qa/matchplay_engine.py` — match-play engine sanity tests
+- `qa/playoff_sim.py` — bracket cascade simulation
+- `qa/season4_qa.py` — Stableford engine validation vs Terry's S4 spreadsheet
+- `NewFeatures/wechat-blast-may23-playoffs.md` — Wechat message draft
 - `docs/firebase-rules.md` — current Firebase rules + apply instructions
-- `season-3.json` (untracked) — extracted S3 data for QA
-- `extract_season3.py` (untracked) — S3 extractor
