@@ -4567,6 +4567,11 @@ function holeMeta(holeIdx, day){
 const DICK_PUTTER_SVG=`<svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align:middle"><path d="M12 2 C12 2 14 2.5 14 5 C14 7 13 8 13 8 L13 18 L15 19 C15 19 16 19.5 16 21 C16 22.5 14.5 23 12 23 C9.5 23 8 22.5 8 21 C8 19.5 9 19 11 19 L11 8 C11 8 10 7 10 5 C10 2.5 12 2 12 2Z" fill="currentColor" opacity="0.9"/></svg>`;
 const CHALLENGE_ICONS={dickputter:DICK_PUTTER_SVG,buddyballs:'🟡🟡',shortestdrive:'👶',oneiron:'🏒',littlechubby:'🐊',ctp:'🎯',moneyhole:'💰',longestputt:'🕳️',longestdrive:'💥'};
 function getChallengesForHole(holeIdx, day){
+  // Defensive — renderAll() builds every section's DOM each cycle (including
+  // hidden ones), so renderDay1 / challengeBadgeHtml can fire before
+  // _doApplyBundle has set state.eventBundle. Null guard prevents the
+  // boot-time crash that Brain Trust members hit on first URL load.
+  if(!state.eventBundle) return [];
   const challenges=(day==='day1'||day==='scramble')
     ?(state.eventBundle.day1Challenges||[])
     :(state.eventBundle.day2Challenges||[]);
@@ -4655,6 +4660,7 @@ function setMoneyHolePot(val){
   renderAll();
 }
 function renderChallengeWinnersAdmin(){
+  if(!state.eventBundle) return '';
   const d1ch=state.eventBundle.day1Challenges||[];
   const d2ch=state.eventBundle.day2Challenges||[];
   if(!d1ch.length&&!d2ch.length) return '';
@@ -4705,6 +4711,7 @@ function renderChallengeWinnersAdmin(){
   return html;
 }
 function renderChallengesCard(){
+  if(!state.eventBundle) return '';
   const d1ch=state.eventBundle.day1Challenges||[];
   const d2ch=state.eventBundle.day2Challenges||[];
   if(!d1ch.length&&!d2ch.length) return '';

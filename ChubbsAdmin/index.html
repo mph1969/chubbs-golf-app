@@ -2621,7 +2621,17 @@ function _poTop16(){
 function buildPlayoffPayload(){
   if(!poState.enabled) return null;
   const top16 = _poTop16();
-  if(top16.length < 2) return null;
+  if(top16.length < 2){
+    // Loud warning — silent null here is the #1 cause of "I toggled
+    // Playoffs ON but the bundle had playoffs: null" on the mobile side.
+    // Usually means loadPoSeasonData() hasn't finished (race), the fetch
+    // failed entirely, or the user dropped so many players from the
+    // qualified roster that fewer than 2 remain.
+    console.warn('[playoffs] payload skipped — _poStandings empty or <2 top16.',
+      { hasSeasonData: !!_poSeasonData, standingsCount: _poStandings ? _poStandings.length : 0,
+        top16Count: top16.length, rosterOverrides: poState.roster });
+    return null;
+  }
   return {
     version: 1,
     stage: poState.stage,
@@ -2987,7 +2997,14 @@ function importConfig(input){
 function generateAndDownloadJson() {
   showExportConfirmation('download');
 }
-function showExportConfirmation(action) {
+async function showExportConfirmation(action) {
+  // Mirror the push-handler await — if the user hits the button before
+  // initPlayoffCard finished, the preview would falsely show
+  // "Playoffs: NOT included" and they'd push anyway. Wait briefly so
+  // the banner reflects what's actually in the bundle.
+  if(poState.enabled && !_poStandings){
+    try { await loadPoSeasonData(); } catch(e){ console.warn('[preview] season data load failed:', e); }
+  }
   const bundle = buildEventBundle();
   const ev = bundle.event || {};
   const opts = bundle.options || {};
@@ -3138,8 +3155,18 @@ const APP_BASE_URL = 'https://chubbs-golf.netlify.app';
 function pushToLiveApp() {
   showExportConfirmation('push');
 }
-function doPushToLiveApp() {
+async function doPushToLiveApp() {
   if(!db) { alert("Database not connected. Please refresh the page."); return; }
+
+  // Ensure season-4.json + standings are loaded before building the bundle.
+  // Without this await, a push fired before DOMContentLoaded's
+  // initPlayoffCard() finished would ship playoffs: null even with the
+  // toggle ON — the silent failure mode that bit Brain Trust testing on
+  // 2026-05-14. loadPoSeasonData is idempotent + memoised, so this is a
+  // no-op on the common path.
+  if(poState.enabled && !_poStandings){
+    try { await loadPoSeasonData(); } catch(e){ console.warn('[push] season data load failed:', e); }
+  }
 
   const eventJson = buildEventBundle();
   const eventId = eventJson.event.eventId;

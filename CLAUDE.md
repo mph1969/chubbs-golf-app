@@ -84,7 +84,7 @@ The mobile app has a durable "seasons" concept:
 ## Deployment Workflow
 
 1. Edit the relevant `index.html` (mobile or admin).
-2. If mobile: bump `CACHE_VERSION` in `sw.js` AND `APP_VERSION` in `index.html` — they must match (there's a warning comment on the APP_VERSION line).
+2. If mobile: bump `CACHE_VERSION` in `sw.js` on every deploy that touches mobile assets (monotonically increasing — just bump by +1). Bump `APP_VERSION` in `index.html` when shipping a user-visible release. **The two do NOT need to match** — CACHE_VERSION has historically run ahead of APP_VERSION (drift was ~20 by v5.59) because cosmetic/fix commits bumped CACHE without an APP_VERSION roll. All that matters for cache invalidation is that CACHE_VERSION differs from the previously deployed value.
 3. Commit, push to master.
 4. Netlify auto-deploys within ~45s.
 5. PWA shows an update-available banner on next load.
@@ -113,7 +113,7 @@ These stay untracked — do not `git add` them in a commit unless explicitly ask
 
 ## Recurring Conventions
 
-- **Bump SW + APP_VERSION on every deploy.** Comment on the APP_VERSION line says "MUST match CACHE_VERSION" — respect it.
+- **Bump CACHE_VERSION on every mobile deploy; bump APP_VERSION on user-visible releases.** Values intentionally drift — see Deployment Workflow above. Do NOT "fix" the offset by lowering CACHE_VERSION — that would break cache invalidation for users on the current cache.
 - **Commit messages follow the pattern** `Area: short headline (vX.YZ)`. Feature intent in the body, not implementation.
 - **Push immediately after each feature** — Michael actively tests on iPhone between pushes and shares links with the brain trust.
 - **Don't re-implement what's in the handbook PDF.** Cite the section in code comments when shipping handbook-sourced logic.
