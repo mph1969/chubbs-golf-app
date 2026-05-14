@@ -1584,13 +1584,18 @@ function parseWeChatText() {
     if(ch){ challengeAssignments.push(ch); return; }
 
     if (!datesFound) {
-        const dateMatch1 = line.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?/i);
-        const dateMatch2 = line.match(/(\d{1,2})(?:\s*[\/\-]\s*(\d{1,2}))?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i);
+        // `(?!\d)` after each day capture prevents the regex from eating two
+        // digits of a 4-digit year (eg "May 2026" matching as month=May,
+        // day=20). dateMatch2 is tried first because for "22-23 May 2026"
+        // dateMatch1 will still fire on the year if no lookahead — both
+        // safeguards are belt-and-suspenders.
+        const dateMatch1 = line.match(/(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2})(?!\d)(?:\s*[\/\-]\s*(\d{1,2})(?!\d))?/i);
+        const dateMatch2 = line.match(/(\d{1,2})(?!\d)(?:\s*[\/\-]\s*(\d{1,2})(?!\d))?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*/i);
 
         if (dateMatch1 || dateMatch2) {
           let mStr, d1Str, d2Str;
-          if (dateMatch1) { mStr = dateMatch1[1]; d1Str = dateMatch1[2]; d2Str = dateMatch1[3]; }
-          else { d1Str = dateMatch2[1]; d2Str = dateMatch2[2]; mStr = dateMatch2[3]; }
+          if (dateMatch2) { d1Str = dateMatch2[1]; d2Str = dateMatch2[2]; mStr = dateMatch2[3]; }
+          else { mStr = dateMatch1[1]; d1Str = dateMatch1[2]; d2Str = dateMatch1[3]; }
 
           const mStr3 = mStr.substring(0, 3).toLowerCase();
           const monthIdx = monthNames.indexOf(mStr3);
