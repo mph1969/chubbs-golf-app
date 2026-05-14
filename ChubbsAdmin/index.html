@@ -2404,7 +2404,17 @@ function buildEventBundle() {
   return {
     version: 2,
     event: {
-      eventId: `${document.getElementById('scramble-date').value.split('-')[0]}-${document.getElementById('ev-name').value.replace(/\s+/g,'-').substring(0,10)}`,
+      eventId: (() => {
+        const year = document.getElementById('scramble-date').value.split('-')[0] || 'event';
+        const rawName = document.getElementById('ev-name').value
+          .replace(/\s+/g,'-')
+          // Firebase Realtime Database paths reject these 6 chars; strip
+          // them so user-friendly names like "[TEST2] BrainTrust" still
+          // produce a valid /events/{id} path.
+          .replace(/[.#$\[\]\/]/g, '')
+          .substring(0,10);
+        return `${year}-${rawName || 'chubbs'}`;
+      })(),
       name: document.getElementById('ev-name').value,
       displayName: document.getElementById('ev-display').value,
       satDate: fmtDate(document.getElementById('scramble-date').value), satTime: document.getElementById('scramble-time').value,
@@ -2751,7 +2761,7 @@ function exportConfig(){
   // Mirror event-bundle naming: {eventId}-{LIVE|TEST}-{YYYYMMDD}-config.json
   // Falls back to {eventName}-config-{date}.json if no event has been
   // built yet (no eventId derivable).
-  const evt={event:{eventId:`${(config.form.scrambleDate||'').split('-')[0]||'event'}-${(config.form.eventName||'chubbs').replace(/\s+/g,'-').substring(0,10)}`},_isTest:eventMode==='test'};
+  const evt={event:{eventId:`${(config.form.scrambleDate||'').split('-')[0]||'event'}-${(config.form.eventName||'chubbs').replace(/\s+/g,'-').replace(/[.#$\[\]\/]/g,'').substring(0,10)}`},_isTest:eventMode==='test'};
   saveConfigToLibrary(config);
   const blob=new Blob([JSON.stringify(config,null,2)],{type:'application/json'});
   const a=document.createElement('a');
@@ -3146,17 +3156,27 @@ function doPushToLiveApp() {
     _publishedBy: 'ChubbsAdmin'
   };
 
-  db.ref(`/events/${eventId}/bundle`).set(payload)
-    .then(() => {
-      btn.innerHTML = "✅ Sent!";
-      setTimeout(() => btn.innerHTML = origText, 4000);
-      showPlayerLinksPanel(eventJson);
-    })
-    .catch(err => {
-      btn.innerHTML = "❌ Failed";
-      setTimeout(() => btn.innerHTML = origText, 3000);
-      alert("Upload failed: " + err.message);
-    });
+  // Wrap in try/catch so synchronous failures (eg. Firebase rejecting a
+  // path with illegal chars like '[', '.', '$') surface a clear error
+  // instead of leaving the button stuck on "⏳ Uploading...". Async
+  // rejections still flow through the .catch chain.
+  try {
+    db.ref(`/events/${eventId}/bundle`).set(payload)
+      .then(() => {
+        btn.innerHTML = "✅ Sent!";
+        setTimeout(() => btn.innerHTML = origText, 4000);
+        showPlayerLinksPanel(eventJson);
+      })
+      .catch(err => {
+        btn.innerHTML = "❌ Failed";
+        setTimeout(() => btn.innerHTML = origText, 3000);
+        alert("Upload failed: " + err.message);
+      });
+  } catch (err) {
+    btn.innerHTML = "❌ Failed";
+    setTimeout(() => btn.innerHTML = origText, 3000);
+    alert("Upload failed (sync): " + err.message + "\n\nCheck the event name + date for special characters.");
+  }
 }
 
 function showPlayerLinksPanel(eventJson) {
