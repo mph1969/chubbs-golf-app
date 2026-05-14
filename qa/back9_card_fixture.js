@@ -97,6 +97,62 @@
     console.log('[Chubbs test] ' + (ok ? '✓ Re-rendered.' : '(no renderAll/renderSeason found — tap Standings tab to refresh)'));
   }
 
+  // Reads /events/{eventId}/groups/* from Firebase and prints a one-line
+  // summary per group node — proves v5.77's Firebase sync routing landed
+  // (R16 nodes have half:'r16', back-9 nodes have half:'back9'). Also handy
+  // mid-round if anyone reports "my score isn't propagating" — shows which
+  // group nodes exist and how many holes each has data for.
+  function firebaseGroups() {
+    if (!window.SYNC || !window.SYNC.db || !window.SYNC.eventId) {
+      console.error('[Chubbs test] Firebase not connected — load an event first');
+      return;
+    }
+    const eid = window.SYNC.eventId;
+    console.log('[Chubbs test] Reading /events/' + eid + '/groups/ …');
+    window.SYNC.db.ref('/events/' + eid + '/groups').once('value').then(snap => {
+      const data = snap.val() || {};
+      const keys = Object.keys(data);
+      if (!keys.length) { console.log('  (no group nodes — has anyone entered scores?)'); return; }
+      console.log('  Found ' + keys.length + ' group node(s):');
+      keys.forEach(k => {
+        const g = data[k] || {};
+        const half = g.half || 'r16-legacy';
+        const players = Array.isArray(g.players)
+          ? g.players.map(p => (p && (p.name || p.displayName)) || '?').join(', ')
+          : '?';
+        const scoredCount = Array.isArray(g.holes)
+          ? g.holes.filter(h => h && Array.isArray(h.gross) && h.gross.some(v => typeof v === 'number')).length
+          : 0;
+        const tsStr = g.ts ? new Date(g.ts).toLocaleTimeString() : '?';
+        console.log('  /groups/' + k);
+        console.log('    half: ' + half + ' · scored holes: ' + scoredCount + ' · last update: ' + tsStr);
+        console.log('    players: ' + players);
+      });
+    }).catch(e => console.error('[Chubbs test] Firebase read failed:', e && e.message));
+  }
+
+  // Local season store — shows what's been saved to the bracket (per-phone
+  // view of the same data the bracket tree + ladders render from).
+  function bracketStatus() {
+    const store = loadStore();
+    const s = store.seasons && store.seasons['season-4'];
+    if (!s || !s.playoffs) { console.log('[Chubbs test] no playoffs data'); return; }
+    const fmt = (label, sz, arr) => {
+      const a = Array.isArray(arr) ? arr : [];
+      const filled = a.filter(x => x && x.winner).length;
+      console.log('  ' + label + ': ' + filled + '/' + sz);
+      a.forEach((x, i) => { if (x && x.winner) console.log('    [' + (i + 1) + '] ' + x.winner + ' ' + (x.result || '')); });
+    };
+    console.log('[Chubbs test] Bracket state (local season store):');
+    fmt('r16', 8, s.playoffs.r16);
+    fmt('cup_qf', 4, s.playoffs.cup_qf);
+    fmt('plate_qf', 4, s.playoffs.plate_qf);
+    fmt('cup_sf', 2, s.playoffs.cup_sf);
+    fmt('plate_sf', 2, s.playoffs.plate_sf);
+    fmt('shield_sf', 2, s.playoffs.shield_sf);
+    fmt('spoon_sf', 2, s.playoffs.spoon_sf);
+  }
+
   window.chubbsTest = {
     chalk: () => inject([0,0,0,0,0,0,0,0]),
     upsets: () => inject([0,1,0,0,1,0,1,0]),
@@ -109,6 +165,8 @@
       console.log('[Chubbs test] seeds:', season.playoffs.seeds || '(none)');
       console.log('[Chubbs test] r16:', season.playoffs.r16 || '(none)');
     },
+    firebaseGroups: firebaseGroups,
+    bracketStatus: bracketStatus,
     clear: () => {
       const store = loadStore();
       const season = store.seasons && store.seasons['season-4'];
@@ -124,10 +182,12 @@
   };
 
   console.log('[Chubbs test] Fixture loaded. Try:');
-  console.log('  chubbsTest.chalk()       — all chalk');
-  console.log('  chubbsTest.upsets()      — M2/M5/M7 upsets');
-  console.log('  chubbsTest.allUpsets()   — every lower seed wins');
-  console.log('  chubbsTest.custom([0,1,0,0,1,0,1,0])  — custom (8 ints, 0=higher seed)');
-  console.log('  chubbsTest.status()      — show current state');
-  console.log('  chubbsTest.clear()       — wipe and restore TBD');
+  console.log('  chubbsTest.chalk()         — inject all-chalk R16 winners');
+  console.log('  chubbsTest.upsets()        — M2/M5/M7 upsets');
+  console.log('  chubbsTest.allUpsets()     — every lower seed wins');
+  console.log('  chubbsTest.custom([0,1,0,0,1,0,1,0])  — custom (8 ints)');
+  console.log('  chubbsTest.status()        — show local seeds + r16');
+  console.log('  chubbsTest.bracketStatus() — show all saved bracket buckets');
+  console.log('  chubbsTest.firebaseGroups()— list /events/{eid}/groups/ nodes');
+  console.log('  chubbsTest.clear()         — wipe and restore TBD');
 })();
