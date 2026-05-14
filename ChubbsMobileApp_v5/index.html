@@ -3314,6 +3314,23 @@ function _doApplyBundle(bundle, requestedPlayerId){
   const previousEventId = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId) || null;
   if(incomingEventId !== previousEventId){
     state.challengeWinners = {};
+    // Wipe bracket results on event change. season.playoffs.seeds gets
+    // re-hydrated below from the new bundle's playoffs payload. Prevents
+    // prior test-round bracket data from polluting a fresh push (and any
+    // chubbsTest fixture leftover from a previous session).
+    // May→June LIVE continuity is a separate future addition: June's
+    // bundle would explicitly carry forward May's R16/QF data via a
+    // priorPlayoffs field, applied after this wipe.
+    try {
+      const store = ensureActiveSeason();
+      const season = store.seasons[ACTIVE_SEASON_ID];
+      if(season && season.playoffs){
+        ['r16','cup_qf','plate_qf','cup_sf','plate_sf','cup_final','plate_final',
+         'shield_sf','shield_final','spoon_sf','spoon_final']
+          .forEach(k => delete season.playoffs[k]);
+        saveSeasonStore(store);
+      }
+    } catch(e){}
   }
   state.eventBundle = normalized;
   // v5.64: preserve previously-selected player on bundle re-applications
@@ -4232,34 +4249,10 @@ function getActiveBackNineMatches(){
   return matches;
 }
 
-// Returns true if the currently-selected event player's name is in
-// season.playoffs.seeds (i.e. one of the 16 R16 contenders). False for
-// Fireball Cup players, scramble-only attendees, or viewers without an
-// identity selected. Used to gate playoff-specific UI copy that would be
-// confusing for non-bracket players.
-function isCurrentPlayerInBracket(){
-  try {
-    const store = ensureActiveSeason();
-    const season = store && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
-    const seeds = season && season.playoffs && season.playoffs.seeds;
-    if(!Array.isArray(seeds) || !seeds.length) return false;
-    if(!state.eventPlayerId) return false;
-    const me = currentEventPlayer();
-    if(!me) return false;
-    const norm = s => String(s || '').trim().toUpperCase();
-    const myNames = [me.displayName, me.fullName, me.shortName, me.playerId].map(norm).filter(Boolean);
-    return seeds.some(s => myNames.includes(norm(s)));
-  } catch(e){ return false; }
-}
-
 // One-time intro card shown the first time a player opens the score view for
 // a playoff bundle. Sets a per-bundle dismissed flag so it never shows again
-// for that event.
-//
-// Audience-aware copy: R16 contenders see the matchplay/scorer briefing;
-// Fireball Cup / non-bracket Saturday players see a side-game version that
-// doesn't mention "Save to bracket"; players not on Saturday at all get
-// nothing (the intro doesn't apply).
+// for that event. Surfaces the matchplay format + scorer expectation up front
+// so brain trust members aren't surprised on tee.
 function renderPlayoffIntro(){
   let seeds = null;
   try {
@@ -4272,30 +4265,11 @@ function renderPlayoffIntro(){
   if(!bundleId) return '';
   const key = 'chubbs_playoff_intro_seen_' + bundleId;
   try { if(localStorage.getItem(key)) return ''; } catch(e){ return ''; }
-
-  const inBracket = isCurrentPlayerInBracket();
-  // If the player isn't on Saturday at all (scramble-only or not playing),
-  // the playoff intro is irrelevant — skip it entirely.
-  const onSaturday = !!state.day2GroupId;
-  if(!inBracket && !onSaturday) return '';
-
-  if(inBracket){
-    return `
-      <div class="card playoff-intro-card">
-        <div class="section-title" style="margin-bottom:6px">🥊 Playoff round</div>
-        <div class="small" style="margin-bottom:10px;line-height:1.5">
-          R16 today on the front 9, QF on the back. One designated scorer per foursome enters all 4 grosses — the other 3 phones go read-only. Live match status appears above the scorecard. When a match closes, scorer taps "Save to bracket". Stableford runs for all 18 regardless.
-        </div>
-        <button class="btn slim gold" style="font-size:11px;padding:6px 14px" onclick="dismissPlayoffIntro()">Got it</button>
-      </div>
-    `;
-  }
-  // Fireball Cup / Saturday side-game players
   return `
     <div class="card playoff-intro-card">
-      <div class="section-title" style="margin-bottom:6px">🔥 Fireball Cup</div>
+      <div class="section-title" style="margin-bottom:6px">🥊 Playoff round</div>
       <div class="small" style="margin-bottom:10px;line-height:1.5">
-        You're in the Saturday side game today — Stableford scoring across all 18 holes. The R16/QF matchplay bracket runs alongside but doesn't apply to you. Designated scorer enters all 4 grosses for your foursome; other phones go read-only.
+        R16 today on the front 9, QF on the back. One designated scorer per foursome enters all 4 grosses — the other 3 phones go read-only. Live match status appears above the scorecard. When a match closes, scorer taps "Save to bracket". Stableford runs for all 18 regardless.
       </div>
       <button class="btn slim gold" style="font-size:11px;padding:6px 14px" onclick="dismissPlayoffIntro()">Got it</button>
     </div>
@@ -8614,7 +8588,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.86';
+const APP_VERSION = '5.87';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
