@@ -4005,8 +4005,11 @@ function getActiveMatchPlayMatches(){
             strokesToHigher: strokes,
             aHigher,
           };
-        } else if(strokes > 0){
-          // Pre-hole heads-up — at least one stroke being awarded this hole.
+        } else {
+          // Pre-hole heads-up. Always populated (even with strokes=0) so
+          // the inline chip can render "No strokes given on this hole" —
+          // brain-trust feedback: they want to see the stroke situation
+          // BEFORE entering scores, not be silent when nothing applies.
           currentHole = {
             idx: curIdx, par: ch.par, si: ch.si,
             strokesToHigher: strokes,
@@ -4154,7 +4157,10 @@ function getActiveBackNineMatches(){
             winner: matchPlayHoleWinner(grossA, playerA.hcp, grossB, playerB.hcp, ch.si),
             strokesToHigher: strokes, aHigher,
           };
-        } else if(strokes > 0){
+        } else {
+          // Always populated pre-hole, including the no-strokes case (chip
+          // will render "No strokes given" so brain trust always sees the
+          // stroke situation on the active hole).
           currentHole = { idx: curIdx, par: ch.par, si: ch.si, strokesToHigher: strokes, aHigher, preHole: true };
         }
       }
@@ -7617,8 +7623,13 @@ function renderDay2(){
 
     const used = new Set();
     const matchHtml = activeMatches.map(m => {
-      const idxA = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerA || '').trim());
-      const idxB = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerB || '').trim());
+      // Prefer the index already computed by getActive*Matches (they map
+      // by playerId, robust to displayName edits). Fall back to name
+      // comparison for legacy match objects without idxA/idxB.
+      let idxA = (typeof m.idxA === 'number' && m.idxA >= 0) ? m.idxA : -1;
+      let idxB = (typeof m.idxB === 'number' && m.idxB >= 0) ? m.idxB : -1;
+      if(idxA < 0) idxA = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerA || '').trim());
+      if(idxB < 0) idxB = stablePlayers.findIndex(p => (p.name || '').trim() === (m.playerB || '').trim());
       if(idxA < 0 || idxB < 0) return ''; // fall through; standalone fallback catches them
       used.add(idxA); used.add(idxB);
 
@@ -7633,10 +7644,18 @@ function renderDay2(){
       let chipHtml = '', outcomeHtml = '';
       if(m.currentHole && !s.closed){
         const cd = m.currentHole;
-        if(cd.preHole && cd.strokesToHigher > 0){
-          const sp = cd.aHigher ? m.playerA : m.playerB;
-          const sLbl = cd.strokesToHigher === 1 ? '1 stroke' : `${cd.strokesToHigher} strokes`;
-          chipHtml = `<div class="mc-stroke">⬇ ${escHtml(sp)} gets ${sLbl} on this hole · par ${cd.par} · SI ${cd.si}</div>`;
+        if(cd.preHole){
+          // Pre-hole strokes heads-up. Always rendered when on a matchplay
+          // hole — explicit "No strokes given" beats silence.
+          let chipText;
+          if(cd.strokesToHigher > 0){
+            const sp = cd.aHigher ? m.playerA : m.playerB;
+            const sLbl = cd.strokesToHigher === 1 ? '1 stroke' : `${cd.strokesToHigher} strokes`;
+            chipText = `⬇ ${escHtml(sp)} gets ${sLbl} on this hole`;
+          } else {
+            chipText = `Even hcp on this hole · no strokes given`;
+          }
+          chipHtml = `<div class="mc-stroke">${chipText} · par ${cd.par} · SI ${cd.si}</div>`;
         } else if(!cd.preHole){
           let outcome, cls = 'mc-outcome';
           if(cd.winner === 'a'){ outcome = `${escHtml(m.playerA)} wins H${cd.idx+1}`; cls += ' win-a'; }
@@ -7650,10 +7669,13 @@ function renderDay2(){
         }
       }
 
+      const tagLabel = m.matchLabel || `M${m.matchNum}`;
+      const seedAHtml = (m.seedA != null) ? `<span class="seed">#${m.seedA}</span> ` : '';
+      const seedBHtml = (m.seedB != null) ? ` <span class="seed">#${m.seedB}</span>` : '';
       return `<div class="match-container">
         <div class="mc-head">
-          <span class="mc-tag">M${m.matchNum}</span>
-          <span class="mc-pair"><span class="seed">#${m.seedA}</span> ${escHtml(m.playerA)} <span class="vs">vs</span> ${escHtml(m.playerB)} <span class="seed">#${m.seedB}</span></span>
+          <span class="mc-tag">${tagLabel}</span>
+          <span class="mc-pair">${seedAHtml}${escHtml(m.playerA)} <span class="vs">vs</span> ${escHtml(m.playerB)}${seedBHtml}</span>
           <span class="mc-status ${statusCls}">${statusLbl}</span>
         </div>
         ${chipHtml}
@@ -8432,7 +8454,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.78';
+const APP_VERSION = '5.79';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
