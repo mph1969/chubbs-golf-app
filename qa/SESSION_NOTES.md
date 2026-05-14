@@ -32,6 +32,8 @@ State at end of day. Pick up from **OPEN ITEMS** below.
 | v5.82 | Stepper +/− no-shift; Leaderboard closed-match shows winner name; `chubbsTest.seedsOnly()` |
 | v5.83 | Sub-tab memory; "Match-Play" label on day2 when seeds locked; tap-target stability for chip/outcome slots |
 | v5.84 | Sub-tab memory snapshot on group switch (fixes v5.83 missed-path bug) |
+| SW v5.108 | Mobile null-guards on `state.eventBundle` in getChallengesForHole + renderChallengeWinnersAdmin + renderChallengesCard (fixes boot-time TypeError on fresh URL loads); Admin doPushToLiveApp + showExportConfirmation await loadPoSeasonData (fixes race that shipped `playoffs: null` despite toggle ON); buildPlayoffPayload console.warn with diagnostics |
+| SW v5.109 | Seed-name canonicalisation through roster aliases on bundle apply — unblocks M1 (Matt vs Jamie), M6 (Dustin vs John B), M7 (Jordan vs Jack S) banners that were silently missing because season-4.json uses bare names ("Jack", "John", "Matt D") while mobile compares against canonical displayNames ("JACK S", "John B", "MATT") |
 
 Plus:
 - `qa/r16_to_qf_sim.py` — front-9 → back-9 transition harness, 3 scenarios (chalk / all_square_m1 / mixed_upsets), bracket save-state + cascade invariant assertions. 3/3 pass.
