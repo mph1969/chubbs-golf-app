@@ -185,6 +185,20 @@
     .ladder-title.first{margin-top:4px}
     .ladder-sub{font-size:10px;color:var(--muted);font-weight:600;margin-left:6px}
     .bt-cell .bt-from{font-size:9px;color:var(--muted);font-style:italic;margin-top:2px}
+    /* Back-9 foursome cards */
+    .bn-grid{display:grid;grid-template-columns:1fr;gap:10px}
+    @media(min-width:600px){.bn-grid{grid-template-columns:1fr 1fr}}
+    .bn-foursome{background:rgba(255,255,255,0.025);border:1px solid var(--line);border-radius:10px;padding:12px}
+    .bn-head{font-size:14px;font-weight:800;color:var(--gold2);margin-bottom:8px;letter-spacing:0.02em}
+    .bn-players{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px}
+    .bn-player{font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);color:#e0e0e0}
+    .bn-matches{font-size:11px;color:var(--ink);margin-bottom:8px;line-height:1.5}
+    .bn-match{padding:2px 0;font-family:'DM Mono',monospace}
+    .bn-mlabel{display:inline-block;min-width:62px;color:var(--gold2);font-weight:700}
+    .bn-scorer{font-size:11px;padding:7px 10px;border-radius:6px;font-weight:700;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+    .bn-scorer.ok{color:var(--gold2);background:rgba(214,176,90,0.08);border:1px solid rgba(214,176,90,0.2)}
+    .bn-scorer.warn{color:#f5d85c;background:rgba(245,216,92,0.08);border:1px solid rgba(245,216,92,0.25)}
+    .bn-scorer-why{font-size:10px;color:var(--muted);font-weight:600;font-style:italic}
     /* v5.67: Match-play list rows on the Leaderboard tab */
     .mp-lb-list{display:grid;gap:4px}
     .mp-lb-row{display:grid;grid-template-columns:36px 1fr auto;gap:8px;align-items:center;padding:8px 10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);border-radius:8px;font-size:12px}
@@ -2486,6 +2500,120 @@ function renderBracketTree(season){
   return out;
 }
 
+// Once all 8 R16 results land, physically the 4 R16 foursomes reshuffle
+// for the back nine: winners regroup into Cup A (M1-M4 winners) + Cup B
+// (M5-M8 winners), losers regroup into Plate A + Plate B. Each back-9
+// foursome runs 2 simultaneous matchplay matches among its 4 players plus
+// Stableford for all. This helper derives those 4 foursomes from the
+// saved R16 winners + the original seed list and assigns a designated
+// scorer via the brain-trust rule (with Diego excluded from fallback).
+// Returns null when R16 isn't fully resolved.
+function _buildBackNineGroups(season, bundle){
+  if(!season || !season.playoffs) return null;
+  const seeds = Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
+  if(!seeds || seeds.length < 16) return null;
+  const r16 = season.playoffs.r16 || [];
+  if(r16.length < 8 || r16.some(m => !m || !m.winner)) return null;
+
+  const PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
+  const matchPlayers = i => [seeds[PAIRS[i][0]], seeds[PAIRS[i][1]]];
+  const winnerOf = i => r16[i] && r16[i].winner;
+  const loserOf  = i => {
+    const [p1, p2] = matchPlayers(i);
+    const w = winnerOf(i);
+    return w === p1 ? p2 : (w === p2 ? p1 : null);
+  };
+
+  // Name → playerId resolver via the event bundle's catalog.
+  const nameToId = {};
+  if(bundle && Array.isArray(bundle.players)){
+    bundle.players.forEach(p => {
+      [p.displayName, p.fullName].forEach(n => {
+        if(n) nameToId[String(n).trim().toUpperCase()] = String(p.playerId);
+      });
+    });
+  }
+  const idForName = n => nameToId[String(n || '').trim().toUpperCase()] || '';
+
+  const build = (id, name, icon, playerNames, matches) => {
+    const playerIds = playerNames.map(idForName).filter(Boolean);
+    const scorer = _pickBackNineScorerId(playerIds);
+    return {
+      id, name, icon, playerNames, playerIds,
+      scorerPlayerId: scorer.pid,
+      scorerName: scorer.name,
+      scorerFallback: scorer.fallback,
+      scorerReason: scorer.reason,
+      matches
+    };
+  };
+
+  return [
+    build('cup-a', 'Cup A', '🏆',
+      [winnerOf(0), winnerOf(1), winnerOf(2), winnerOf(3)],
+      [
+        { type: 'cup_qf', index: 0, p1: winnerOf(0), p2: winnerOf(1) },
+        { type: 'cup_qf', index: 1, p1: winnerOf(2), p2: winnerOf(3) }
+      ]
+    ),
+    build('cup-b', 'Cup B', '🏆',
+      [winnerOf(4), winnerOf(5), winnerOf(6), winnerOf(7)],
+      [
+        { type: 'cup_qf', index: 2, p1: winnerOf(4), p2: winnerOf(5) },
+        { type: 'cup_qf', index: 3, p1: winnerOf(6), p2: winnerOf(7) }
+      ]
+    ),
+    build('plate-a', 'Plate A', '🍽️',
+      [loserOf(0), loserOf(1), loserOf(2), loserOf(3)],
+      [
+        { type: 'plate_qf', index: 0, p1: loserOf(0), p2: loserOf(1) },
+        { type: 'plate_qf', index: 1, p1: loserOf(2), p2: loserOf(3) }
+      ]
+    ),
+    build('plate-b', 'Plate B', '🍽️',
+      [loserOf(4), loserOf(5), loserOf(6), loserOf(7)],
+      [
+        { type: 'plate_qf', index: 2, p1: loserOf(4), p2: loserOf(5) },
+        { type: 'plate_qf', index: 3, p1: loserOf(6), p2: loserOf(7) }
+      ]
+    )
+  ];
+}
+
+// Renders the Back-9 Foursomes card. Returns '' when R16 isn't done.
+function renderBackNineGroupsCard(season){
+  const groups = _buildBackNineGroups(season, state.eventBundle);
+  if(!groups) return '';
+
+  const cards = groups.map(g => {
+    const players = g.playerNames.map(n => `<div class="bn-player">${escHtml(n || 'TBD')}</div>`).join('');
+    const matchesHtml = g.matches.map(m => {
+      const label = m.type === 'cup_qf' ? `Cup QF${m.index+1}` : `Plate QF${m.index+1}`;
+      return `<div class="bn-match"><span class="bn-mlabel">${label}</span> ${escHtml(m.p1 || 'TBD')} v ${escHtml(m.p2 || 'TBD')}</div>`;
+    }).join('');
+    let scorerLine;
+    if(!g.scorerName){
+      scorerLine = `<div class="bn-scorer warn">⚠️ No scorer auto-assigned — pick one before tee off</div>`;
+    } else if(g.scorerFallback){
+      scorerLine = `<div class="bn-scorer warn">⚠️ Scorer: <b>${escHtml(g.scorerName)}</b> <span class="bn-scorer-why">(no brain trust in foursome — lowest hcp fallback)</span></div>`;
+    } else {
+      scorerLine = `<div class="bn-scorer ok">🎯 Scorer: <b>${escHtml(g.scorerName)}</b> <span class="bn-scorer-why">(brain trust)</span></div>`;
+    }
+    return `<div class="bn-foursome">
+      <div class="bn-head">${g.icon} ${escHtml(g.name)}</div>
+      <div class="bn-players">${players}</div>
+      <div class="bn-matches">${matchesHtml}</div>
+      ${scorerLine}
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div class="section-title" style="margin-bottom:6px">⛳ Back 9 Foursomes</div>
+    <div class="small" style="color:var(--muted);margin-bottom:10px">R16 is locked — players regroup for the back 9. Each foursome runs 2 simultaneous matches plus Stableford.</div>
+    <div class="bn-grid">${cards}</div>
+  </div>`;
+}
+
 function renderSeason(){
   const host = document.getElementById('season');
   if(!host) return;
@@ -2602,8 +2730,10 @@ function renderSeason(){
   // qualification" note (both pushed live scoring context that better lives
   // on the Round / Leaderboard tabs).
   const bracketTreeHtml = renderBracketTree(season);
+  const backNineCardHtml = renderBackNineGroupsCard(season);
   host.innerHTML = `
     ${bracketTreeHtml ? `<div class="card"><div class="section-title" style="margin-bottom:8px">🏆 Bracket · ${escHtml(season.name || viewingId)}</div>${bracketTreeHtml}</div>` : ''}
+    ${backNineCardHtml}
     <div class="card">
       <div class="toolbar tight" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
         <div class="section-title" style="margin:0">📅 Season Standings</div>
@@ -3581,6 +3711,41 @@ function courseConfigForDay(day){
 // Brain trust per handbook §3 — used as the default scorer when the admin
 // bundle didn't specify one. Priority order matches the admin app.
 const BRAIN_TRUST_NAMES = ['Luke', 'Terry', 'Jack', 'Ryan N', 'Mike W'];
+
+// Never auto-pick these names as a scorer for the post-R16 back-nine
+// foursomes — they're playing too tight a match to be also doing entry.
+// Diego is explicitly excluded by user; brain trust already implicitly
+// excluded by virtue of not being in BRAIN_TRUST_NAMES, but he could win
+// the lowest-hcp fallback so we drop him from that pool too.
+const BACKNINE_SCORER_EXCLUDE = ['Diego'];
+
+// Like _pickDefaultScorerId but for back-9 foursomes. Returns
+// { pid, name, fallback, reason } so the UI can flag fallback foursomes.
+function _pickBackNineScorerId(ids){
+  if(!Array.isArray(ids) || !ids.length) return { pid: '', name: '', fallback: false, reason: 'no-players' };
+  if(!state.eventBundle) return { pid: '', name: '', fallback: true, reason: 'no-bundle' };
+  const players = ids.map(id => findEventPlayerCatalog(state.eventBundle, id)).filter(Boolean);
+  if(!players.length) return { pid: '', name: '', fallback: true, reason: 'no-players' };
+  const excludeUpper = BACKNINE_SCORER_EXCLUDE.map(s => s.toUpperCase());
+  const nameOf = p => ((p.displayName || p.fullName || '') + '').trim();
+  const isExcluded = p => excludeUpper.includes(nameOf(p).toUpperCase());
+  // Brain trust first (priority order), excluding any names in the
+  // exclusion list. Diego isn't in BRAIN_TRUST_NAMES so this is defensive.
+  for(const btName of BRAIN_TRUST_NAMES){
+    const match = players.find(p => nameOf(p).toUpperCase() === btName.toUpperCase() && !isExcluded(p));
+    if(match) return { pid: String(match.playerId), name: nameOf(match), fallback: false, reason: 'brain-trust' };
+  }
+  // Fallback to lowest playing handicap among non-excluded players.
+  const eligible = players.filter(p => !isExcluded(p));
+  if(!eligible.length) return { pid: '', name: '', fallback: true, reason: 'all-excluded' };
+  let best = eligible[0];
+  for(const p of eligible){
+    const ph = Number.isFinite(+p.playingHandicap) ? +p.playingHandicap : 36;
+    const bh = Number.isFinite(+best.playingHandicap) ? +best.playingHandicap : 36;
+    if(ph < bh) best = p;
+  }
+  return { pid: String(best.playerId), name: nameOf(best), fallback: true, reason: 'lowest-hcp' };
+}
 
 function _pickDefaultScorerId(ids){
   if(!Array.isArray(ids) || !ids.length) return '';
@@ -8032,7 +8197,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.71';
+const APP_VERSION = '5.72';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
