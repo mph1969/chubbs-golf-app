@@ -3291,6 +3291,28 @@ function toggleCollapsed(key){
 // ── End season store ─────────────────────────────────────────────────────
 // ── End admin support ─────────────────────────────────────────────────────
 
+// Resolve a seed name (from season-4.json — often a bare first name like
+// "Jack", "John", "Matt D") to the canonical roster displayName ("JACK S",
+// "John B", "MATT"). Checks displayName, fullName, and aliases[] on each
+// roster entry. Falls back to the original name when no match exists, so
+// non-roster seeds still survive. Case-insensitive.
+function canonicaliseSeedName(seedName, roster){
+  const norm = s => String(s||'').trim().toUpperCase();
+  const target = norm(seedName);
+  if(!target || !Array.isArray(roster)) return seedName;
+  for(const p of roster){
+    if(!p) continue;
+    if(norm(p.displayName) === target) return p.displayName;
+    if(norm(p.fullName) === target) return p.displayName;
+    if(Array.isArray(p.aliases)){
+      for(const alias of p.aliases){
+        if(norm(alias) === target) return p.displayName;
+      }
+    }
+  }
+  return seedName;
+}
+
 function _doApplyBundle(bundle, requestedPlayerId){
   const normalized = normalizeEventBundle(bundle);
   const players = normalized.players;
@@ -3426,7 +3448,18 @@ function _doApplyBundle(bundle, requestedPlayerId){
       const season = store.seasons[ACTIVE_SEASON_ID];
       if(season){
         if(!season.playoffs) season.playoffs = {};
-        season.playoffs.seeds = normalized.playoffs.seeds.slice();
+        // Canonicalise seed names against the bundle's roster (with
+        // aliases) BEFORE storing. season-4.json uses bare names ("Jack",
+        // "John", "Matt D") but mobile compares against the admin's
+        // canonical displayName ("JACK S", "John B", "MATT") in every
+        // downstream lookup (getActiveMatchPlayMatches, bracket tree,
+        // save-to-bracket). Without this, only matches whose seed name
+        // happens to equal the canonical name fire — the rest go silent.
+        // 2026-05-14: spotted when M7 (Jordan v Jack S) never rendered
+        // in Leigh's R16 G4 view because seeds had "Jack" and roster
+        // had "JACK S".
+        season.playoffs.seeds = normalized.playoffs.seeds
+          .map(name => canonicaliseSeedName(name, normalized.players));
         season.playoffs.seededAt = normalized.playoffs.seededAt || new Date().toISOString().slice(0,10);
         season.playoffs.stage = normalized.playoffs.stage || 'r16';
         season.playoffs.source = 'admin';
