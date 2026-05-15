@@ -3169,6 +3169,30 @@ async function doPushToLiveApp() {
   }
 
   const eventJson = buildEventBundle();
+
+  // Hard-guard added 2026-05-15 — when the Playoff Setup toggle is ON
+  // but buildPlayoffPayload still returns null (because season-4 didn't
+  // load, or too many players were dropped), refuse the push. Previously
+  // this silently shipped `playoffs: null` and brain-trust phones fell
+  // back to Stableford. The first-time-on-this-device scenario was the
+  // common cause — poState defaults to enabled:false in fresh localStorage
+  // and the toggle UI made it look on.
+  if(poState.enabled && !eventJson.playoffs){
+    alert([
+      '❌ Push blocked — playoff data missing.',
+      '',
+      'Playoff Setup toggle is ON but the bundle has no seeds. Common causes:',
+      '• Section 6 (Playoff Setup) was never opened in this tab',
+      '• Season-4 data failed to load from GitHub',
+      '• Too many players dropped — fewer than 2 qualified remain',
+      '',
+      'Fix: scroll to Section 6, verify the seed list shows 16 players, then push again.',
+      '',
+      `(If you actually meant to push without playoffs, toggle Section 6 OFF first.)`,
+    ].join('\n'));
+    return;
+  }
+
   const eventId = eventJson.event.eventId;
   const btn = document.getElementById('push-btn');
   const origText = btn.innerHTML;
