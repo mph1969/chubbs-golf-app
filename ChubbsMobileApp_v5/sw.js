@@ -1,6 +1,6 @@
 // Chubbs Golf — Service Worker
 // Bump CACHE_VERSION on every deploy to trigger update prompt
-const CACHE_VERSION = 'chubbs-v5.110';
+const CACHE_VERSION = 'chubbs-v5.111';
 
 // Cache API only supports GET requests on http(s) URLs. Trying to put POST
 // requests or chrome-extension:// scripts throws TypeError noise into the
