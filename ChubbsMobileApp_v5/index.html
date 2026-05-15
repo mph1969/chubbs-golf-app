@@ -1174,9 +1174,19 @@ function initSync(eventId){
   syncTeardown();
   SYNC.eventId = eventId;
 
-  // Push event bundle so ?watch= viewers can load player/group data
+  // Push event bundle so ?watch= viewers can load player/group data.
+  //
+  // CRITICAL: use update() not set() so we MERGE at the top level instead
+  // of replacing the whole bundle. set() was silently stripping admin-
+  // owned fields (playoffs, _publishedAt, _publishedBy) every time any
+  // mobile device synced after an admin push. That's why TEST5 kept
+  // showing playoffs:null in Firebase even minutes after admin pushed
+  // it with playoffs:16 seeds — the user's own phone was wiping it on
+  // first sync. Discovered + fixed 2026-05-15 (SW v6.3). The Playwright
+  // E2E suite caught this — fresh contexts saw 'Stableford' while the
+  // user's own iPhone (with cached season-store seeds) saw 'Match-Play'.
   if(!readOnlyMode && hasImportedEvent()){
-    SYNC.db.ref(`/events/${eventId}/bundle`).set({
+    SYNC.db.ref(`/events/${eventId}/bundle`).update({
       players:           state.eventBundle.players,
       day2Groups:        state.eventBundle.day2Groups       || [],
       day1ScrambleTeams: state.eventBundle.day1ScrambleTeams|| [],
