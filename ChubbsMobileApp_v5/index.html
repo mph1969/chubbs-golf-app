@@ -40,14 +40,25 @@
     .app{max-width:560px;margin:0 auto;padding:16px 14px 96px}
     .hero{display:flex;gap:14px;align-items:center;padding:14px 14px;padding-right:80px;border:1px solid var(--line2);
       background:linear-gradient(180deg,rgba(214,176,90,0.08),rgba(16,38,28,0.92));border-radius:24px;
-      box-shadow:var(--shadow);position:sticky;top:0;z-index:5;backdrop-filter:blur(10px)}
-    .badge{width:84px;height:84px;flex:0 0 84px;border-radius:18px;overflow:hidden;background:#0a2418;border:1px solid rgba(214,176,90,0.35);object-fit:cover}
+      box-shadow:var(--shadow);position:sticky;top:0;z-index:5;backdrop-filter:blur(10px);
+      transition:padding 0.15s, gap 0.15s}
+    .badge{width:84px;height:84px;flex:0 0 84px;border-radius:18px;overflow:hidden;background:#0a2418;border:1px solid rgba(214,176,90,0.35);object-fit:cover;transition:width 0.15s, height 0.15s, flex-basis 0.15s}
     .tagline{margin-top:6px;font-size:12px;color:var(--text);min-height:18px;line-height:1.35}
     .tagline span{color:var(--gold2);font-weight:700}
     #tagline-text{transition:opacity 0.5s ease;}
     .hero h1{margin:0;font-size:26px;line-height:1.05;font-family:Georgia,serif;color:var(--gold2)}
     .hero .sub{margin-top:3px;font-size:11px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .hero-controls{position:absolute;top:10px;right:12px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;align-items:center;z-index:1;max-width:140px}
+    /* v5.111 — one-line minimal header during play. Drops the 'Chubbs!' title,
+       shrinks the logo, and compacts the subtitle so the scoring grid lands
+       above the fold instead of ~340px down. Restored on tabs other than Round
+       (toggled via state.ui.tab in renderAll). */
+    .hero.event-loaded{padding:10px 12px;padding-right:96px;gap:10px}
+    .hero.event-loaded .badge{width:44px;height:44px;flex:0 0 44px;border-radius:10px}
+    .hero.event-loaded h1{display:none}
+    .hero.event-loaded .sub{margin-top:0;font-size:14px;color:var(--text);letter-spacing:.02em;text-transform:none;font-weight:700;font-family:Georgia,serif}
+    .hero.event-loaded .tagline{display:none}
+    .hero.event-loaded .hero-controls{top:50%;transform:translateY(-50%);right:10px}
     .tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0 8px}
     .sub-tabs{display:flex;gap:4px;padding:4px;margin:0 0 14px;border-radius:12px;background:rgba(255,255,255,0.025);border:1px solid var(--line)}
     .sub-tabs:empty{display:none}
@@ -120,11 +131,31 @@
     /* Match-play overlay banner — sits above the Stableford scorecard during
        playoff rounds (R16). Updates live on every gross-score input. */
     .mp-card{border:1px solid rgba(214,176,90,0.4);background:linear-gradient(180deg,rgba(214,176,90,0.06),rgba(20,40,30,0.92))}
-    .mp-row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid rgba(255,255,255,0.04);font-size:12px}
+    .mp-row{display:grid;grid-template-columns:34px 1fr auto;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid rgba(255,255,255,0.04);font-size:12px;border-left:3px solid transparent;transition:background 0.15s}
     .mp-row:first-of-type{border-top:none}
+    /* v5.111 — Recent events switcher list */
+    .rev-list{display:flex;flex-direction:column;gap:6px}
+    .rev-row{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer;transition:background 0.12s, border-color 0.12s}
+    .rev-row.active{border-color:var(--gold2);background:rgba(214,176,90,0.06);cursor:default}
+    .rev-row:not(.active):active{background:rgba(255,255,255,0.04)}
+    .rev-row-main{flex:1;min-width:0}
+    .rev-name{font-weight:700;font-size:13px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .rev-meta{font-size:10px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .rev-arrow{font-size:18px;color:var(--gold2);opacity:0.7}
+    /* v5.111 — pair-tint by group half. M1-M4 (top of bracket = Cup A back-9
+       foursomes) get a warm gold tint; M5-M8 (Cup B) get cool blue. Makes
+       at-a-glance which two matches share a back-9 foursome. Subtle by
+       design so the data still reads first. */
+    .mp-row.mp-cup-a{background:rgba(214,176,90,0.06);border-left-color:rgba(214,176,90,0.45)}
+    .mp-row.mp-cup-b{background:rgba(80,140,200,0.07);border-left-color:rgba(80,140,200,0.45)}
     .mp-tag{font-size:10px;font-weight:800;color:var(--gold2);font-family:monospace;text-align:center;background:rgba(214,176,90,0.12);border:1px solid rgba(214,176,90,0.3);border-radius:5px;padding:3px 0}
+    .mp-row.mp-cup-b .mp-tag{color:#9bc4ed;background:rgba(80,140,200,0.14);border-color:rgba(80,140,200,0.35)}
     .mp-pair{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .mp-pair .mp-sn{font-size:9px;color:var(--muted);margin:0 4px;font-family:monospace}
+    /* v5.111 — "me" highlight. Current player's name is bolded gold and gets
+       a "(YOU)" suffix so the viewer can spot their match in a glance. */
+    .mp-pair .mp-me{color:var(--gold2);font-weight:800;text-shadow:0 0 8px rgba(214,176,90,0.25)}
+    .mp-pair .mp-me::after{content:' (YOU)';font-size:9px;font-weight:700;color:var(--gold2);opacity:0.7;letter-spacing:.05em}
     .mp-status{font-weight:700;font-size:11px;white-space:nowrap;text-align:right}
     .mp-status.mp-closed{color:#d6b05a}
     .mp-status.mp-dormie{color:#e07060}
@@ -1671,6 +1702,44 @@ const MOBILE_CACHE_MAX = 5;
 function loadEventCache(){
   try { return JSON.parse(localStorage.getItem(MOBILE_CACHE_KEY) || '[]'); } catch(e){ return []; }
 }
+// v5.111 — PWA event switcher. Installed home-screen icons launch without
+// URL params, so a player who needs to move between events (TEST → LIVE,
+// May Chubbs → June Yinli) has no way to do it from the icon alone. This
+// card lists the last 5 cached events and switches with one tap. Visible
+// to all users (no master gate) on the Me / Setup tab → Event sub-pill.
+function renderRecentEventsCard(){
+  const cache = loadEventCache();
+  if(!cache.length) return '';
+  const currentId = state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId;
+  const rows = cache.slice(0, 5).map(e => {
+    const isActive = e.eventId === currentId;
+    const date = e.cachedAt
+      ? new Date(e.cachedAt).toLocaleDateString('en-GB', {day:'numeric', month:'short'})
+      : '';
+    const testBadge = e.isLive ? '' : ' <span style="color:#f5d85c">🧪 test</span>';
+    const clickHandler = isActive ? '' : `onclick="switchToCachedEvent('${escHtml(e.eventId)}')"`;
+    return `<div class="rev-row${isActive ? ' active' : ''}" ${clickHandler}>
+      <div class="rev-row-main">
+        <div class="rev-name">${escHtml(e.displayName)}${testBadge}</div>
+        <div class="rev-meta">${escHtml(e.eventId)} · cached ${date}${isActive ? ' · <span style="color:var(--gold2)">active</span>' : ''}</div>
+      </div>
+      ${isActive ? '' : '<div class="rev-arrow">↻</div>'}
+    </div>`;
+  }).join('');
+  return `
+    <div class="card">
+      <div class="section-title">🔄 Switch event</div>
+      <div class="small tight">Recent events cached on this device. Tap to switch — useful when you have the Chubbs PWA installed on your home screen and need to move between events without re-tapping the WeChat link.</div>
+      <div class="rev-list" style="margin-top:10px">${rows}</div>
+    </div>`;
+}
+
+function switchToCachedEvent(eventId){
+  // Delegates to the existing loadFromCache flow (with its confirm prompt
+  // and toast) so the behaviour matches admin "Verify Mobile" loads.
+  loadFromCache(eventId);
+}
+
 function cacheBundle(bundle){
   if(!bundle || !bundle.event) return;
   const eventId = bundle.event.eventId || 'event';
@@ -4417,6 +4486,15 @@ function renderMatchPlayBanner(){
   } catch(e){}
   // Permission for the "Save to bracket" button — admin or designated scorer.
   const canSave = masterMode || (typeof isCurrentPlayerScorer === 'function' && isCurrentPlayerScorer('stableford'));
+  // v5.111 — figure out the current viewer's display name once so we can
+  // highlight their name in any row that includes them. Normalised on both
+  // sides for the comparison so "JACK S" canonical matches "Jack S" raw.
+  const _mpNorm = s => String(s||'').trim().toUpperCase();
+  const _mpMe = state.eventBundle && state.eventBundle.players
+    ? state.eventBundle.players.find(p => String(p.playerId) === String(state.eventPlayerId)) : null;
+  const _mpMeName = _mpMe ? (_mpMe.displayName || _mpMe.fullName || '') : '';
+  const _mpMeKey = _mpNorm(_mpMeName);
+  const _mpWrapName = (n) => (_mpMeKey && _mpNorm(n) === _mpMeKey) ? `<span class="mp-me">${n}</span>` : n;
   const rowHtml = matches.map(m => {
     const matchType = m.matchType || 'r16';
     const matchLabel = m.matchLabel || `M${m.matchNum}`;
@@ -4479,9 +4557,16 @@ function renderMatchPlayBanner(){
     const hintHtml = '';
     // Seed badges only on R16; QF rows just show names paired with vs.
     const pairHtml = (m.seedA != null && m.seedB != null)
-      ? `<span class="mp-sn">#${m.seedA}</span>${m.playerA} vs ${m.playerB}<span class="mp-sn">#${m.seedB}</span>`
-      : `${m.playerA} vs ${m.playerB}`;
-    return `<div class="mp-row">
+      ? `<span class="mp-sn">#${m.seedA}</span>${_mpWrapName(m.playerA)} vs ${_mpWrapName(m.playerB)}<span class="mp-sn">#${m.seedB}</span>`
+      : `${_mpWrapName(m.playerA)} vs ${_mpWrapName(m.playerB)}`;
+    // v5.111 — tint class per back-9 group half. M1-M4 = Cup A (gold),
+    // M5-M8 = Cup B (blue). On Cup QF / Plate QF rows the matchType comes
+    // through as 'cup_qf' / 'plate_qf' — give those a flat colour each.
+    let tintCls = '';
+    if(matchType === 'r16') tintCls = m.matchNum <= 4 ? 'mp-cup-a' : 'mp-cup-b';
+    else if(matchType === 'cup_qf') tintCls = 'mp-cup-a';
+    else if(matchType === 'plate_qf') tintCls = 'mp-cup-b';
+    return `<div class="mp-row ${tintCls}">
       <span class="mp-tag">${matchLabel}</span>
       <span class="mp-pair">${pairHtml}</span>
       <span class="${cls}">${status}</span>
@@ -6799,6 +6884,7 @@ function renderSetup(){
   })() : '';
 
   const eventTab = `
+    ${renderRecentEventsCard()}
     <div class="card">
       <div class="section-title">Weekend event file</div>
       <div class="small">Upload the <strong>event.json</strong> to preload teams, groups, courses, and scorer defaults for the weekend.</div>
@@ -8813,7 +8899,7 @@ function renderFooter(){
 // CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
 // it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
 // Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.110';
+const APP_VERSION = '5.111';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
@@ -8950,23 +9036,25 @@ function renderAll(){
   const heroSub = document.getElementById('hero-event-sub');
   const taglineEl = document.querySelector('.tagline');
   const eBanner = document.getElementById('event-banner');
+  const heroEl = document.querySelector('.hero');
   const ev = state.eventBundle && state.eventBundle.event;
   const eventLoaded = !!(ev && (ev.displayName || ev.name || ev.satDate || ev.sunDate));
+  // v5.111 — collapse the 'Chubbs!' title row to a thin one-line bar when an
+  // event is loaded. Drops the dates from the subtitle since they're already
+  // visible in the round card; player + course is what's load-bearing during
+  // play. Toggle is class-based so CSS handles the layout shift cleanly.
+  if(heroEl) heroEl.classList.toggle('event-loaded', eventLoaded);
   if(heroSub){
     if(eventLoaded){
       const isTest = !!(state.eventBundle && state.eventBundle._isTest);
       const ep = state.eventBundle && state.eventBundle.players
         ? state.eventBundle.players.find(p => String(p.playerId) === String(state.eventPlayerId)) : null;
       const playerName = ep ? (ep.displayName || ep.fullName || ep.playerId) : '';
-      // Pick a course label — prefer day2 when set, fall back to day1
       const courseLabel = (ev.day2CourseLabel || ev.day1CourseLabel || '').trim();
-      const sat = ev.satDate ? formatEventDate(ev.satDate,'short') : '';
-      const sun = ev.sunDate ? formatEventDate(ev.sunDate,'short') : '';
-      const dateStr = [sat, sun].filter(Boolean).join(' · ');
       const lhs = playerName
         ? `${playerName}${courseLabel ? ' @ ' + courseLabel : ''}`
         : (courseLabel || (ev.displayName || ev.name || ''));
-      heroSub.textContent = (isTest ? '🧪 ' : '') + [lhs, dateStr].filter(Boolean).join(' · ');
+      heroSub.textContent = (isTest ? '🧪 ' : '') + lhs;
       if(isTest) heroSub.style.color = '#f5d85c'; else heroSub.style.color = '';
     } else {
       heroSub.textContent = 'Golf scorer';
