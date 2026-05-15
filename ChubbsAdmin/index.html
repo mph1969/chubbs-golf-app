@@ -3194,6 +3194,39 @@ async function doPushToLiveApp() {
   }
 
   const eventId = eventJson.event.eventId;
+
+  // Soft-warning added 2026-05-15 — catches the "toggle reset, didn't notice"
+  // footgun that the hard-guard above misses. Hard-guard fires when toggle
+  // is ON but data missing; this fires when toggle is OFF (so the push
+  // intends no playoffs) but the EVENT in Firebase already has playoffs
+  // from a previous push. Most likely the user opened admin in a new tab
+  // or incognito and poState defaulted to off — without this confirm they'd
+  // silently destroy the seeds that were already live.
+  if(!poState.enabled && !eventJson.playoffs){
+    try {
+      const snap = await db.ref(`/events/${eventId}/bundle/playoffs`).once('value');
+      const existing = snap.val();
+      if(existing && Array.isArray(existing.seeds) && existing.seeds.length){
+        const ok = confirm([
+          '⚠ This event previously had playoffs. This push will REMOVE them.',
+          '',
+          `Existing seeds (${existing.seeds.length}): ${existing.seeds.slice(0,4).join(', ')}${existing.seeds.length > 4 ? '…' : ''}`,
+          `Stage: ${existing.stage || 'r16'}`,
+          `Seeded at: ${existing.seededAt || '—'}`,
+          '',
+          'This usually means:',
+          '• You opened admin in a different tab/browser → playoff toggle defaulted off',
+          '• You haven\'t scrolled to Section 6 (Playoff Setup) in this session',
+          '',
+          'Continue and overwrite with no-playoff version? Brain-trust devices loading the event fresh will see Stableford only, no match-play.',
+        ].join('\n'));
+        if(!ok) return;
+      }
+    } catch(e){
+      console.warn('[push] pre-read of existing playoffs failed:', e);
+    }
+  }
+
   const btn = document.getElementById('push-btn');
   const origText = btn.innerHTML;
   btn.innerHTML = "⏳ Uploading...";
