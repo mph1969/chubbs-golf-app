@@ -8896,10 +8896,13 @@ function renderFooter(){
 }
 
 // APP_VERSION = marketing/release number shown in About + footer. Bump on user-visible releases.
-// CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation —
-// it has historically run ahead of APP_VERSION (currently chubbs-v5.88) and does NOT need to match.
-// Do NOT lower CACHE_VERSION to match APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '5.111';
+// CACHE_VERSION in sw.js is a separate monotonically-increasing counter for cache invalidation.
+// Both reset to v6.0 on 2026-05-15 — anchor for "match-play, playoffs, canonicalisation,
+// diagnostics, PWA event switcher" production-ready milestone. Pre-6.0 history was a long
+// drift accumulated across 100+ deploys in the 5.x series; the reset realigned both counters.
+// Drift will naturally accumulate again — APP bumps on user-visible releases, CACHE bumps every
+// deploy. Do NOT lower CACHE_VERSION to "match" APP_VERSION — that would break cache invalidation.
+const APP_VERSION = '6.0';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){

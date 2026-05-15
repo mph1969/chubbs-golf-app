@@ -84,7 +84,7 @@ The mobile app has a durable "seasons" concept:
 ## Deployment Workflow
 
 1. Edit the relevant `index.html` (mobile or admin).
-2. If mobile: bump `CACHE_VERSION` in `sw.js` on every deploy that touches mobile assets (monotonically increasing — just bump by +1). Bump `APP_VERSION` in `index.html` when shipping a user-visible release. **The two do NOT need to match** — CACHE_VERSION has historically run ahead of APP_VERSION (drift was ~20 by v5.59) because cosmetic/fix commits bumped CACHE without an APP_VERSION roll. All that matters for cache invalidation is that CACHE_VERSION differs from the previously deployed value.
+2. If mobile: bump `CACHE_VERSION` in `sw.js` on every deploy that touches mobile assets (monotonically increasing — just bump by +1). Bump `APP_VERSION` in `index.html` when shipping a user-visible release. **The two do NOT need to match** — they are independent counters with different bump cadences and will naturally drift. **Anchor: both reset to `6.0` / `chubbs-v6.0` on 2026-05-15** marking the match-play/playoff/canonicalisation/diagnostics milestone. Drift will reaccumulate from there. All that matters for cache invalidation is that CACHE_VERSION differs from the previously deployed value — never lower it to "match" APP_VERSION.
 3. Commit, push to master.
 4. Netlify auto-deploys within ~45s.
 5. PWA shows an update-available banner on next load.

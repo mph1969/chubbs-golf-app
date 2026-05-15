@@ -34,6 +34,8 @@ State at end of day. Pick up from **OPEN ITEMS** below.
 | v5.84 | Sub-tab memory snapshot on group switch (fixes v5.83 missed-path bug) |
 | SW v5.108 | Mobile null-guards on `state.eventBundle` in getChallengesForHole + renderChallengeWinnersAdmin + renderChallengesCard (fixes boot-time TypeError on fresh URL loads); Admin doPushToLiveApp + showExportConfirmation await loadPoSeasonData (fixes race that shipped `playoffs: null` despite toggle ON); buildPlayoffPayload console.warn with diagnostics |
 | SW v5.109 | Seed-name canonicalisation through roster aliases on bundle apply — unblocks M1 (Matt vs Jamie), M6 (Dustin vs John B), M7 (Jordan vs Jack S) banners that were silently missing because season-4.json uses bare names ("Jack", "John", "Matt D") while mobile compares against canonical displayNames ("JACK S", "John B", "MATT") |
+| SW v5.110 | getActivePlayoffSeeds() helper unifies season-store + bundle-fallback for every "is this match-play?" gate; canonicaliseSeedName strips punctuation + Levenshtein ≤1 fallback; master-mode Playoff Diagnostics card; admin push hard-guard refuses to ship playoffs:null when toggle is ON |
+| **v6.0** | **2026-05-15 milestone reset.** APP_VERSION and CACHE_VERSION both anchor to v6.0 / chubbs-v6.0. Marks playoff-ready production state: match-play engine, canonicalisation, diagnostics, PWA event switcher, header compaction, per-match tint, current-player highlight. Pre-6.0 = pre-playoff iteration. |
 
 Plus:
 - `qa/r16_to_qf_sim.py` — front-9 → back-9 transition harness, 3 scenarios (chalk / all_square_m1 / mixed_upsets), bracket save-state + cascade invariant assertions. 3/3 pass.
