@@ -3295,11 +3295,22 @@ function toggleCollapsed(key){
 // "Jack", "John", "Matt D") to the canonical roster displayName ("JACK S",
 // "John B", "MATT"). Checks displayName, fullName, and aliases[] on each
 // roster entry. Falls back to the original name when no match exists, so
-// non-roster seeds still survive. Case-insensitive.
+// non-roster seeds still survive. Case-insensitive, punctuation-tolerant.
+//
+// v5.110: tightened normalisation — strips trailing/embedded punctuation
+// and collapses whitespace, so "Matt D" matches an alias "Matt D." despite
+// the trailing period that broke equality in v5.109. Falls back to a
+// Levenshtein ≤1 fuzzy match as a last resort (catches single-character
+// typos like "Hanssan" vs "Hanson" without false-positive risk).
 function canonicaliseSeedName(seedName, roster){
-  const norm = s => String(s||'').trim().toUpperCase();
+  const norm = s => String(s||'')
+    .trim()
+    .toUpperCase()
+    .replace(/[\.,'"`]/g, '')   // strip punctuation (Matt D. → Matt D)
+    .replace(/\s+/g, ' ');      // collapse whitespace
   const target = norm(seedName);
   if(!target || !Array.isArray(roster)) return seedName;
+  // Pass 1 — exact match on normalised name/alias.
   for(const p of roster){
     if(!p) continue;
     if(norm(p.displayName) === target) return p.displayName;
@@ -3310,7 +3321,60 @@ function canonicaliseSeedName(seedName, roster){
       }
     }
   }
+  // Pass 2 — fuzzy fallback. Levenshtein ≤1 to catch single-char typos
+  // like "Hanssan" → "Hanson". Skip very short names (<4 chars) since
+  // 1 edit there is too lax.
+  if(target.length >= 4){
+    const lev = (a,b) => {
+      if(Math.abs(a.length - b.length) > 1) return 2;
+      const m = a.length, n = b.length;
+      const dp = Array.from({length:m+1}, () => new Array(n+1).fill(0));
+      for(let i=0;i<=m;i++) dp[i][0]=i;
+      for(let j=0;j<=n;j++) dp[0][j]=j;
+      for(let i=1;i<=m;i++) for(let j=1;j<=n;j++){
+        dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j],dp[i][j-1],dp[i-1][j-1]);
+      }
+      return dp[m][n];
+    };
+    for(const p of roster){
+      if(!p) continue;
+      const candidates = [p.displayName, p.fullName, ...(Array.isArray(p.aliases) ? p.aliases : [])];
+      for(const cand of candidates){
+        if(cand && cand.length >= 4 && lev(target, norm(cand)) <= 1) return p.displayName;
+      }
+    }
+  }
   return seedName;
+}
+
+// Single source of truth for "what playoff seeds are active right now".
+// Checks the season store first (which is the canonicalised hydrated copy
+// from _doApplyBundle) and falls back to the raw bundle payload if the
+// season store hasn't been populated yet — covers the race where the
+// Firebase listener fires _doApplyBundle slightly after the first render,
+// and the iOS-Safari case where SW cache served stale state.
+//
+// v5.110: introduced so the "is this a playoff event?" decision is robust
+// against partial state. Previously every reader checked
+// season.playoffs.seeds directly and a stale/empty season store made the
+// app render Stableford even when the bundle clearly had playoff seeds.
+function getActivePlayoffSeeds(){
+  try {
+    const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
+    const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
+    if(season && season.playoffs && Array.isArray(season.playoffs.seeds) && season.playoffs.seeds.length){
+      return season.playoffs.seeds;
+    }
+  } catch(e){}
+  // Bundle fallback — canonicalised on the fly so downstream lookups
+  // still match against roster displayNames even when the season store
+  // hasn't received its write yet.
+  const bp = state.eventBundle && state.eventBundle.playoffs;
+  if(bp && Array.isArray(bp.seeds) && bp.seeds.length){
+    const roster = state.eventBundle.players || [];
+    return bp.seeds.map(n => canonicaliseSeedName(n, roster));
+  }
+  return null;
 }
 
 function _doApplyBundle(bundle, requestedPlayerId){
@@ -4018,9 +4082,10 @@ function getActiveMatchPlayMatches(){
   if(isBackNineSwapActive()) return getActiveBackNineMatches();
   const players = currentPlayers('stableford') || [];
   if(players.length < 2) return [];
-  let store; try { store = ensureActiveSeason(); } catch(e){ return []; }
-  const season = store && store.seasons && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
-  const seeds = season && season.playoffs && Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
+  // v5.110: bundle-fallback so matches render even when season store
+  // hydration is racing the first render (iOS Safari has been hitting
+  // this on cold loads).
+  const seeds = getActivePlayoffSeeds();
   if(!seeds || seeds.length < 2) return [];
   const course = activeCourse('day2');
   const holes = state.stableford && state.stableford.holes;
@@ -4692,6 +4757,129 @@ function setMoneyHolePot(val){
   }
   renderAll();
 }
+// v5.110 — master-mode diagnostic card for playoff data flow. Surfaces
+// the raw bundle payload, the hydrated season store, and the per-seed
+// canonicalisation results so "why isn't this rendering as match-play?"
+// is answerable in 5 seconds instead of 5 messages. Hidden unless
+// masterMode is on; renders nothing on non-playoff events to keep
+// the Setup tab clean.
+function renderPlayoffDebugCard(){
+  if(!masterMode) return '';
+  const bundle = state.eventBundle || {};
+  const bp = bundle.playoffs;
+  const roster = bundle.players || [];
+  // Resolve season-store seeds
+  let seasonSeeds = null, seededAt = '—', source = '—';
+  try {
+    const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
+    const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
+    if(season && season.playoffs){
+      if(Array.isArray(season.playoffs.seeds)) seasonSeeds = season.playoffs.seeds;
+      seededAt = season.playoffs.seededAt || '—';
+      source   = season.playoffs.source   || '—';
+    }
+  } catch(e){}
+  // Skip the card entirely when no playoff data is anywhere — nothing useful to show.
+  const bundleHasSeeds = bp && Array.isArray(bp.seeds) && bp.seeds.length;
+  const seasonHasSeeds = Array.isArray(seasonSeeds) && seasonSeeds.length;
+  if(!bundleHasSeeds && !seasonHasSeeds) return '';
+
+  const activeSeeds = getActivePlayoffSeeds();
+  const matches = (typeof getActiveMatchPlayMatches === 'function') ? getActiveMatchPlayMatches() : [];
+  const players = (typeof currentPlayers === 'function') ? (currentPlayers('stableford') || []) : [];
+
+  // Per-seed canonicalisation: raw bundle name → resolved roster name (or "—" if no match)
+  const canonRows = bundleHasSeeds ? bp.seeds.map((raw, i) => {
+    const canon = canonicaliseSeedName(raw, roster);
+    const ok = canon !== raw || roster.some(p => {
+      const n = s => String(s||'').trim().toUpperCase().replace(/[\.,'"`]/g,'').replace(/\s+/g,' ');
+      return n(p.displayName) === n(raw);
+    });
+    return {idx: i+1, raw, canon: ok ? canon : `${raw} <span style="color:#f5a623">⚠ no roster match</span>`, ok};
+  }) : [];
+  const failedCanon = canonRows.filter(r => !r.ok);
+
+  // Player seed positions in the active group
+  const playerLookup = players.map(p => {
+    const norm = s => String(s||'').trim().toUpperCase().replace(/[\.,'"`]/g,'').replace(/\s+/g,' ');
+    const seedIdx = activeSeeds ? activeSeeds.findIndex(s => norm(s) === norm(p && p.name)) : -1;
+    return {name: p.name, hcp: p.hcp, seed: seedIdx >= 0 ? `#${seedIdx+1}` : '—'};
+  });
+
+  const collapsed = isCollapsed('playoff_debug');
+  const seedListHtml = (arr) => arr && arr.length
+    ? arr.map((s,i) => `<span style="display:inline-block;padding:2px 6px;margin:2px;border:1px solid var(--line);border-radius:4px;font-size:10px"><b style="color:var(--gold2)">#${i+1}</b> ${s}</span>`).join('')
+    : '<span style="color:var(--muted);font-size:11px">none</span>';
+
+  return `
+    <div class="card ${collapsed?'collapsed':''}" style="border:1px dashed var(--gold2)">
+      <div class="collapsible-hdr" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px" onclick="toggleCollapsed('playoff_debug')">
+        <div class="section-title" style="margin:0"><span class="collapse-chev">▾</span>🛠 Playoff Diagnostics <span style="font-size:10px;color:var(--muted);font-weight:400">master-mode</span></div>
+        <span class="small" style="color:${failedCanon.length ? '#f5a623' : 'var(--muted)'}">${failedCanon.length ? `⚠ ${failedCanon.length} unresolved` : '✓ ok'}</span>
+      </div>
+      <div class="collapsible-body" style="font-size:11px">
+        <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin-bottom:10px">
+          <div style="color:var(--muted)">APP / SW</div><div>v${APP_VERSION} · ${typeof SYNC!=='undefined' && SYNC.enabled ? '☁ synced' : '○ offline'}</div>
+          <div style="color:var(--muted)">Bundle playoffs</div><div>${bp ? `<span style="color:#5cf5a0">present</span> · ${(bp.seeds||[]).length} seeds · stage ${bp.stage||'—'}` : '<span style="color:#f5a623">missing (null)</span>'}</div>
+          <div style="color:var(--muted)">Season seeds</div><div>${seasonHasSeeds ? `<span style="color:#5cf5a0">${seasonSeeds.length} hydrated</span> · seededAt ${seededAt} · src ${source}` : '<span style="color:#f5a623">empty</span>'}</div>
+          <div style="color:var(--muted)">Active seeds</div><div>${activeSeeds ? `${activeSeeds.length} (${seasonHasSeeds ? 'season-store' : 'bundle-fallback'})` : '<span style="color:#f5a623">none</span>'}</div>
+          <div style="color:var(--muted)">Visible matches</div><div>${matches.length ? matches.map(m => `M${m.matchNum} ${m.playerA} vs ${m.playerB}`).join(' · ') : '<span style="color:var(--muted)">none</span>'}</div>
+        </div>
+        ${bundleHasSeeds ? `
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+            <div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">Canonicalisation map</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;line-height:1.6">
+              ${canonRows.map(r => `<div>#${r.idx} <span style="color:var(--muted)">${r.raw}</span> → ${r.canon}</div>`).join('')}
+            </div>
+          </div>` : ''}
+        ${players.length ? `
+          <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+            <div style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px">My group · seed lookup</div>
+            <div style="font-family:'DM Mono',monospace;font-size:10px;line-height:1.6">
+              ${playerLookup.map(p => `<div>${p.name} (hcp ${p.hcp}) → seed ${p.seed}</div>`).join('')}
+            </div>
+          </div>` : ''}
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap" onclick="event.stopPropagation()">
+          <button class="btn ghost slim" style="font-size:10px" onclick="copyPlayoffDiagnostics()">📋 Copy diagnostics</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+// Dumps the same info renderPlayoffDebugCard surfaces to the clipboard,
+// for pasting into Slack/WeChat when triaging.
+function copyPlayoffDiagnostics(){
+  const bundle = state.eventBundle || {};
+  const bp = bundle.playoffs;
+  let seasonSeeds = null, seededAt = '—';
+  try {
+    const store = loadSeasonStore && loadSeasonStore();
+    const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
+    if(season && season.playoffs){
+      seasonSeeds = season.playoffs.seeds;
+      seededAt = season.playoffs.seededAt || '—';
+    }
+  } catch(e){}
+  const matches = (typeof getActiveMatchPlayMatches === 'function') ? getActiveMatchPlayMatches() : [];
+  const lines = [
+    `Chubbs playoff diagnostics — ${new Date().toISOString()}`,
+    `APP v${APP_VERSION}`,
+    `Event: ${(bundle.event && bundle.event.eventId) || '—'}`,
+    `Bundle.playoffs: ${bp ? 'present' : 'null'}`,
+    `Bundle seeds (${(bp && bp.seeds && bp.seeds.length) || 0}): ${bp && bp.seeds ? bp.seeds.join(', ') : '—'}`,
+    `Season seeds (${(seasonSeeds && seasonSeeds.length) || 0}) seededAt=${seededAt}: ${seasonSeeds ? seasonSeeds.join(', ') : '—'}`,
+    `Visible matches: ${matches.length ? matches.map(m => `M${m.matchNum} ${m.playerA} vs ${m.playerB}`).join(' | ') : 'none'}`,
+  ];
+  const text = lines.join('\n');
+  try {
+    if(navigator.clipboard) navigator.clipboard.writeText(text);
+    if(typeof showToast === 'function') showToast('Diagnostics copied to clipboard', 'ok');
+  } catch(e){
+    if(typeof showToast === 'function') showToast('Copy failed — see console', 'err');
+    console.log(text);
+  }
+}
+
 function renderChallengeWinnersAdmin(){
   if(!state.eventBundle) return '';
   const d1ch=state.eventBundle.day1Challenges||[];
@@ -6071,13 +6259,10 @@ function scrambleBeforeStableford(){
 function _getNavGroups(){
   const showMyCard = _myCardShouldShow();
   let showPlayoffs = masterMode;
-  try {
-    const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
-    const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
-    if(season && season.playoffs && Array.isArray(season.playoffs.seeds) && season.playoffs.seeds.length){
-      showPlayoffs = true;
-    }
-  } catch(e){}
+  // v5.110: bundle-fallback via getActivePlayoffSeeds so the Playoffs nav
+  // pill appears immediately on bundle arrival, not only after season
+  // store hydration completes.
+  try { if(getActivePlayoffSeeds()) showPlayoffs = true; } catch(e){}
   // Round group — order Stableford/Scramble by which day comes first.
   // Single-day attendees only see the pill for the day they're playing
   // (e.g. Kevin in Stableford-only sees Match-Play but not Scramble).
@@ -6119,12 +6304,11 @@ const SUB_TAB_LABELS = {
 // underlying point system. Falls back to SUB_TAB_LABELS for everything else.
 function subTabLabel(sectionId){
   if(sectionId === 'day2'){
+    // v5.110: route through getActivePlayoffSeeds so the label flips
+    // correctly as soon as the bundle arrives, even before the season
+    // store hydration has run (fixes iOS-Safari "everything's Stableford").
     try {
-      const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
-      const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
-      if(season && season.playoffs && Array.isArray(season.playoffs.seeds) && season.playoffs.seeds.length){
-        return 'Match-Play';
-      }
+      if(getActivePlayoffSeeds()) return 'Match-Play';
     } catch(e){}
   }
   return SUB_TAB_LABELS[sectionId] || sectionId;
@@ -6833,6 +7017,7 @@ function renderSetup(){
       <div class="inline-note" style="margin-top:8px">The version pill in the header turns red on stale devices and shows "v(yours) → v(latest)". Tapping it reloads.</div>
     </div>
 
+    ${renderPlayoffDebugCard()}
     ${renderChallengeWinnersAdmin()}`;
 
   const history   = loadHistory();
@@ -8187,9 +8372,9 @@ function hasAnyMatchplayScores(){
 
 function getAllPlayoffMatchStatuses(){
   if(!hasImportedEvent()) return [];
-  let store; try { store = ensureActiveSeason(); } catch(e){ return []; }
-  const season = store && store.seasons && store.seasons[store.viewingSeasonId || ACTIVE_SEASON_ID];
-  const seeds = season && season.playoffs && Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
+  // v5.110: bundle-fallback so the leaderboard's playoff match list
+  // populates from a fresh push without waiting on season-store hydration.
+  const seeds = getActivePlayoffSeeds();
   if(!seeds || seeds.length < 16) return [];
 
   const course = activeCourse('day2');
