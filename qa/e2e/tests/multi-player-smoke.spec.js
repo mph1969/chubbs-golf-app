@@ -56,18 +56,38 @@ test.describe('Multi-player concurrent load — Chubbs R16 G4 (TEST5)', () => {
 
     // Capture console errors per page so we can fail loudly on regressions
     const consoleErrors = pages.map((_, i) => /** @type {string[]} */ ([]));
+    // Filter for known-benign errors raised by third-party / browser layers
+    // that we can't and don't want to fix. If any of these patterns matches,
+    // the error gets dropped on the floor. Anything else surfaces as a test
+    // failure.
+    const isBenignError = (text) => {
+      if (!text) return false;
+      const benignPatterns = [
+        'cloudflareinsights',              // Netlify CF analytics beacon
+        'beacon.min.js',                   // Same beacon, different surfacing
+        'FIREBASE WARNING',                // Firebase indexOn perf hint
+        'Failed to convert value to',      // SW fetch+cache miss noise
+        'ERR_NAME_NOT_RESOLVED',           // Chromium DNS failure
+        'Could not resolve hostname',      // WebKit DNS failure
+        'firebasedatabase.app/.lp',        // Firebase long-poll disconnect on cleanup
+        'TypeError: Load failed',          // WebKit's version of fetch failure for beacon
+        'FetchEvent.respondWith',          // SW interception of failed beacon
+      ];
+      return benignPatterns.some(p => text.includes(p));
+    };
     pages.forEach((page, i) => {
-      page.on('pageerror', err => consoleErrors[i].push(`pageerror: ${err.message}`));
+      page.on('pageerror', err => {
+        const text = err && (err.message || String(err));
+        if (isBenignError(text)) return;
+        consoleErrors[i].push(`pageerror: ${text}`);
+      });
       page.on('console', msg => {
-        if (msg.type() === 'error') {
-          const text = msg.text();
-          // Filter known benign errors that aren't ours (Cloudflare
-          // beacon, Firebase indexOn warnings, etc.)
-          if (text.includes('cloudflareinsights')) return;
-          if (text.includes('FIREBASE WARNING')) return;
-          if (text.includes('Failed to convert value to')) return;  // SW noise
-          consoleErrors[i].push(`console.error: ${text}`);
-        }
+        if (msg.type() !== 'error') return;
+        const text = msg.text();
+        if (isBenignError(text)) return;
+        // ERR_FAILED is ambiguous — only flag if the URL mentions chubbs.
+        if (text.includes('ERR_FAILED') && !text.includes('chubbs')) return;
+        consoleErrors[i].push(`console.error: ${text}`);
       });
     });
 
@@ -103,8 +123,17 @@ test.describe('Multi-player concurrent load — Chubbs R16 G4 (TEST5)', () => {
       );
 
       // 1. Version pill — must be v6.x or higher. Anything 5.x means the
-      //    device is on stale cache.
-      const versionPill = await page.locator('#version-pill').textContent({ timeout: 8000 });
+      //    device is on stale cache. Pill text is populated by setTimeout
+      //    in the IIFE at ~100ms after load + Firebase subscribe at ~800ms,
+      //    so we poll until it actually has content.
+      await page.waitForFunction(
+        () => {
+          const el = document.getElementById('version-pill');
+          return el && (el.textContent || '').match(/v\d+\.\d+/);
+        },
+        { timeout: 10_000 }
+      );
+      const versionPill = await page.locator('#version-pill').textContent();
       expect(versionPill, `${player.id}: version pill`).toMatch(/v6\.\d+/);
 
       // 2. Header subtitle — must mention their name. Catches mis-routing
@@ -114,35 +143,38 @@ test.describe('Multi-player concurrent load — Chubbs R16 G4 (TEST5)', () => {
       const subtitle = await page.locator('#hero-event-sub').textContent({ timeout: 8000 });
       expect((subtitle || '').toUpperCase(), `${player.id}: header subtitle`).toContain(firstNameToken);
 
-      // 3. Click the Round top tab (in case sub-tab persisted to something
-      //    else) then click the Match-Play / Stableford sub-pill. The match-
-      //    play banner is part of the day2 view, only renders when day2 is
-      //    active. Sub-pill label is "Match-Play" when playoffs.seeds are
-      //    locked (catches the getActivePlayoffSeeds() regression too).
+      // 3. Click the Round top tab to make sure we're on the scoring view
+      //    (in case last sub-tab was restored to something else).
       await page.locator('button:has-text("Round")').first().click({ timeout: 8000 });
-      await page.waitForTimeout(300);
-
-      const subPill = page.locator('.seg-pill:has-text("Match-Play"), .seg-pill:has-text("Stableford")').first();
-      const subPillText = ((await subPill.textContent({ timeout: 5000 })) || '').trim();
-      // Match-Play label is the v5.110+ contract — anything else on a
-      // fresh context means the bundle's playoffs payload is null (admin
-      // pushed without the Section 6 toggle). The season-store fallback
-      // doesn't apply here because Playwright always opens fresh contexts
-      // with no localStorage. To fix: in admin, verify Section 6 is ON,
-      // re-push the event, re-run this test.
-      expect(
-        subPillText,
-        `${player.id}: sub-pill should say Match-Play — got "${subPillText}". This usually means the bundle at /events/${EVENT_ID}/bundle has playoffs:null. Re-push from admin with the playoff toggle on.`
-      ).toBe('Match-Play');
-      await subPill.click();
       await page.waitForTimeout(500);
 
-      // 4. Match-play banner exists and shows at least one row
+      // 4. Dual-day players (e.g. JACKS — in both Scramble Team 3 and R16
+      //    G4) land on the Scramble sub-pill by default. Switch to
+      //    Match-Play if a Match-Play sub-pill exists. For single-day
+      //    Stableford-only players, no sub-pills appear and we just stay
+      //    on the rendered day2 view.
+      const matchPlayPill = page.locator('.seg-pill').filter({ hasText: /^Match-Play$/ });
+      if ((await matchPlayPill.count()) > 0) {
+        await matchPlayPill.first().click();
+        // Wait for setTab → renderAll to swap the active .view container.
+        // Use the data-section visibility itself as the gate.
+        await page.locator('#day2.active').waitFor({ state: 'visible', timeout: 5000 });
+      }
+
+      // 5. Match-play banner exists and shows at least one row — this is
+      //    the load-bearing assertion. If playoffs.seeds didn't resolve,
+      //    .mp-card won't render at all. Failure here on a fresh context
+      //    means Firebase has /events/${EVENT_ID}/bundle with playoffs:null
+      //    — re-push from admin with the toggle on.
       const banner = page.locator('.mp-card');
       await expect(banner, `${player.id}: match-play banner card`).toBeVisible({ timeout: 8000 });
 
-      const rows = banner.locator('.mp-row');
-      const rowCount = await rows.count();
+      // Wait for at least one .mp-row to appear inside the banner. The
+      // banner can render briefly with just the section title before the
+      // rows hydrate (especially under 4-context contention), so polling
+      // is more robust than a single immediate count.
+      await expect(banner.locator('.mp-row').first(), `${player.id}: first match-play row visible`).toBeVisible({ timeout: 8000 });
+      const rowCount = await banner.locator('.mp-row').count();
       expect(rowCount, `${player.id}: match-play rows`).toBeGreaterThan(0);
 
       // 5. Player's own name is highlighted with .mp-me span (v5.111 fix)
