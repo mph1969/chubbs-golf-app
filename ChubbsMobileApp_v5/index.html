@@ -9171,7 +9171,13 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
     // Firebase-driven force-reload: admin can flip /chubbs/forceReload to push the
     // banner to every connected device immediately (no need to wait for SW poll).
     const subscribeForceReload = () => {
-      if(!window.SYNC || !SYNC.db) { setTimeout(subscribeForceReload, 1500); return; }
+      // SYNC is declared `const` at top level — in classic scripts that puts it
+      // in the script's own scope, NOT on window. window.SYNC is therefore
+      // undefined, so the legacy `!window.SYNC` check fired forever and this
+      // subscription never ran (so admin's broadcast-reload never reached
+      // devices). Bug latent since the SYNC declaration switched from var to
+      // const. Fixed 2026-05-15 by checking SYNC directly via closure.
+      if(typeof SYNC === 'undefined' || !SYNC.db) { setTimeout(subscribeForceReload, 1500); return; }
       try {
         SYNC.db.ref('chubbs/forceReload').on('value', snap => {
           const v = snap.val();
@@ -9294,7 +9300,10 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
     }
   };
   function subscribe(){
-    if(!window.SYNC || !SYNC.db){ setTimeout(subscribe, 1500); return; }
+    // Same window.SYNC bug — see subscribeForceReload above. Without this fix
+    // the version pill never auto-updates when admin pushes a new
+    // chubbs/currentVersion, so stale clients can't be told they're stale.
+    if(typeof SYNC === 'undefined' || !SYNC.db){ setTimeout(subscribe, 1500); return; }
     try {
       SYNC.db.ref('chubbs/currentVersion').on('value', snap => {
         const v = snap.val();
@@ -9308,7 +9317,11 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
   setTimeout(subscribe, 800);
   // Admin helper: publish current running version to Firebase
   window.publishCurrentVersion = function(){
-    if(!window.SYNC || !SYNC.db){ alert('Firebase offline'); return; }
+    // Same window.SYNC bug — see subscribeForceReload above. This was the
+    // visible failure: tapping "📌 Publish v6.0 as current" alerted
+    // "Firebase offline" even though Firebase was perfectly online (LIVE
+    // pill green, forceReconnect working). Fixed by using SYNC directly.
+    if(typeof SYNC === 'undefined' || !SYNC.db){ alert('Firebase offline'); return; }
     const me = appVer();
     if(!me){ alert('No APP_VERSION'); return; }
     SYNC.db.ref('chubbs/currentVersion').set({version: me, ts: Date.now()})
