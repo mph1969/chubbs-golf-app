@@ -1,0 +1,19 @@
+{
+  "rules": {
+    "events": {
+      ".read": true,
+      ".indexOn": "bundle/_publishedAt",
+      "$eventId": {
+        ".write": true
+      }
+    },
+    "admin": {
+      ".read": true,
+      ".write": true
+    },
+    "chubbs": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

@@ -36,6 +36,13 @@ State at end of day. Pick up from **OPEN ITEMS** below.
 | SW v5.109 | Seed-name canonicalisation through roster aliases on bundle apply — unblocks M1 (Matt vs Jamie), M6 (Dustin vs John B), M7 (Jordan vs Jack S) banners that were silently missing because season-4.json uses bare names ("Jack", "John", "Matt D") while mobile compares against canonical displayNames ("JACK S", "John B", "MATT") |
 | SW v5.110 | getActivePlayoffSeeds() helper unifies season-store + bundle-fallback for every "is this match-play?" gate; canonicaliseSeedName strips punctuation + Levenshtein ≤1 fallback; master-mode Playoff Diagnostics card; admin push hard-guard refuses to ship playoffs:null when toggle is ON |
 | **v6.0** | **2026-05-15 milestone reset.** APP_VERSION and CACHE_VERSION both anchor to v6.0 / chubbs-v6.0. Marks playoff-ready production state: match-play engine, canonicalisation, diagnostics, PWA event switcher, header compaction, per-match tint, current-player highlight. Pre-6.0 = pre-playoff iteration. |
+| SW v6.1 | 4 sites of the same `window.SYNC` bug fixed (top-level `const SYNC` not on window in classic scripts) — was silently breaking `publishCurrentVersion`, `subscribe` (version pill auto-update), `subscribeForceReload`, `broadcastReload` (latter shipped in v6.2). |
+| SW v6.2 | broadcastReload's missed instance of the window.SYNC fix. |
+| Rules | Firebase rules updated to re-add `/chubbs/*` read+write (was dropped silently in v5.59 with the honeypot removal). Doc at `docs/firebase-rules.md`. |
+| **QA** | **qa/course_data_qa.py** — par-sum + SI-uniqueness check across all 12 courses. Caught Krungthep Kreetha SI bug (H3 and H7 both SI 5, missing SI 8) — flagged for fix in task #19. |
+| **QA** | **qa/canonicalisation_qa.py** — 25-case regression suite for canonicaliseSeedName covering exact, alias, punctuation, multi-alias, Levenshtein, and false-positive paths. 25/25 pass. |
+| **QA** | **qa/e2e/** — Playwright multi-player smoke test (4 concurrent contexts as JORDAN/LEIGH/HANSON/JACK S). Asserts version pill v6.x, header subtitle, Match-Play sub-pill, .mp-card visible, .mp-me highlight, no console errors. Currently catches that live TEST5 bundle has `playoffs:null` — surfaces the fresh-device-no-fallback case manual testing missed. |
+| **QA** | **qa/firebase_rules/** — scaffolded `@firebase/rules-unit-testing` suite covering `/events/*`, `/chubbs/*`, `/admin`, and default-deny paths. Includes regression test for the v5.59 `/chubbs/*` removal class of bug. Needs Java + `firebase-tools` to actually run. |
 
 Plus:
 - `qa/r16_to_qf_sim.py` — front-9 → back-9 transition harness, 3 scenarios (chalk / all_square_m1 / mixed_upsets), bracket save-state + cascade invariant assertions. 3/3 pass.
