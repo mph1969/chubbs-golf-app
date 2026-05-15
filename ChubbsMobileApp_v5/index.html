@@ -6929,6 +6929,7 @@ function renderSetup(){
   const lbModeLabel = {open:'Open — everyone sees live scores', locked:'Locked — hidden until you reveal', fee:'Unlock with fee'}[getLeaderboardAccess()] || 'Open';
   const lbModeColor = {open:'var(--green)', locked:'var(--blue)', fee:'var(--gold2)'}[getLeaderboardAccess()] || 'var(--green)';
   const settingsTab = `
+    ${renderPlayoffDebugCard()}
     <div class="card">
       <div class="section-title">Leaderboard access <span style="color:${lbModeColor}">· ${getLeaderboardAccess().toUpperCase()}</span></div>
       <div class="small tight">${lbModeLabel}${getLeaderboardAccess()==='fee' ? ' · '+getLeaderboardFee()+' '+ ((state.eventBundle&&state.eventBundle.event&&state.eventBundle.event.currency)||'RMB') +' per player' : ''}</div>
@@ -7017,7 +7018,6 @@ function renderSetup(){
       <div class="inline-note" style="margin-top:8px">The version pill in the header turns red on stale devices and shows "v(yours) → v(latest)". Tapping it reloads.</div>
     </div>
 
-    ${renderPlayoffDebugCard()}
     ${renderChallengeWinnersAdmin()}`;
 
   const history   = loadHistory();
