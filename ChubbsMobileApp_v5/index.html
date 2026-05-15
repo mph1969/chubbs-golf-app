@@ -9241,7 +9241,14 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
   }
   // Expose for admin: window.broadcastReload('optional msg')
   window.broadcastReload = function(message){
-    if(!window.SYNC || !SYNC.db){ alert('Firebase offline'); return; }
+    // Same window.SYNC bug as publishCurrentVersion / subscribe /
+    // subscribeForceReload (fixed 2026-05-15) — top-level const SYNC isn't
+    // attached to window in a classic script, so the old `!window.SYNC`
+    // check was permanently true and Broadcast Reload returned 'Firebase
+    // offline' even when fully connected. This is the 4th and final site
+    // of that same bug — the broadcastReload IIFE is separate from the
+    // version-pill IIFE so the v6.1 fix missed it.
+    if(typeof SYNC === 'undefined' || !SYNC.db){ alert('Firebase offline'); return; }
     SYNC.db.ref('chubbs/forceReload').set({ts: Date.now(), message: message || 'New build pushed — reload to update'})
       .then(() => { try{ showToast && showToast('Reload broadcast sent', 'ok'); }catch(e){} })
       .catch(e => alert('Broadcast failed: ' + e.message));
