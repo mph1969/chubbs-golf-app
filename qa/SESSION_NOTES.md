@@ -77,6 +77,7 @@ Currently testing with "(TEST) May Chubbs at Yinli" event. Day-of: switch admin 
 
 ## Deferred to post-May 23
 
+- **Activity dashboard** (task #21) — master-mode view of who's actively using the app: live-now (last 60s loadHits + score writes), today's totals, per-player heatmap with stale-version flag, per-event drilldown. Pre-event: confirm brain trust is testing. Day-of: confirm scorers are hitting the app live. ~5-6 hrs. Data already collected in `/events/{id}/_loadHits` + `/events/{id}/groups/{gid}` — just needs the UI. See `NewFeatures/activity-dashboard-spec.md` for the design sketch. Recommend hosting on ChubbsAdmin (desktop) rather than mobile.
 - Mobile-side event-header playoffs indicator chip ("🏆 Playoffs locked · 16 seeds") — proposed for load-side mistake protection
 - John B / Mike H / case sensitivity edge cases in roster (the JOHN-with-hcp-1 quirk)
 - Bracket-via-Firebase sync (would remove admin-re-push friction)
