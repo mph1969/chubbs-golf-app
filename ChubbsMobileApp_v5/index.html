@@ -183,8 +183,20 @@
     .mc-grid>.player-card .player-head{margin-bottom:6px;gap:6px}
     .mc-grid>.player-card .player-name{font-size:12px}
     .mc-grid>.player-card .hcp-badge{padding:2px 6px;font-size:10px}
-    .mc-grid>.player-card .stepper{grid-template-columns:36px 1fr 36px;gap:4px}
-    .mc-grid>.player-card .stepper button{height:38px;font-size:18px;border-radius:10px}
+    /* v6.2 — equal-width stepper for the match-grid (2 cards per row). Was
+       36px/1fr/36px which crammed the buttons left of a reserved to-par + ✕
+       slot; new layout pulls those out to their own rows so the stepper can
+       use the full card width with 44px+ touch targets (iOS HIG min for
+       glove-friendly tapping). */
+    .mc-grid>.player-card .stepper{grid-template-columns:1fr 1fr 1fr;gap:6px}
+    .mc-grid>.player-card .stepper button{height:46px;font-size:20px;border-radius:10px;font-weight:700}
+    .mc-grid>.player-card .stepper .val{height:46px;font-size:24px;display:flex;align-items:center;justify-content:center;font-weight:800}
+    /* Status + clear row sits below the stepper; clear button is a slim ✕ on the right */
+    .mc-grid>.player-card .mc-status-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;font-size:11px;color:var(--muted);min-height:30px}
+    .mc-grid>.player-card .mc-status-row .stepper-clr{height:30px;min-width:30px;padding:0 8px;font-size:13px}
+    /* Spenny gets its own row so it's not competing with status text for horizontal space */
+    .mc-grid>.player-card .mc-spenny-row{display:flex;justify-content:center;padding:2px 0 0;min-height:32px}
+    .mc-grid>.player-card .mc-spenny-row .spenny-btn{font-size:11px;padding:6px 16px;flex:0 1 auto}
     /* Score value font matches +/− button so the number doesn't visually
        shrink relative to the controls on narrow widths. */
     .mc-grid>.player-card .stepper .val{height:38px;font-size:22px;font-weight:900;border-radius:10px}
@@ -245,11 +257,13 @@
        hide jackets/score-status icons and the Spenny button to make room
        for the stroke tag + side-by-side layout. */
     .mc-grid > .player-card .player-extras{display:none}
-    .mc-grid > .player-card .spenny-btn{display:none}
+    /* v6.2 — Spenny is back, but on its own row below the stepper (see
+       .mc-spenny-row above). Previously hidden in match-grid because there
+       wasn't room next to the cramped stepper. The new layout has space. */
     @media (max-width:380px){
-      .mc-grid>.player-card .stepper{grid-template-columns:32px 1fr 32px;gap:3px}
-      .mc-grid>.player-card .stepper button{height:36px;font-size:16px}
-      .mc-grid>.player-card .stepper .val{height:36px;font-size:20px;font-weight:900}
+      .mc-grid>.player-card .stepper{grid-template-columns:1fr 1fr 1fr;gap:4px}
+      .mc-grid>.player-card .stepper button{height:42px;font-size:18px}
+      .mc-grid>.player-card .stepper .val{height:42px;font-size:22px;font-weight:900}
       .mc-pair{font-size:11px}
     }
     .mp-tiebreak{padding:7px 10px 7px 44px;font-size:11px;font-weight:600;color:#79b0e3;background:rgba(121,176,227,0.07);border-top:1px dashed rgba(121,176,227,0.3);line-height:1.4}
@@ -8033,19 +8047,13 @@ function renderDay2(){
             <div class="hcp-badge">HCP ${p.hcp}</div>
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:4px">
-          <div class="stepper" style="flex:1">
-            <button onclick="stepScore('stableford',${idx},-1,'gross')">−</button>
-            ${hasGross
-              ? `<div class="val entered">${gross}</div>`
-              : (meta.par ? `<button class="val needs-entry" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
-                          : `<div class="val empty needs-entry">—</div>`)}
-            <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
-          </div>
-          <button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear" style="visibility:${hasGross?'visible':'hidden'}" aria-hidden="${hasGross?'false':'true'}">✕</button>
-          ${(typeof gross==='number' && typeof meta.par==='number')
-            ? `<span style="font-size:12px;font-weight:700;color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'};min-width:50px;text-align:right;flex:0 0 50px">${fmtToPar(gross - meta.par)}</span>`
-            : `<span style="min-width:50px;flex:0 0 50px" aria-hidden="true"></span>`}
+        <div class="stepper" style="margin-bottom:4px">
+          <button onclick="stepScore('stableford',${idx},-1,'gross')">−</button>
+          ${hasGross
+            ? `<div class="val entered">${gross}</div>`
+            : (meta.par ? `<button class="val needs-entry" onclick="setExact('stableford',${idx},${meta.par},'gross')">${meta.par}</button>`
+                        : `<div class="val empty needs-entry">—</div>`)}
+          <button onclick="stepScore('stableford',${idx},1,'gross')">+</button>
         </div>
         ${needsPutts ? `<div style="display:flex;gap:6px;align-items:center;padding:4px 0;border-top:1px solid var(--line)">
           <span style="font-size:10px;color:var(--muted);min-width:32px">🃏 Putts</span>
@@ -8056,9 +8064,14 @@ function renderDay2(){
           </div>
           <button class="stepper-clr" onclick="clearScore('stableford',${idx},'putts')" title="Clear" style="visibility:${hasPutts?'visible':'hidden'}" aria-hidden="${hasPutts?'false':'true'}">✕</button>
         </div>` : ''}
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;font-size:11px;color:var(--muted);min-height:32px">
-          <span>${hasGross ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${shots?' · +'+shots+' shots':''}` : '<span aria-hidden="true">&nbsp;</span>'}</span>
-          <button class="btn slim spenny-btn" style="font-size:11px;padding:6px 12px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter double-par (max allowed score per Chubbs rules) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
+        <div class="mc-status-row">
+          <span>${hasGross
+            ? `Net ${net ?? '—'} · <strong style="color:var(--gold2)">${points ?? 0} pts</strong>${(typeof gross==='number' && typeof meta.par==='number') ? ` · <span style="color:${gross-meta.par<0?'#a5f0c5':gross-meta.par>0?'#ffb5ae':'var(--gold2)'};font-weight:700">${fmtToPar(gross - meta.par)}</span>` : ''}${shots?' · +'+shots+' shots':''}`
+            : '<span aria-hidden="true">&nbsp;</span>'}</span>
+          <button class="stepper-clr" onclick="clearScore('stableford',${idx},'gross')" title="Clear" style="visibility:${hasGross?'visible':'hidden'}" aria-hidden="${hasGross?'false':'true'}">✕</button>
+        </div>
+        <div class="mc-spenny-row">
+          <button class="btn slim spenny-btn" style="font-size:11px;padding:6px 16px;border-color:rgba(209,107,93,0.3);color:#d16b5d" onclick="setBlob(${idx})" title="Auto-enter double-par (max allowed score per Chubbs rules) and trigger DRINK FOR SPENNY alert">💀 Spenny</button>
         </div>
       </div>
     `;
@@ -8934,7 +8947,7 @@ function renderFooter(){
 // drift accumulated across 100+ deploys in the 5.x series; the reset realigned both counters.
 // Drift will naturally accumulate again — APP bumps on user-visible releases, CACHE bumps every
 // deploy. Do NOT lower CACHE_VERSION to "match" APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '6.1';
+const APP_VERSION = '6.2';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
