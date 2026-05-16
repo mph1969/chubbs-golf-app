@@ -3126,9 +3126,24 @@ async function showExportConfirmation(action) {
 
       ${warningHtml}
 
+      ${action === 'push' ? `
+        <label style="display:flex;align-items:flex-start;gap:10px;padding:10px;margin-top:12px;border:1px solid rgba(214,176,90,0.3);border-radius:8px;background:rgba(214,176,90,0.04);cursor:pointer;font-size:11px;color:#f4efe2">
+          <input type="checkbox" id="mark-current-live" style="margin-top:2px;cursor:pointer" />
+          <div>
+            <div style="font-weight:700;color:var(--gold2,#c9a84c);margin-bottom:2px">📍 Mark as current LIVE event</div>
+            <div style="color:#a8b8ad;line-height:1.4">
+              Writes this event ID to <code>/chubbs/currentEvent</code>. Every connected mobile device
+              that's loaded a DIFFERENT event will see a gold banner offering to switch.
+              <strong>Only enable this for the real event you want everyone on</strong> —
+              if you flag a TEST event, your brain trust phones will be told to switch to it.
+            </div>
+          </div>
+        </label>
+      ` : ''}
+
       <div style="display:flex;gap:8px;margin-top:16px">
         <button onclick="document.getElementById('export-confirm').remove()" style="flex:1;padding:12px;border-radius:10px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:#a8b8ad;font-size:13px;cursor:pointer">← Back to Setup</button>
-        <button onclick="document.getElementById('export-confirm').remove();${actionFn}" style="flex:1;padding:12px;border-radius:10px;background:${hasErrors?'#5c2020':'var(--gold2,#c9a84c)'};border:none;color:${hasErrors?'#ffb5ae':'#1a1000'};font-size:13px;font-weight:900;cursor:pointer">${hasErrors ? '⚠️ Export anyway' : actionLabel}</button>
+        <button onclick="(function(){var cb=document.getElementById('mark-current-live');window.__markAsCurrentLive=cb&&cb.checked;document.getElementById('export-confirm').remove();${actionFn};})()" style="flex:1;padding:12px;border-radius:10px;background:${hasErrors?'#5c2020':'var(--gold2,#c9a84c)'};border:none;color:${hasErrors?'#ffb5ae':'#1a1000'};font-size:13px;font-weight:900;cursor:pointer">${hasErrors ? '⚠️ Export anyway' : actionLabel}</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -3244,12 +3259,33 @@ async function doPushToLiveApp() {
   // path with illegal chars like '[', '.', '$') surface a clear error
   // instead of leaving the button stuck on "⏳ Uploading...". Async
   // rejections still flow through the .catch chain.
+  const markCurrent = !!window.__markAsCurrentLive;
+  window.__markAsCurrentLive = false;  // consume the flag so it doesn't bleed to next push
   try {
     db.ref(`/events/${eventId}/bundle`).set(payload)
       .then(() => {
         btn.innerHTML = "✅ Sent!";
         setTimeout(() => btn.innerHTML = origText, 4000);
         showPlayerLinksPanel(eventJson);
+
+        // v6.5 — mark this event as the current live event so every
+        // connected mobile sees the gold "switch event" banner. Only
+        // runs when the user explicitly checked the box in the confirm
+        // modal; default is OFF so test pushes don't accidentally yank
+        // the brain trust off LIVE.
+        if(markCurrent){
+          const displayName = (eventJson.event && (eventJson.event.displayName || eventJson.event.name)) || eventId;
+          db.ref('chubbs/currentEvent').set({
+            eventId,
+            displayName,
+            ts: Date.now(),
+            publishedBy: 'ChubbsAdmin',
+          }).then(() => {
+            try { showToast(`📍 ${displayName} marked as current live event`, 'ok', 4500); } catch(e){}
+          }).catch(err => {
+            alert('Push succeeded, but failed to mark as current: ' + err.message);
+          });
+        }
       })
       .catch(err => {
         btn.innerHTML = "❌ Failed";

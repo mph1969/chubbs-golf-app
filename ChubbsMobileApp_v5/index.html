@@ -395,6 +395,20 @@
     .mode-banner{margin:12px 0 0}
     .mode-banner .status{display:flex;justify-content:space-between;align-items:center;gap:10px}
     .mode-banner .toolbar{flex-shrink:0}
+    /* v6.5 — current-event banner. Surfaces when admin marked a different
+       event as the live event and the device is still pointed at an old
+       one (typically the TEST event after the LIVE push). Gold border so
+       it's not lost in the green chrome. */
+    .cur-evt-banner{display:flex;align-items:center;gap:10px;margin:12px 0 0;padding:12px 14px;
+      border:1.5px solid var(--gold2);border-radius:14px;
+      background:linear-gradient(90deg,rgba(214,176,90,0.18),rgba(214,176,90,0.06));
+      animation:toastIn 0.25s ease}
+    .cur-evt-banner-main{flex:1;min-width:0}
+    .cur-evt-banner-title{font-weight:800;font-size:13px;color:var(--gold2)}
+    .cur-evt-banner-sub{font-size:11px;color:var(--text);opacity:0.85;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .cur-evt-banner-actions{display:flex;gap:6px;flex-shrink:0}
+    .cur-evt-banner-switch{padding:8px 14px;border-radius:10px;border:none;background:var(--gold2);color:#251800;font-weight:800;font-size:12px;cursor:pointer}
+    .cur-evt-banner-dismiss{padding:8px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.15);background:transparent;color:var(--muted);font-size:14px;cursor:pointer;line-height:1}
     .flag-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid rgba(209,107,93,0.35);background:rgba(209,107,93,0.08);color:#ffd8d2;font-size:12px;font-weight:800;cursor:pointer}
     .flag-btn.on{background:rgba(209,107,93,0.22);border-color:#ff9f93;color:#fff4f1}
     .join-box{display:grid;gap:10px}
@@ -573,6 +587,7 @@
       <div id="event-banner-player" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
     </div>
     <div id="pendingEventBanner" style="display:none"></div>
+    <div id="currentEventBanner" style="display:none"></div>
     <div id="modeBanner" class="mode-banner"></div>
     <nav class="tabs" id="tabs"></nav>
     <nav class="sub-tabs" id="sub-tabs"></nav>
@@ -8919,7 +8934,7 @@ function renderFooter(){
 // drift accumulated across 100+ deploys in the 5.x series; the reset realigned both counters.
 // Drift will naturally accumulate again — APP bumps on user-visible releases, CACHE bumps every
 // deploy. Do NOT lower CACHE_VERSION to "match" APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '6.0';
+const APP_VERSION = '6.1';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
@@ -9352,6 +9367,98 @@ fetchSeason4IfMissing();  // Phase 1 — pull baked-in season-4.json on first lo
       .then(() => { try { showToast(`Published v${me} as current`, 'ok'); } catch(e){} })
       .catch(e => alert('Publish failed: ' + e.message));
   };
+})();
+
+// ── Current-event pointer + auto-switch banner (v6.5) ──
+// Admin marks an event as "current live" via /chubbs/currentEvent. Every
+// connected device subscribes and surfaces a gold banner if the local
+// event doesn't match. One tap switches. Solves the lock-in problem for
+// devices that bookmarked the test-event URL or have it pinned in PWA
+// shortcut — without this, you'd have to manually message every player
+// the new URL and hope they tap it instead of their existing icon.
+(function(){
+  const DISMISS_KEY = 'chubbs_curevt_dismissed_v1';
+  let liveEvent = null;  // { eventId, displayName, ts, publishedBy }
+  let dismissedFor = null;
+  try { dismissedFor = localStorage.getItem(DISMISS_KEY) || null; } catch(e){}
+
+  function currentLocalEventId(){
+    try {
+      return (state && state.eventBundle && state.eventBundle.event && state.eventBundle.event.eventId) || null;
+    } catch(e){ return null; }
+  }
+
+  function render(){
+    const el = document.getElementById('currentEventBanner');
+    if(!el) return;
+    if(!liveEvent || !liveEvent.eventId){ el.style.display = 'none'; return; }
+    const localId = currentLocalEventId();
+    // Three skip conditions:
+    //   1. local already matches the current event — nothing to switch to
+    //   2. user dismissed this specific eventId — respect the choice
+    //      until a NEWER currentEvent gets published (different eventId)
+    //   3. no local event loaded — banner is irrelevant, they'll tap a
+    //      link to load something
+    if(!localId) { el.style.display = 'none'; return; }
+    if(localId === liveEvent.eventId){ el.style.display = 'none'; return; }
+    if(dismissedFor === liveEvent.eventId){ el.style.display = 'none'; return; }
+    const label = liveEvent.displayName || liveEvent.eventId;
+    el.className = 'cur-evt-banner';
+    el.style.display = 'flex';
+    el.innerHTML = `
+      <div class="cur-evt-banner-main">
+        <div class="cur-evt-banner-title">🏆 ${escHtml(label)} is now live</div>
+        <div class="cur-evt-banner-sub">You're currently on a different event · tap Switch to load this one</div>
+      </div>
+      <div class="cur-evt-banner-actions">
+        <button class="cur-evt-banner-switch" onclick="window.__switchToCurrentEvent()">Switch</button>
+        <button class="cur-evt-banner-dismiss" title="Dismiss for this session" onclick="window.__dismissCurrentEvent()">×</button>
+      </div>`;
+  }
+
+  window.__switchToCurrentEvent = function(){
+    if(!liveEvent || !liveEvent.eventId) return;
+    // Preserve player identity across the switch. The new event's bundle
+    // will look for state.eventPlayerId in its players[] list — if the
+    // ID matches (HANSON, LEIGH, etc.), the user lands as themselves
+    // without needing the ?player= param.
+    let pid = '';
+    try { pid = state.eventPlayerId || ''; } catch(e){}
+    const url = new URL(window.location.href);
+    url.searchParams.set('loadEvent', liveEvent.eventId);
+    if(pid) url.searchParams.set('player', pid);
+    window.location.href = url.toString();
+  };
+
+  window.__dismissCurrentEvent = function(){
+    if(!liveEvent || !liveEvent.eventId) return;
+    dismissedFor = liveEvent.eventId;
+    try { localStorage.setItem(DISMISS_KEY, dismissedFor); } catch(e){}
+    render();
+  };
+
+  function subscribe(){
+    if(typeof SYNC === 'undefined' || !SYNC.db){ setTimeout(subscribe, 1500); return; }
+    try {
+      SYNC.db.ref('chubbs/currentEvent').on('value', snap => {
+        const v = snap.val();
+        liveEvent = (v && typeof v === 'object') ? v : null;
+        render();
+      });
+    } catch(e){ console.warn('[currentEvent subscribe]', e); }
+  }
+  // Re-render on every renderAll so the banner refreshes if the local
+  // event changes (e.g. user manually loads via Switch Event picker
+  // while the currentEvent pointer is set).
+  const origRenderAll = window.renderAll;
+  if(typeof origRenderAll === 'function'){
+    window.renderAll = function(){
+      const r = origRenderAll.apply(this, arguments);
+      try { render(); } catch(e){}
+      return r;
+    };
+  }
+  setTimeout(subscribe, 900);
 })();
 
 // ── Rotating tagline ──
