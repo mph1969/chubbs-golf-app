@@ -257,9 +257,10 @@
        hide jackets/score-status icons and the Spenny button to make room
        for the stroke tag + side-by-side layout. */
     .mc-grid > .player-card .player-extras{display:none}
-    /* v6.2 — Spenny is back, but on its own row below the stepper (see
-       .mc-spenny-row above). Previously hidden in match-grid because there
-       wasn't room next to the cramped stepper. The new layout has space. */
+    /* v6.2 — Spenny stays out of match-play. Tournament rules don't use the
+       double-par shortcut for match-play scoring; it's a casual-round
+       shenanigan only. Hide the whole row so we don't leave empty space. */
+    .mc-grid > .player-card .mc-spenny-row{display:none}
     @media (max-width:380px){
       .mc-grid>.player-card .stepper{grid-template-columns:1fr 1fr 1fr;gap:4px}
       .mc-grid>.player-card .stepper button{height:42px;font-size:18px}
