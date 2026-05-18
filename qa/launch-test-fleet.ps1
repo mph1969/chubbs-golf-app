@@ -94,7 +94,10 @@ Write-Host ""
 for ($i = 0; $i -lt $Players.Count; $i++) {
     $p     = $Players[$i]
     $col   = $i % $Cols
-    $row   = [int]($i / $Cols)
+    # NOTE: PowerShell [int] uses banker's rounding (0.6 -> 1), which broke
+    # the first-run row math (windows 4, 5, 9, 10 landed in wrong rows).
+    # [math]::Floor is the integer-truncation we actually want.
+    $row   = [math]::Floor($i / $Cols)
     $x     = $MonitorOffsetX + ($col * $winW)
     $y     = $MonitorOffsetY + ($row * $winH)
     $profileDir = Join-Path $ProfileRoot ("p{0:D2}-{1}" -f $i, $p.pid)
