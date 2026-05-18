@@ -28,14 +28,30 @@
 
 param(
     [string]$EventId        = "2026-TEST5-Brai",
-    [int]   $MonitorWidth   = 1920,
-    [int]   $MonitorHeight  = 1080,
+    [int]   $MonitorWidth   = 0,           # 0 = auto-detect primary monitor
+    [int]   $MonitorHeight  = 0,           # 0 = auto-detect primary monitor working area
     [int]   $Cols           = 5,
     [int]   $Rows           = 2,
     [int]   $MonitorOffsetX = 0,
     [int]   $MonitorOffsetY = 0,
     [int]   $StaggerMs      = 600
 )
+
+# Auto-detect primary monitor dimensions when not explicitly overridden.
+# WorkingArea excludes the taskbar so windows on row 2 don't get clipped.
+# On the 2026-05-19 first run this script defaulted to 1920x1080 on a
+# 3440x1440 ultrawide — windows ended up tiny. Auto-detect avoids that.
+if ($MonitorWidth -le 0 -or $MonitorHeight -le 0) {
+    try {
+        Add-Type -AssemblyName System.Windows.Forms -ErrorAction SilentlyContinue
+        $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+        if ($MonitorWidth  -le 0) { $MonitorWidth  = $bounds.Width  }
+        if ($MonitorHeight -le 0) { $MonitorHeight = $bounds.Height }
+    } catch {
+        if ($MonitorWidth  -le 0) { $MonitorWidth  = 1920 }
+        if ($MonitorHeight -le 0) { $MonitorHeight = 1080 }
+    }
+}
 
 $BaseUrl = "https://chubbs-golf.netlify.app/?loadEvent=$EventId&player="
 
