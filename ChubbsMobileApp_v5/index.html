@@ -1245,12 +1245,24 @@ function initSync(eventId){
     SYNC.remoteGroups = data;
     SYNC.status = 'live';
     updateSyncBadge();
-    renderLeaderboard();
+    // v6.2 hotfix (SW v6.9): renderAll instead of just renderLeaderboard.
+    // The match-play banner + scoring grid both consume SYNC.remoteGroups
+    // via the v6.8 read-side hydration in getActiveMatchPlayMatches, but
+    // they live inside the Round->Match-Play view (NOT the leaderboard
+    // section). Without re-rendering everything, viewers would have the
+    // remote data sitting in memory but the rendered banner would stay
+    // stale at "-- not started --" until the user navigated away and
+    // back. Found in 2026-05-19 dry-run: hydration logic was correct,
+    // re-render trigger was missing.
+    renderAll();
     if(typeof window._liveAlertCheck === 'function') window._liveAlertCheck();
   });
   listen(`/events/${eventId}/teams`, data => {
     SYNC.remoteTeams = data;
-    renderLeaderboard();
+    // Same reasoning as /groups above — scramble viewers also need a
+    // full re-render to see live team scoring updates, not just the
+    // leaderboard column.
+    renderAll();
   });
   // Listen for leaderboard reveal flag (admin can reveal/hide mid-event)
   listen(`/events/${eventId}/leaderboardRevealed`, data => {
