@@ -4204,8 +4204,47 @@ function getActiveMatchPlayMatches(){
   const seeds = getActivePlayoffSeeds();
   if(!seeds || seeds.length < 2) return [];
   const course = activeCourse('day2');
-  const holes = state.stableford && state.stableford.holes;
+  let holes = state.stableford && state.stableford.holes;
   if(!course || !course.holes || !holes) return [];
+
+  // ── Read-side hydration for FRONT-9 R16 (v6.2 hotfix, SW v6.8) ─────────
+  // Mirrors the back-9 Tier 2c-4b pattern at getActiveBackNineMatches.
+  // Without this, non-scorer phones in an R16 group show "— not started —"
+  // even after the scorer enters multiple holes — because the match-play
+  // engine reads state.stableford.holes (local-only). The scorer's writes
+  // land in Firebase fine; viewers receive them in SYNC.remoteGroups via
+  // the listener; but nothing overlays them onto the local holes array
+  // that the engine consumes. Pull the scorer's grosses from the active
+  // R16 group node and overlay them where local data is missing. Remote
+  // player order may differ from local — map via playerId so reorderings
+  // (e.g. scorer-last sort) don't corrupt the overlay.
+  // Found 2026-05-19 during the 10-window dry-run: JACK S scored holes 1+2,
+  // LEIGH & HANSON both showed "not started" until reload.
+  try {
+    const gid = state.day2GroupId;
+    const remote = (typeof SYNC !== 'undefined' && SYNC && SYNC.remoteGroups && gid)
+      ? SYNC.remoteGroups[gid] : null;
+    if(remote && Array.isArray(remote.holes) && Array.isArray(remote.players) && remote.half !== 'back9'){
+      const remoteIdxFor = (localIdx) => {
+        const lp = players[localIdx];
+        const lpid = lp ? String(lp.playerId || '') : '';
+        if(!lpid) return -1;
+        return remote.players.findIndex(rp => rp && String(rp.playerId || '') === lpid);
+      };
+      holes = holes.map((h, hi) => {
+        if(hi > 8) return h;   // R16 match-play window = front 9 only
+        const rh = remote.holes[hi];
+        if(!rh || !Array.isArray(rh.gross)) return h;
+        const localGross = (h && Array.isArray(h.gross)) ? h.gross : [];
+        const mergedGross = players.map((p, i) => {
+          if(localGross[i] != null) return localGross[i];
+          const ri = remoteIdxFor(i);
+          return (ri >= 0 && rh.gross[ri] != null) ? rh.gross[ri] : null;
+        });
+        return Object.assign({}, h || {}, { gross: mergedGross });
+      });
+    }
+  } catch(e){}
   // R16 pairings — kept in lock-step with the bracket viewer r16Pairs above.
   // Order follows the printed bracket graphic top-to-bottom; see r16Pairs comment.
   const R16_PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
