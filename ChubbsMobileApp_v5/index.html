@@ -1364,7 +1364,21 @@ function pushToFirebase(){
     ? hydrateLineupPlayers(swapGroup.playerIds, state.eventBundle)
     : state.day2Players;
   const tid = state.day1TeamId;
-  if(gid) SYNC.db.ref(`/events/${eventId}/groups/${gid}`).set({
+
+  // v6.2 hotfix (SW v6.10) — SCORER GATE.
+  // Without this, viewer devices push their empty state.stableford.holes
+  // to Firebase on every saveState() (bundle hydration, options toggles,
+  // page reload, etc.), clobbering the scorer's writes. Found 2026-05-19:
+  // a viewer's reload wiped Jack S's R16 G4 scores from Firebase entirely.
+  // Only the designated scorer for each day's lineup should write.
+  // Manual-mode safety: if isCurrentPlayerScorer is undefined, allow the
+  // write (backward-compat with older flows that had no scorer concept).
+  const day2IsScorer = (typeof isCurrentPlayerScorer === 'function')
+    ? isCurrentPlayerScorer('stableford') : true;
+  const day1IsScorer = (typeof isCurrentPlayerScorer === 'function')
+    ? isCurrentPlayerScorer('scramble') : true;
+
+  if(gid && day2IsScorer) SYNC.db.ref(`/events/${eventId}/groups/${gid}`).set({
     players,
     holes:   state.stableford.holes,
     hole:    state.stableford.hole,
@@ -1372,7 +1386,7 @@ function pushToFirebase(){
     half:    swap ? 'back9' : 'r16',
     ts:      now
   }).catch(()=>{});
-  if(tid) SYNC.db.ref(`/events/${eventId}/teams/${tid}`).set({
+  if(tid && day1IsScorer) SYNC.db.ref(`/events/${eventId}/teams/${tid}`).set({
     players:  state.day1Players,
     holes:    state.scramble.holes,
     hole:     state.scramble.hole,
@@ -8575,24 +8589,35 @@ function getAllPlayoffMatchStatuses(){
   function lookup(name){
     const t = norm(name);
     if(!t) return null;
+    // v6.2 hotfix (SW v6.10): if the player is in MY local group BUT I'm a
+    // viewer (local state.stableford has no scores), don't short-circuit
+    // here — fall through to remote so we pick up the scorer's writes.
+    // Previously this caused the Leaderboard's R16 strip to show "-- not
+    // started --" for the viewer's own group while other groups rendered
+    // fine. Found 2026-05-19 — Hanson on G4 saw G1+G2 progress but his
+    // own G4 match as not-started.
     const li = localPlayers.findIndex(p => norm(p.name) === t);
+    let localResult = null;
     if(li >= 0){
-      return {
-        hcp: localPlayers[li].hcp || 0,
-        grosses: state.stableford.holes.map(h => Array.isArray(h.gross) ? h.gross[li] : null)
-      };
+      const localGrosses = state.stableford.holes.map(h => Array.isArray(h.gross) ? h.gross[li] : null);
+      localResult = { hcp: localPlayers[li].hcp || 0, grosses: localGrosses };
+      if(localGrosses.some(g => g != null)) return localResult;
+      // else fall through and try remote
     }
     for(const gd of Object.values((SYNC && SYNC.remoteGroups) || {})){
       const players = Array.isArray(gd.players) ? gd.players : [];
       const pi = players.findIndex(p => norm(p.displayName || p.name) === t);
       if(pi >= 0){
-        return {
-          hcp: players[pi].hcp || 0,
-          grosses: (Array.isArray(gd.holes) ? gd.holes : []).map(h => Array.isArray(h.gross) ? h.gross[pi] : null)
-        };
+        const remoteGrosses = (Array.isArray(gd.holes) ? gd.holes : []).map(h => Array.isArray(h.gross) ? h.gross[pi] : null);
+        // Prefer the remote source that actually has scores. A different
+        // remote group may also contain this player (stale or wrong data),
+        // so accept only when grosses are present.
+        if(remoteGrosses.some(g => g != null)){
+          return { hcp: players[pi].hcp || 0, grosses: remoteGrosses };
+        }
       }
     }
-    return null;
+    return localResult;
   }
 
   const matchHoleIdxs = [0,1,2,3,4,5,6,7,8]; // R16 = front 9
