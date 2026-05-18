@@ -2358,6 +2358,17 @@ function pickDefaultScorerId(playerIds) {
 function buildEventBundle() {
   const lbRadio = document.querySelector('input[name="lb-access"]:checked');
   const lbAccess = lbRadio ? lbRadio.value : 'open';
+  // 2026-05-18 audit (sister-app wolfDecision-class bug). The five number
+  // inputs below previously used `parseInt(input.value) || default`, which
+  // silently coerces a legitimately-typed "0" to the default. Most
+  // visible failure: organiser sets ante=0 for a free-ante poker game,
+  // bundle ships ante=50. `Number.isFinite` lets 0 survive; only truly
+  // missing/blank input (NaN) falls through to the default.
+  const numOr = (selId, def) => {
+    const raw = document.getElementById(selId);
+    const n = raw ? parseInt(raw.value, 10) : NaN;
+    return Number.isFinite(n) ? n : def;
+  };
   const opts = {
     // 3-Putt Poker disabled by default — mobile shows a per-group toggle so
     // any group can opt in on the day without needing the admin to flip it
@@ -2365,12 +2376,12 @@ function buildEventBundle() {
     // toggle has sensible values when flipped on.
     threePuttPoker: false, pokerMode: "digital",
     scrambleTeamSize: getScrambleTeamSize(),
-    minDrives: parseInt(document.getElementById('scramble-min-drives').value) || 4,
-    ante: parseInt(document.getElementById('ev-ante').value) || 50,
-    penalty3: parseInt(document.getElementById('ev-pen3').value) || 10,
-    penalty4plus: parseInt(document.getElementById('ev-pen4').value) || 20,
+    minDrives: numOr('scramble-min-drives', 4),
+    ante: numOr('ev-ante', 50),
+    penalty3: numOr('ev-pen3', 10),
+    penalty4plus: numOr('ev-pen4', 20),
     leaderboardAccess: lbAccess,
-    leaderboardFee: lbAccess === 'fee' ? (parseInt(document.getElementById('ev-lb-fee').value) || 20) : 0
+    leaderboardFee: lbAccess === 'fee' ? numOr('ev-lb-fee', 20) : 0
   };
 
   const playersOut = masterRoster.filter(p => state.attendance[p.playerId] && state.attendance[p.playerId] !== 'none');
