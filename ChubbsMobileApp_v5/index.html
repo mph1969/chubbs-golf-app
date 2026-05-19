@@ -1368,6 +1368,43 @@ function initSync(eventId){
   });
   SYNC._eventId = eventId;
   subscribeConnectionStatus();
+
+  // v6.2 hotfix (SW v6.12) — re-publish existing local bracket saves.
+  // Handles the historic case: scorer's device saved matches on pre-v6.11
+  // code, which only wrote to localStorage. After upgrading to v6.11+,
+  // the Save buttons now read "Saved to bracket" and won't re-fire the
+  // Firebase write. This block iterates the scorer's local season store
+  // on init and pushes any saved entries that aren't already in Firebase.
+  // Idempotent — Firebase write with the same value is a no-op for
+  // listeners. Gated by isCurrentPlayerScorer so viewers don't try to
+  // publish their local state (which v6.11 listener has been writing to,
+  // making it potentially stale from another scorer's data).
+  setTimeout(() => {
+    try {
+      const isScorer = (typeof isCurrentPlayerScorer === 'function')
+        ? isCurrentPlayerScorer('stableford') : false;
+      if(!isScorer || masterMode){
+        // Master mode also republishes — they can edit any bracket entry.
+        if(!isScorer && !masterMode) return;
+      }
+      const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
+      const season = store && store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
+      if(!season || !season.playoffs) return;
+      ['r16','cup_qf','plate_qf','cup_sf','plate_sf','shield_sf','spoon_sf','cup_final','plate_final','shield_final','spoon_final'].forEach(type => {
+        const arr = season.playoffs[type];
+        if(!Array.isArray(arr)) return;
+        arr.forEach((rec, idx) => {
+          if(rec && rec.winner){
+            SYNC.db.ref(`/events/${eventId}/bracket/${type}/${idx}`).set({
+              winner: rec.winner,
+              result: rec.result || '',
+              savedAt: Date.now()
+            }).catch(()=>{});
+          }
+        });
+      });
+    } catch(e){ console.warn('[Sync] bracket republish failed:', e); }
+  }, 1200);   // small delay so the listeners have settled first
 }
 // Apply admin-pushed starting holes to the bundle + this device's own round (if not yet scored)
 function applyRemoteStartingHoles(sh){
