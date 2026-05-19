@@ -296,9 +296,14 @@ async function fb_get_public(path){
 async function fb_get_auth(path, secret){
   // Uses the legacy ?auth=SECRET pattern — works for the database-secret
   // token. The compat SDK doesn't expose this directly, so we hit REST.
-  const url = `${FB}/${path}.json?auth=${encodeURIComponent(secret)}`;
+  //
+  // cache:'no-store' + a ts query param defeat both the HTTP cache and any
+  // CDN edge that might key on the URL+secret combination. Without this
+  // bust, a tab that loaded before a new submission would keep showing
+  // the stale snapshot even after tapping Refresh.
+  const url = `${FB}/${path}.json?auth=${encodeURIComponent(secret)}&_ts=${Date.now()}`;
   try {
-    const res = await fetch(url);
+    const res = await fetch(url, { cache: 'no-store' });
     if(!res.ok){
       const body = await res.text();
       return { __error: `HTTP ${res.status}: ${body.slice(0, 200)}` };
