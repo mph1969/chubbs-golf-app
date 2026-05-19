@@ -6688,20 +6688,23 @@ function _getNavGroups(){
     if(s === 'day2' && showDay2) roundSections.push('day2');
   });
   if(showMyCard) roundSections.push('mycard');
-  // Standings group — Season always; Playoffs only when seeded or admin
-  const standingsSections = ['season'];
-  if(showPlayoffs) standingsSections.push('playoffs');
+  // Today group — Leaderboard always; Bracket (playoffs) as a sub-pill when
+  // seeded or admin. Consolidates "what's happening today" into one tab so
+  // the brain trust can flip between live leaderboard and match-play bracket
+  // without leaving the group. (v6.3: Option A nav restructure)
+  const todaySections = ['leaderboard'];
+  if(showPlayoffs) todaySections.push('playoffs');
   return [
     { id:'round',       label:'Round',                      sections: roundSections },
-    { id:'leaderboard', label:'Leaderboard',                sections: ['leaderboard'] },
-    { id:'standings',   label:'Standings',                  sections: standingsSections },
+    { id:'today',       label:'Today',                      sections: todaySections },
+    { id:'standings',   label:'Standings',                  sections: ['season'] },
     { id:'setup',       label: masterMode ? 'Admin' : 'Me', sections: ['setup'] },
   ];
 }
 
 const SUB_TAB_LABELS = {
   day1:'Scramble', day2:'Stableford', mycard:'My Card',
-  season:'Season', playoffs:'Playoffs',
+  leaderboard:'Leaderboard', season:'Season', playoffs:'Bracket',
 };
 
 // Sub-tab label resolver — on matchplay events (playoff seeds present in the
@@ -9233,7 +9236,7 @@ function renderFooter(){
 // drift accumulated across 100+ deploys in the 5.x series; the reset realigned both counters.
 // Drift will naturally accumulate again — APP bumps on user-visible releases, CACHE bumps every
 // deploy. Do NOT lower CACHE_VERSION to "match" APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '6.2';
+const APP_VERSION = '6.3';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
