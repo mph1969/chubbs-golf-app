@@ -407,22 +407,26 @@ function renderForm(){
       </div>
     </div>`;
 
-  // Datalist sources: prefer the full Chubbs roster (43 names) if it's
-  // been published to /chubbs/roster, otherwise fall back to just the
-  // event players (22). Free text-entry is always allowed — the list is
-  // a typeahead hint, not a validation gate.
-  const rosterForDatalist = (FULL_ROSTER && FULL_ROSTER.length)
-    ? FULL_ROSTER
-    : ALL_PLAYERS;
-  const rosterOptions = rosterForDatalist
-    .map(p => `<option value="${escapeHtml(p.displayName)}"></option>`)
+  // Two-input pattern: a real <select> with the full Chubbs roster (43
+  // names if /chubbs/roster published, else just the event players),
+  // PLUS a free-text input below for spectators not in the roster.
+  // The datalist alone didn't pop on tap in mobile Safari / WeChat browser,
+  // so a native <select> gives the punter the "tap → see list" they expect.
+  const rosterForPick = (FULL_ROSTER && FULL_ROSTER.length) ? FULL_ROSTER : ALL_PLAYERS;
+  const rosterSelectOpts = rosterForPick
+    .map(p => `<option value="${escapeHtml(p.displayName)}" ${punterName === p.displayName ? 'selected' : ''}>${escapeHtml(p.displayName)}</option>`)
     .join('');
   const punterCard = `
     <div class="card">
       <div class="title">Your name</div>
-      <input type="text" id="punter-name" list="roster-options" autocomplete="off" placeholder="Tap to pick from roster, or type" value="${escapeHtml(punterName)}" ${locked ? 'disabled' : ''} />
-      <datalist id="roster-options">${rosterOptions}</datalist>
-      <div class="hint" style="margin-top:6px">Tap the field to see the Chubbs roster, or type a name freely (wives, spectators welcome).</div>
+      <label style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:4px 0 6px;display:block">Pick from roster</label>
+      <select id="punter-pick" ${locked ? 'disabled' : ''} onchange="onPunterPick(this.value)">
+        <option value="">— Tap to pick —</option>
+        ${rosterSelectOpts}
+      </select>
+      <label style="font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px;display:block">…or type a name</label>
+      <input type="text" id="punter-name" autocomplete="off" placeholder="Free text (spectators, wives, guests)" value="${escapeHtml(punterName)}" ${locked ? 'disabled' : ''} />
+      <div class="hint" style="margin-top:6px">Either input works — picking from the roster fills the text box; typing freely overrides it.</div>
     </div>
     <div class="card" style="background:linear-gradient(180deg,rgba(214,176,90,0.18),rgba(214,176,90,0.04));border-color:var(--gold);border-width:1.5px">
       <div class="title" style="color:var(--gold2)">💰 Entry fee · 100 RMB</div>
@@ -624,6 +628,17 @@ function showSuccess(d){
     <div class="footer-note">Results land here after the round on Saturday.</div>`;
   // Don't wipe the draft — re-opening the form should still show what was submitted.
 }
+
+// Punter-picker handler — fills the free-text input when the user picks
+// a name from the roster select. Exposed on window so the inline onchange
+// handler can reach it from outside the IIFE scope.
+window.onPunterPick = function(val){
+  const input = document.getElementById('punter-name');
+  if(input && val){
+    input.value = val;
+    saveDraft();
+  }
+};
 
 // ── Utils ────────────────────────────────────────────────────────────────
 function ordinal(n){ return ['','1st','2nd','3rd','4th'][n] || (n+''); }
