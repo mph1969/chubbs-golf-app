@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Chubbs! · Playoff Pool</title>
+  <meta name="theme-color" content="#07150f" />
+  <link rel="icon" href="./ChubbsGatorIcon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="./ChubbsGatorIcon.png" />
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+  <style>
+    :root{
+      --bg:#07150f; --bg2:#0c2017; --card:#10261c; --card2:#163526;
+      --line:rgba(255,255,255,0.08); --line2:rgba(214,176,90,0.35);
+      --text:#f4efe2; --muted:#a8b8ad;
+      --gold:#d6b05a; --gold2:#f2dd97;
+      --green:#2aa36a; --red:#d16b5d; --blue:#79b0e3;
+      --shadow:0 16px 40px rgba(0,0,0,0.34);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;
+      background:
+        radial-gradient(circle at top, rgba(214,176,90,0.10), transparent 28%),
+        linear-gradient(180deg,#05110c 0%,#0b1d15 100%);
+      color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif;
+      -webkit-font-smoothing:antialiased;
+    }
+    body{min-height:100vh}
+    .wrap{max-width:540px;margin:0 auto;padding:14px 14px 80px}
+    header{padding:18px 16px;border:1px solid var(--line2);
+      background:linear-gradient(180deg,rgba(214,176,90,0.10),rgba(16,38,28,0.92));
+      border-radius:20px;box-shadow:var(--shadow);text-align:center;margin-bottom:14px}
+    header img{width:64px;height:64px;border-radius:14px;margin-bottom:8px}
+    header h1{margin:0;font-family:Georgia,serif;font-size:24px;color:var(--gold2);letter-spacing:.02em}
+    header .sub{margin-top:4px;font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+    header .event{margin-top:10px;font-size:14px;font-weight:700;color:var(--text)}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:16px;
+      padding:14px 14px 12px;margin-bottom:12px;box-shadow:var(--shadow)}
+    .card .title{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+      color:var(--gold2);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+    .card .title .pill{font-size:10px;font-weight:700;color:#0a1810;background:var(--gold2);
+      padding:2px 8px;border-radius:10px;letter-spacing:.03em;text-transform:none}
+    .card .hint{font-size:11px;color:var(--muted);margin-top:-4px;margin-bottom:8px;line-height:1.4}
+    label{display:block;font-size:11px;font-weight:700;letter-spacing:.04em;
+      text-transform:uppercase;color:var(--muted);margin:8px 0 4px}
+    input[type=text],select{
+      width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--line);
+      background:var(--bg2);color:var(--text);font-size:15px;font-family:inherit;
+      -webkit-appearance:none;appearance:none;
+    }
+    select{
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'><path fill='%23a8b8ad' d='M6 8L0 0h12z'/></svg>");
+      background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
+    }
+    select:focus,input:focus{outline:2px solid var(--gold);outline-offset:1px}
+    .rank-row{display:grid;grid-template-columns:46px 1fr;gap:8px;align-items:center;margin-bottom:6px}
+    .rank-badge{height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+      font-family:Georgia,serif;font-weight:700;font-size:15px;color:var(--gold2);
+      background:var(--card2);border:1px solid var(--line2)}
+    .rank-1 .rank-badge{background:linear-gradient(180deg,#3a2e0b,#1a1606);color:var(--gold2)}
+    .pair-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    @media (max-width:380px){.pair-row{grid-template-columns:1fr}}
+    .btn{display:block;width:100%;padding:14px 16px;border-radius:14px;border:none;
+      font-size:15px;font-weight:800;letter-spacing:.04em;cursor:pointer;font-family:inherit;
+      background:var(--gold2);color:#0a1810;transition:transform 0.08s, opacity 0.15s}
+    .btn:active{transform:scale(0.98)}
+    .btn:disabled{opacity:0.4;cursor:not-allowed}
+    .btn.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+    .status{padding:12px 14px;border-radius:12px;font-size:13px;line-height:1.5;margin-bottom:12px}
+    .status.ok{background:rgba(42,163,106,0.10);border:1px solid rgba(42,163,106,0.35);color:#a5f0c5}
+    .status.warn{background:rgba(255,196,84,0.08);border:1px solid rgba(255,196,84,0.32);color:#ffd58a}
+    .status.err{background:rgba(209,107,93,0.10);border:1px solid rgba(209,107,93,0.35);color:#ffb5ae}
+    .status.info{background:rgba(121,176,227,0.08);border:1px solid rgba(121,176,227,0.30);color:#cfe2f5}
+    .lock-banner{position:sticky;top:0;z-index:9;margin:-14px -14px 12px;padding:10px 14px;
+      background:rgba(7,21,15,0.95);border-bottom:1px solid var(--line);backdrop-filter:blur(8px);
+      font-size:12px;font-weight:700;text-align:center;color:var(--gold2)}
+    .errors{background:rgba(209,107,93,0.10);border:1px solid rgba(209,107,93,0.4);
+      border-radius:10px;padding:10px 12px;margin-bottom:10px;color:#ffb5ae;font-size:12px;line-height:1.6}
+    .errors ul{margin:4px 0 0;padding-left:18px}
+    .footer-note{text-align:center;font-size:11px;color:var(--muted);margin-top:18px;line-height:1.6}
+    .spinner{text-align:center;padding:60px 20px;color:var(--muted)}
+    .spinner::before{content:"";display:inline-block;width:24px;height:24px;border-radius:50%;
+      border:2px solid var(--line);border-top-color:var(--gold);animation:spin 1s linear infinite;margin-right:10px;vertical-align:middle}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .group-card{position:relative}
+    .group-card .group-meta{font-size:11px;color:var(--muted);margin:-4px 0 8px;line-height:1.4}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="./ChubbsGatorIcon.png" alt="Chubbs" />
+    <h1>Chubbs! Playoff Pool</h1>
+    <div class="sub">Pick the order · win the pot · bragging rights for a month</div>
+    <div class="event" id="event-name">Loading event…</div>
+  </header>
+
+  <div id="content"><div class="spinner">Loading event from Firebase…</div></div>
+</div>
+
+<script>
+// ── Firebase config (mirror of mobile app) ────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyBbuOgOICrb_nt64fCdfOMY-Nn1ySDKIu4",
+  authDomain:        "chubbs-golf.firebaseapp.com",
+  databaseURL:       "https://chubbs-golf-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:         "chubbs-golf",
+  storageBucket:     "chubbs-golf.firebasestorage.app",
+  messagingSenderId: "462454481032",
+  appId:             "1:462454481032:web:6ddc74ffb7ff543f3b3f3d"
+};
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const db = firebase.database();
+
+// ── State ─────────────────────────────────────────────────────────────────
+let EVENT_ID = null;
+let BUNDLE = null;
+let R16_GROUPS = [];      // [{ name, players: [{playerId, displayName, handicap}] }]
+let FIREBALL_POOL = [];   // [{playerId, displayName}]
+let ALL_PLAYERS = [];     // [{playerId, displayName}]
+let LOCK_AT_MS = null;    // ms epoch when bets lock
+let MANUAL_LOCK = false;  // admin force-lock
+let DRAFT_KEY = null;     // localStorage key for in-progress draft
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+async function boot(){
+  try {
+    EVENT_ID = await resolveEventId();
+    if(!EVENT_ID){
+      renderError(
+        "No live event published yet.",
+        "Once the organiser pushes the event from Admin and marks it as the current LIVE event, this form will populate. Try again in a few minutes."
+      );
+      return;
+    }
+    BUNDLE = await fetchBundle(EVENT_ID);
+    if(!BUNDLE){
+      renderError("Couldn't load event " + EVENT_ID, "The event ID exists but the bundle is empty. Ask the organiser to re-publish.");
+      return;
+    }
+    parseBundle();
+    DRAFT_KEY = 'chubbs_bets_draft_' + EVENT_ID;
+    renderForm();
+  } catch(e){
+    console.error(e);
+    renderError("Something went wrong loading the form.", String(e && e.message || e));
+  }
+}
+
+async function resolveEventId(){
+  // 1) explicit query param wins
+  const urlParam = new URLSearchParams(location.search).get('event');
+  if(urlParam) return urlParam;
+  // 2) currentEvent pointer
+  const snap = await db.ref('chubbs/currentEvent').once('value');
+  const val = snap.val();
+  return val || null;
+}
+
+async function fetchBundle(eid){
+  const snap = await db.ref('events/' + eid + '/bundle').once('value');
+  return snap.val();
+}
+
+function parseBundle(){
+  const ev = BUNDLE.event || {};
+  document.getElementById('event-name').textContent =
+    (ev.displayName || ev.name || EVENT_ID);
+
+  // R16 groups = day2Groups whose groupName matches the R16/M\d pattern.
+  // Anything else (FBC-1, FBC-2) is treated as Fireball.
+  const day2 = BUNDLE.day2Groups || [];
+  const playerMap = {};
+  (BUNDLE.players || []).forEach(p => { playerMap[p.playerId] = p; });
+
+  const r16Pids = new Set();
+  const fireballPids = new Set();
+  const playingPids = new Set();
+
+  R16_GROUPS = day2
+    .filter(g => /R16|M\d/i.test(g.groupName || ''))
+    .map(g => {
+      const players = (g.playerIds || []).map(pid => {
+        const p = playerMap[pid] || {};
+        const name = p.displayName || p.fullName || pid;
+        r16Pids.add(pid);
+        playingPids.add(pid);
+        return { playerId: pid, displayName: name, handicap: p.playingHandicap || 0 };
+      });
+      return { name: g.groupName, players, teeTime: g.teeTime || '' };
+    });
+
+  day2
+    .filter(g => !/R16|M\d/i.test(g.groupName || ''))
+    .forEach(g => (g.playerIds || []).forEach(pid => {
+      fireballPids.add(pid);
+      playingPids.add(pid);
+    }));
+
+  // Gold/Clown pool = everyone actually playing the event.
+  // Fireball pool = the FBC day2Groups (not "anyone outside R16" — a player
+  // who skipped the event shouldn't appear in the Fireball dropdown).
+  const mkOpt = pid => {
+    const p = playerMap[pid] || {};
+    return { playerId: pid, displayName: p.displayName || p.fullName || pid };
+  };
+  ALL_PLAYERS  = Array.from(playingPids).map(mkOpt)
+                   .sort((a,b) => a.displayName.localeCompare(b.displayName));
+  FIREBALL_POOL = Array.from(fireballPids).map(mkOpt)
+                   .sort((a,b) => a.displayName.localeCompare(b.displayName));
+
+  // Lock state
+  LOCK_AT_MS = ev.betsLockAt ? Date.parse(ev.betsLockAt) : null;
+  MANUAL_LOCK = !!ev.betsLocked;
+}
+
+// ── Lock logic ───────────────────────────────────────────────────────────
+function isLocked(){
+  if(MANUAL_LOCK) return true;
+  if(LOCK_AT_MS && Date.now() >= LOCK_AT_MS) return true;
+  return false;
+}
+function lockReason(){
+  if(MANUAL_LOCK) return 'Bets have been locked by the organiser.';
+  if(LOCK_AT_MS && Date.now() >= LOCK_AT_MS){
+    return 'Bets locked at ' + new Date(LOCK_AT_MS).toLocaleString();
+  }
+  return '';
+}
+function lockCountdown(){
+  if(!LOCK_AT_MS) return '';
+  const ms = LOCK_AT_MS - Date.now();
+  if(ms <= 0) return '';
+  const h = Math.floor(ms / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  if(h > 24){
+    const d = Math.floor(h / 24);
+    return `Picks lock in ${d}d ${h % 24}h · ${new Date(LOCK_AT_MS).toLocaleString()}`;
+  }
+  return `Picks lock in ${h}h ${m}m · ${new Date(LOCK_AT_MS).toLocaleString()}`;
+}
+
+// ── Form rendering ───────────────────────────────────────────────────────
+function renderError(title, msg){
+  document.getElementById('content').innerHTML = `
+    <div class="status err">
+      <strong>${escapeHtml(title)}</strong>
+      <div style="margin-top:6px;font-weight:400">${escapeHtml(msg)}</div>
+    </div>`;
+}
+
+function renderForm(){
+  const locked = isLocked();
+  const banner = locked
+    ? `<div class="status warn"><strong>🔒 Picks locked</strong><div style="margin-top:4px;font-weight:400">${escapeHtml(lockReason())}</div></div>`
+    : (LOCK_AT_MS
+        ? `<div class="status info"><strong>⏳ ${escapeHtml(lockCountdown())}</strong></div>`
+        : `<div class="status info"><strong>Picks open · no deadline set yet</strong></div>`);
+
+  const draft = loadDraft();
+  const punterName = draft.punter || '';
+
+  const groupCards = R16_GROUPS.map((g, gi) => {
+    const opts = g.players.map(p => p.playerId);
+    return `
+      <div class="card group-card" data-r16="${gi}">
+        <div class="title">R16 Group ${gi + 1} <span class="pill">${escapeHtml(g.players.length)}-man</span></div>
+        <div class="group-meta">${escapeHtml(g.name || '')}${g.teeTime ? ' · tee ' + escapeHtml(g.teeTime) : ''}</div>
+        ${[1,2,3,4].map(rank => `
+          <div class="rank-row rank-${rank}">
+            <div class="rank-badge">${ordinal(rank)}</div>
+            <select data-r16-rank="${gi}-${rank}" ${locked ? 'disabled' : ''} class="r16-pick">
+              <option value="">— Pick player —</option>
+              ${g.players.map(p => `
+                <option value="${escapeHtml(p.playerId)}" ${draft.r16 && draft.r16[gi] && draft.r16[gi][rank-1] === p.playerId ? 'selected' : ''}>
+                  ${escapeHtml(p.displayName)} (hcp ${p.handicap})
+                </option>`).join('')}
+            </select>
+          </div>`).join('')}
+      </div>`;
+  }).join('');
+
+  const fireballOpts = FIREBALL_POOL.map(p => `
+    <option value="${escapeHtml(p.playerId)}">${escapeHtml(p.displayName)}</option>`).join('');
+  const allOpts = ALL_PLAYERS.map(p => `
+    <option value="${escapeHtml(p.playerId)}">${escapeHtml(p.displayName)}</option>`).join('');
+
+  const fireballCard = `
+    <div class="card">
+      <div class="title">🔥 Fireball Cup</div>
+      <div class="hint">Of the ${FIREBALL_POOL.length} players NOT in the playoff bracket.</div>
+      <div class="pair-row">
+        <div>
+          <label>Best Stableford (Fireball winner)</label>
+          <select id="fireball-best" ${locked ? 'disabled' : ''}>
+            <option value="">— Pick —</option>${fireballOpts}
+          </select>
+        </div>
+        <div>
+          <label>Worst Stableford (Fireball wooden spoon)</label>
+          <select id="fireball-worst" ${locked ? 'disabled' : ''}>
+            <option value="">— Pick —</option>${fireballOpts}
+          </select>
+        </div>
+      </div>
+    </div>`;
+
+  const awardsCard = `
+    <div class="card">
+      <div class="title">🥇 Gold &amp; 🤡 Clown</div>
+      <div class="hint">Best and worst Stableford across the whole field.</div>
+      <div class="pair-row">
+        <div>
+          <label>🥇 Gold Jacket</label>
+          <select id="gold" ${locked ? 'disabled' : ''}>
+            <option value="">— Pick —</option>${allOpts}
+          </select>
+        </div>
+        <div>
+          <label>🤡 Clown Jacket</label>
+          <select id="clown" ${locked ? 'disabled' : ''}>
+            <option value="">— Pick —</option>${allOpts}
+          </select>
+        </div>
+      </div>
+    </div>`;
+
+  const punterCard = `
+    <div class="card">
+      <div class="title">Your name</div>
+      <input type="text" id="punter-name" placeholder="e.g. Diego" value="${escapeHtml(punterName)}" ${locked ? 'disabled' : ''} />
+      <div class="hint" style="margin-top:6px">Use the same name you go by in the brain trust — it's how your picks show up on the results board.</div>
+    </div>`;
+
+  const submitArea = locked
+    ? `<div class="status warn" style="text-align:center">Form is locked — no more submissions accepted.</div>`
+    : `
+      <div id="errors-box"></div>
+      <button class="btn" id="submit-btn">Submit picks</button>
+      <div class="footer-note">
+        Picks save as a draft on this device as you fill them in.<br/>
+        Once submitted, they sync to the organiser via Firebase.
+      </div>`;
+
+  document.getElementById('content').innerHTML =
+    banner +
+    punterCard +
+    groupCards +
+    fireballCard +
+    awardsCard +
+    submitArea;
+
+  // Hydrate draft picks for fireball + awards (the inline `selected` on R16
+  // happened during template render; these can't because the option list is
+  // pre-built once for all 3 selects).
+  if(draft.fireballBest)  document.getElementById('fireball-best').value = draft.fireballBest;
+  if(draft.fireballWorst) document.getElementById('fireball-worst').value = draft.fireballWorst;
+  if(draft.gold)          document.getElementById('gold').value = draft.gold;
+  if(draft.clown)         document.getElementById('clown').value = draft.clown;
+
+  // Auto-save draft on every change
+  document.querySelectorAll('select, input[type=text]').forEach(el => {
+    el.addEventListener('change', saveDraft);
+    el.addEventListener('input', saveDraft);
+  });
+
+  // Submit handler
+  const submitBtn = document.getElementById('submit-btn');
+  if(submitBtn) submitBtn.addEventListener('click', onSubmit);
+
+  // Re-render every minute so the countdown stays fresh and the lock kicks in
+  // automatically without requiring a page reload.
+  if(LOCK_AT_MS && !MANUAL_LOCK && !locked){
+    setTimeout(() => renderForm(), 60000);
+  }
+}
+
+// ── Draft persistence ────────────────────────────────────────────────────
+function captureDraft(){
+  const r16 = R16_GROUPS.map((g, gi) =>
+    [1,2,3,4].map(rank => {
+      const el = document.querySelector(`select[data-r16-rank="${gi}-${rank}"]`);
+      return el ? el.value : '';
+    })
+  );
+  return {
+    punter: (document.getElementById('punter-name') || {}).value || '',
+    r16,
+    fireballBest: (document.getElementById('fireball-best') || {}).value || '',
+    fireballWorst: (document.getElementById('fireball-worst') || {}).value || '',
+    gold: (document.getElementById('gold') || {}).value || '',
+    clown: (document.getElementById('clown') || {}).value || ''
+  };
+}
+function loadDraft(){
+  try { return JSON.parse(localStorage.getItem(DRAFT_KEY) || '{}') || {}; }
+  catch(e){ return {}; }
+}
+function saveDraft(){
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(captureDraft())); }
+  catch(e){}
+}
+
+// ── Validation + submit ──────────────────────────────────────────────────
+function validate(d){
+  const errs = [];
+  const name = (d.punter || '').trim();
+  if(name.length < 2) errs.push('Enter your name (at least 2 characters).');
+
+  // Each R16 group: all 4 dropdowns filled, no duplicates within the group
+  R16_GROUPS.forEach((g, gi) => {
+    const picks = d.r16[gi] || [];
+    if(picks.some(p => !p)){
+      errs.push(`R16 Group ${gi + 1}: pick all four ranks (1st–4th).`);
+      return;
+    }
+    const seen = new Set();
+    let dup = false;
+    picks.forEach(p => {
+      if(seen.has(p)) dup = true;
+      seen.add(p);
+    });
+    if(dup) errs.push(`R16 Group ${gi + 1}: each player can only be picked once.`);
+    // Sanity check the picked player is actually in this R16 group
+    const valid = new Set(g.players.map(p => p.playerId));
+    if(picks.some(p => !valid.has(p))) errs.push(`R16 Group ${gi + 1}: invalid player pick.`);
+  });
+
+  if(!d.fireballBest)  errs.push('Pick a Fireball Cup winner.');
+  if(!d.fireballWorst) errs.push('Pick a Fireball Cup wooden spoon.');
+  if(d.fireballBest && d.fireballWorst && d.fireballBest === d.fireballWorst){
+    errs.push('Fireball winner and wooden spoon must be different players.');
+  }
+  if(!d.gold)  errs.push('Pick a Gold Jacket.');
+  if(!d.clown) errs.push('Pick a Clown Jacket.');
+  if(d.gold && d.clown && d.gold === d.clown){
+    errs.push('Gold and Clown must be different players.');
+  }
+  return errs;
+}
+
+async function onSubmit(){
+  if(isLocked()){
+    renderForm();
+    return;
+  }
+  const d = captureDraft();
+  const errs = validate(d);
+  const box = document.getElementById('errors-box');
+  if(errs.length){
+    box.innerHTML = `<div class="errors"><strong>Fix these before submitting:</strong>
+      <ul>${errs.map(e => `<li>${escapeHtml(e)}</li>`).join('')}</ul></div>`;
+    box.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  box.innerHTML = '';
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+
+  // Write to /events/{id}/bets/{punterId}. punterId = sanitized name +
+  // short hash so two punters with the same first name don't clobber each
+  // other's picks.
+  const punterId = sanitizeId(d.punter);
+  try {
+    const payload = {
+      punter: d.punter.trim(),
+      punterId,
+      r16: d.r16,
+      fireballBest: d.fireballBest,
+      fireballWorst: d.fireballWorst,
+      gold: d.gold,
+      clown: d.clown,
+      submittedAt: new Date().toISOString(),
+      submittedAtMs: firebase.database.ServerValue.TIMESTAMP,
+      eventId: EVENT_ID,
+      userAgent: navigator.userAgent.slice(0, 200)
+    };
+    await db.ref(`events/${EVENT_ID}/bets/${punterId}`).set(payload);
+    showSuccess(d);
+  } catch(e){
+    console.error(e);
+    btn.disabled = false;
+    btn.textContent = 'Submit picks';
+    box.innerHTML = `<div class="errors"><strong>Submission failed:</strong> ${escapeHtml(String(e.message || e))}</div>`;
+  }
+}
+
+function showSuccess(d){
+  const goldName  = nameFor(d.gold);
+  const clownName = nameFor(d.clown);
+  document.getElementById('content').innerHTML = `
+    <div class="status ok" style="text-align:center;padding:24px 14px">
+      <div style="font-size:42px;line-height:1">✅</div>
+      <div style="font-size:18px;font-weight:800;margin-top:8px">Picks submitted</div>
+      <div style="margin-top:10px;font-weight:400;line-height:1.6">
+        Thanks <strong>${escapeHtml(d.punter)}</strong> — your bet is in the bank.<br/>
+        🥇 You picked <strong>${escapeHtml(goldName)}</strong> for Gold<br/>
+        🤡 and <strong>${escapeHtml(clownName)}</strong> for Clown.
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn ghost" onclick="renderForm()">View / edit picks</button>
+      </div>
+    </div>
+    <div class="footer-note">Results land here after the round on Saturday.</div>`;
+  // Don't wipe the draft — re-opening the form should still show what was submitted.
+}
+
+// ── Utils ────────────────────────────────────────────────────────────────
+function ordinal(n){ return ['','1st','2nd','3rd','4th'][n] || (n+''); }
+function nameFor(pid){
+  const p = ALL_PLAYERS.find(p => p.playerId === pid);
+  return p ? p.displayName : pid;
+}
+function sanitizeId(name){
+  const clean = String(name || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  // Short stable hash so "MIKE" + "MIKE" -> two distinct rows.
+  let h = 0;
+  for(let i = 0; i < name.length; i++){ h = ((h << 5) - h) + name.charCodeAt(i); h |= 0; }
+  return (clean || 'ANON') + '_' + (h >>> 0).toString(36);
+}
+function escapeHtml(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+    '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'
+  }[c]));
+}
+
+boot();
+</script>
+</body>
+</html>
