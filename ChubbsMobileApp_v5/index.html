@@ -1254,8 +1254,91 @@ function initSync(eventId){
     // stale at "-- not started --" until the user navigated away and
     // back. Found in 2026-05-19 dry-run: hydration logic was correct,
     // re-render trigger was missing.
+
+    // v6.2 hotfix (SW v6.11) — viewer state hydration.
+    // The match-play banner hydrates via getActiveMatchPlayMatches but the
+    // scoring grid cards + hole-completion modal read state.stableford.holes
+    // directly. For viewers (non-scorers) that's empty, producing blank
+    // scoring cards + spurious "Hole Incomplete" warnings. Copy the
+    // scorer's holes into local state so EVERY component sees consistent
+    // data. v6.10's scorer-gate ensures this doesn't re-trigger an outbound
+    // push (viewers don't write to Firebase regardless).
+    try {
+      const myGid = state.day2GroupId;
+      const myGroup = (myGid && data) ? data[myGid] : null;
+      const isScorer = (typeof isCurrentPlayerScorer === 'function')
+        ? isCurrentPlayerScorer('stableford') : true;
+      if(myGroup && !isScorer && Array.isArray(myGroup.players) && Array.isArray(myGroup.holes)){
+        const localPlayers = state.day2Players || [];
+        const remotePlayers = myGroup.players;
+        // Map local index -> remote index by playerId (robust to scorer-last sort)
+        const l2r = localPlayers.map(lp => remotePlayers.findIndex(rp =>
+          rp && String(rp.playerId || '') === String(lp.playerId || '')));
+        myGroup.holes.forEach((rh, hi) => {
+          if(!rh || !Array.isArray(rh.gross)) return;
+          if(hi >= state.stableford.holes.length) return;
+          const localHole = state.stableford.holes[hi] || { gross:[null,null,null,null], putts:[null,null,null,null], puttStamp:[null,null,null,null], lastPenaltyOverride:null };
+          const newGross = localPlayers.map((_, li) => {
+            const ri = l2r[li];
+            return (ri >= 0 && rh.gross[ri] != null) ? rh.gross[ri] : localHole.gross[li];
+          });
+          state.stableford.holes[hi] = Object.assign({}, localHole, { gross: newGross });
+        });
+        // Also advance the viewer's hole pointer to track the scorer's
+        // current hole — better UX than the viewer being stuck on H1 while
+        // the scorer is on H6.
+        if(typeof myGroup.hole === 'number' && myGroup.hole >= 0 && myGroup.hole < 18){
+          state.stableford.hole = myGroup.hole;
+        }
+        // Save locally only — scorer-gate (v6.10) prevents Firebase write.
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e){}
+      }
+    } catch(e){ console.warn('[Sync] viewer hydration failed:', e); }
+
     renderAll();
     if(typeof window._liveAlertCheck === 'function') window._liveAlertCheck();
+  });
+
+  // v6.2 hotfix (SW v6.11) — bracket-save propagation listener.
+  // The scorer's pushMatchToBracket writes to Firebase at
+  // /events/{id}/bracket/{type}/{matchIdx}. Viewers subscribe here and
+  // mirror those saves into their local season.playoffs[type][matchIdx]
+  // so their Standings tab + Cup QF cascade reflect the bracket state.
+  // Without this, viewers showed "TBD" in Cup QF while the scorer's
+  // phone showed JORDAN vs HANSON correctly.
+  listen(`/events/${eventId}/bracket`, data => {
+    if(!data || typeof data !== 'object') return;
+    try {
+      const store = (typeof loadSeasonStore === 'function') ? loadSeasonStore() : null;
+      if(!store) return;
+      const season = store.seasons && store.seasons[(store.viewingSeasonId || ACTIVE_SEASON_ID)];
+      if(!season) return;
+      if(!season.playoffs) season.playoffs = {};
+      const SIZES = { r16: 8, cup_qf: 4, plate_qf: 4, cup_sf: 2, plate_sf: 2, shield_sf: 2, spoon_sf: 2, cup_final: 1, plate_final: 1, shield_final: 1, spoon_final: 1 };
+      let changed = false;
+      Object.entries(data).forEach(([type, entries]) => {
+        const size = SIZES[type];
+        if(!size || !entries || typeof entries !== 'object') return;
+        if(!Array.isArray(season.playoffs[type])){
+          season.playoffs[type] = Array.from({length: size}, () => ({winner:null, result:null}));
+        }
+        Object.entries(entries).forEach(([idxStr, rec]) => {
+          const idx = parseInt(idxStr, 10);
+          if(!Number.isInteger(idx) || idx < 0 || idx >= size) return;
+          if(rec && typeof rec === 'object' && rec.winner){
+            const cur = season.playoffs[type][idx] || {};
+            if(cur.winner !== rec.winner || cur.result !== rec.result){
+              season.playoffs[type][idx] = { winner: rec.winner, result: rec.result || '' };
+              changed = true;
+            }
+          }
+        });
+      });
+      if(changed){
+        saveSeasonStore(store);
+        renderAll();
+      }
+    } catch(e){ console.warn('[Sync] bracket hydration failed:', e); }
   });
   listen(`/events/${eventId}/teams`, data => {
     SYNC.remoteTeams = data;
@@ -3082,6 +3165,26 @@ function pushMatchToBracket(matchIdx, winnerName, resultLabel, matchType){
   }
   season.playoffs[type][matchIdx] = { winner: winnerName, result: resultLabel || '' };
   saveSeasonStore(store);
+
+  // v6.2 hotfix (SW v6.11) — propagate bracket save to Firebase so viewer
+  // phones see the winner/result without each one having to recompute.
+  // Previously this was local-only, so viewers' Standings tab showed
+  // "TBD" while the scorer saw the saved bracket. Found 2026-05-19 —
+  // Leigh & Hanson saw the R16 G4 matches as unsaved on Standings while
+  // Jack S (scorer) had Cup QF cascading correctly to JORDAN vs HANSON.
+  try {
+    if(SYNC.enabled && SYNC.db && !readOnlyMode && hasImportedEvent()){
+      const eventId = state.eventBundle.event && state.eventBundle.event.eventId;
+      if(eventId){
+        SYNC.db.ref(`/events/${eventId}/bracket/${type}/${matchIdx}`).set({
+          winner: winnerName,
+          result: resultLabel || '',
+          savedAt: Date.now()
+        }).catch(()=>{});
+      }
+    }
+  } catch(e){ console.warn('[Bracket] Firebase propagation failed:', e); }
+
   try { renderAll(); } catch(e){}
   try { if(typeof renderPlayoffs === 'function') renderPlayoffs(); } catch(e){}
 }
