@@ -86,6 +86,13 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     .group-card{position:relative}
     .group-card .group-meta{font-size:11px;color:var(--muted);margin:-4px 0 8px;line-height:1.4}
+    .matchups{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0 6px;
+      padding:6px 8px;background:var(--card2);border:1px solid var(--line);border-radius:8px}
+    @media (max-width:380px){.matchups{grid-template-columns:1fr}}
+    .matchup{font-size:11px;line-height:1.3;color:var(--text);display:flex;gap:6px;align-items:baseline}
+    .m-label{font-size:9px;font-weight:800;letter-spacing:.04em;color:var(--gold2);
+      background:rgba(214,176,90,0.10);padding:2px 5px;border-radius:6px}
+    .constraint-hint{font-size:10px;color:var(--muted);margin:0 0 8px;line-height:1.4;font-style:italic}
   </style>
 </head>
 <body>
@@ -191,9 +198,30 @@ function parseBundle(){
   const fireballPids = new Set();
   const playingPids = new Set();
 
+  // Bracket matchup table — 8 R16 matches grouped 2-per-foursome.
+  // (PAIRS[2*gi], PAIRS[2*gi+1]) = the two R16 matches inside group Gi.
+  // Mirror of the chart in verify_match_play.py / playoff_sim.py.
+  const PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
+  const seeds = ((BUNDLE.playoffs || {}).seeds) || [];
+  // Alias-aware name resolver — "Matt D" / "Ryan N" / "Mike H" all map back
+  // to playerIds via the bundle aliases. Falls back to identity for names
+  // already in pid form (e.g. "TERRY").
+  const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const nameMap = {};
+  (BUNDLE.players || []).forEach(p => {
+    if(p.displayName) nameMap[norm(p.displayName)] = p.playerId;
+    if(p.fullName)    nameMap[norm(p.fullName)]    = p.playerId;
+    (p.aliases || []).forEach(a => { nameMap[norm(a)] = p.playerId; });
+    nameMap[norm(p.playerId)] = p.playerId;
+  });
+  const seedToPid = sIdx => {
+    const name = seeds[sIdx];
+    return name ? (nameMap[norm(name)] || null) : null;
+  };
+
   R16_GROUPS = day2
     .filter(g => /R16|M\d/i.test(g.groupName || ''))
-    .map(g => {
+    .map((g, gi) => {
       const players = (g.playerIds || []).map(pid => {
         const p = playerMap[pid] || {};
         const name = p.displayName || p.fullName || pid;
@@ -201,7 +229,24 @@ function parseBundle(){
         playingPids.add(pid);
         return { playerId: pid, displayName: name, handicap: p.playingHandicap || 0 };
       });
-      return { name: g.groupName, players, teeTime: g.teeTime || '' };
+      // Pull the two underlying R16 matches for this foursome.
+      const matches = [];
+      [2*gi, 2*gi + 1].forEach(pi => {
+        if(pi < PAIRS.length){
+          const [a, b] = PAIRS[pi];
+          const pidA = seedToPid(a), pidB = seedToPid(b);
+          if(pidA && pidB){
+            matches.push({
+              matchNum: pi + 1,
+              players: [
+                { playerId: pidA, displayName: (playerMap[pidA] || {}).displayName || pidA },
+                { playerId: pidB, displayName: (playerMap[pidB] || {}).displayName || pidB }
+              ]
+            });
+          }
+        }
+      });
+      return { name: g.groupName, players, teeTime: g.teeTime || '', matches };
     });
 
   day2
@@ -282,10 +327,24 @@ function renderForm(){
   };
   const groupCards = R16_GROUPS.map((g, gi) => {
     const opts = g.players.map(p => p.playerId);
+    // Render the two R16 matchups under each group title, so the punter sees
+    // who plays whom and can self-check the "1st & 2nd come from different
+    // matches" constraint. Soft guardrail — no dropdown filtering.
+    const matchupsHtml = (g.matches && g.matches.length === 2)
+      ? `<div class="matchups">
+           ${g.matches.map(m => `
+             <div class="matchup">
+               <span class="m-label">M${m.matchNum}</span>
+               <span>${escapeHtml(m.players[0].displayName)} vs ${escapeHtml(m.players[1].displayName)}</span>
+             </div>`).join('')}
+         </div>
+         <div class="constraint-hint">💡 1st &amp; 2nd come from different matches (same for 3rd &amp; 4th)</div>`
+      : '';
     return `
       <div class="card group-card" data-r16="${gi}">
         <div class="title">R16 Group ${gi + 1}</div>
         <div class="group-meta">${escapeHtml(g.name || '')}${g.teeTime ? ' · tee ' + escapeHtml(g.teeTime) : ''}</div>
+        ${matchupsHtml}
         ${[1,2,3,4].map(rank => `
           <div class="rank-row rank-${rank}">
             <div class="rank-badge">${ordinal(rank)}</div>
