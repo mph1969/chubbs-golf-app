@@ -292,27 +292,52 @@ def truth_table(bundle, groups_scoring, bracket):
 
 
 def score_punter(picks, truth):
-    """Return {'r16': [pts_per_group], 'fireballBest': 0/1, ..., 'total': N}."""
-    out = {'r16': [], 'fireballBest': 0, 'fireballWorst': 0, 'gold': 0, 'clown': 0, 'total': 0}
-    # R16: 1 point per exactly-placed player (positional match, not "had the right 4")
+    """Compute a punter's score.
+
+    Rubric (max 22 base pts):
+      R16 placements: 1pt each (max 16)
+      R16 exact-foursome bonus: +1pt per group where all 4 are exact (max 4)
+      Gold Jacket: 1pt
+      Clown Jacket: 1pt
+
+    Tiebreaker (max 2 tiebreak pts):
+      Fireball best:  1pt
+      Fireball worst: 1pt
+
+    Sort punters by (-total, -tiebreak_total) for the leaderboard.
+    """
+    out = {
+        'r16': [],          # per-group placement pts (0..4)
+        'r16_exact': [],    # per-group bonus (0 or 1)
+        'gold': 0,
+        'clown': 0,
+        'fireballBest': 0,
+        'fireballWorst': 0,
+        'total': 0,         # base score, max 22
+        'tiebreak_total': 0 # fireball-based tiebreak, max 2
+    }
     actual_r16 = truth.get('r16') or []
     picks_r16 = picks.get('r16') or []
     for gi, actual in enumerate(actual_r16):
         picked = picks_r16[gi] if gi < len(picks_r16) else []
-        pts = 0
-        for rank in range(min(4, len(actual), len(picked))):
-            if actual[rank] == picked[rank]:
-                pts += 1
+        compared = min(4, len(actual), len(picked))
+        pts = sum(1 for rank in range(compared) if actual[rank] == picked[rank])
         out['r16'].append(pts)
         out['total'] += pts
-    if truth.get('fireballBest') and picks.get('fireballBest') == truth['fireballBest']:
-        out['fireballBest'] = 1; out['total'] += 1
-    if truth.get('fireballWorst') and picks.get('fireballWorst') == truth['fireballWorst']:
-        out['fireballWorst'] = 1; out['total'] += 1
+        # Exact-foursome bonus: all 4 positions correct in this group
+        exact = (pts == 4 and compared == 4)
+        out['r16_exact'].append(1 if exact else 0)
+        if exact:
+            out['total'] += 1
     if truth.get('gold') and picks.get('gold') == truth['gold']:
         out['gold'] = 1; out['total'] += 1
     if truth.get('clown') and picks.get('clown') == truth['clown']:
         out['clown'] = 1; out['total'] += 1
+    # Fireball picks are TIEBREAK only — do not add to total.
+    if truth.get('fireballBest') and picks.get('fireballBest') == truth['fireballBest']:
+        out['fireballBest'] = 1; out['tiebreak_total'] += 1
+    if truth.get('fireballWorst') and picks.get('fireballWorst') == truth['fireballWorst']:
+        out['fireballWorst'] = 1; out['tiebreak_total'] += 1
     return out
 
 
@@ -355,22 +380,30 @@ def render_text(eid, when, bundle, bets, results=None, truth=None):
         lines.append(f'🤡 Clown Jacket:  {n(truth["clown"])}')
         lines.append('')
 
-    # If we have results, sort punters by their score
+    # If we have results, sort punters by their score (base total, then
+    # fireball tiebreak)
     punters = sorted(bets.items(), key=lambda kv: kv[0])
     if results:
-        punters = sorted(bets.items(), key=lambda kv: -(results.get(kv[0], {}).get('total', 0)))
+        def _sort_key(kv):
+            r = results.get(kv[0]) or {}
+            return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
+        punters = sorted(bets.items(), key=_sort_key)
         lines.append('── PUNTER LEADERBOARD ──────────────────────────────────')
         for rank, (pid, b) in enumerate(punters, 1):
-            r = results.get(pid, {'total': 0})
+            r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
             marker = '🏆' if rank == 1 else f'{rank:2}.'
-            lines.append(f'{marker} {b.get("punter", pid):<20} {r["total"]:>2} / 20')
+            tb = f'  (TB: 🔥 {r["tiebreak_total"]}/2)' if r.get('tiebreak_total') else ''
+            lines.append(f'{marker} {b.get("punter", pid):<20} {r["total"]:>2} / 22{tb}')
         lines.append('')
 
     lines.append('── ALL TICKETS ──────────────────────────────────────────')
     for pid, b in punters:
         r = results.get(pid) if results else None
         submitted = b.get('submittedAt', '?')
-        score_tag = f'  [{r["total"]}/20]' if r else ''
+        score_tag = ''
+        if r:
+            tb = f' · TB 🔥 {r["tiebreak_total"]}/2' if r.get('tiebreak_total') else ''
+            score_tag = f'  [{r["total"]}/22{tb}]'
         lines.append('')
         lines.append(f'━━ {b.get("punter", pid)} ━━  submitted {submitted}{score_tag}')
         for gi, picks in enumerate(b.get('r16') or []):
@@ -382,9 +415,12 @@ def render_text(eid, when, bundle, bets, results=None, truth=None):
                     if rank < len(actual) and actual[rank] == pp:
                         tag = ' ✓'
                 placements.append(f'{rank+1}. {n(pp)}{tag}')
-            lines.append(f'  R16 G{gi+1}: ' + ' · '.join(placements))
-        lines.append(f'  🔥 Best/Worst: {n(b.get("fireballBest"))} / {n(b.get("fireballWorst"))}')
+            bonus = ''
+            if r and (r.get('r16_exact') or [])[gi:gi+1] == [1]:
+                bonus = '  +1 EXACT 🎯'
+            lines.append(f'  R16 G{gi+1}: ' + ' · '.join(placements) + bonus)
         lines.append(f'  🥇 Gold: {n(b.get("gold"))}    🤡 Clown: {n(b.get("clown"))}')
+        lines.append(f'  🔥 Fireball best/worst (TB): {n(b.get("fireballBest"))} / {n(b.get("fireballWorst"))}')
 
     lines.append('')
     lines.append('═' * 60)
@@ -424,11 +460,15 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
 
     punters = sorted(bets.items(), key=lambda kv: kv[0])
     if results:
-        punters = sorted(bets.items(), key=lambda kv: -(results.get(kv[0], {}).get('total', 0)))
+        def _sort_key(kv):
+            r = results.get(kv[0]) or {}
+            return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
+        punters = sorted(bets.items(), key=_sort_key)
         body_parts.append('<h2>Punter leaderboard</h2><ol class="punter-board">')
         for pid, b in punters:
-            r = results.get(pid, {'total': 0})
-            body_parts.append(f'<li><strong>{_h(b.get("punter", pid))}</strong> — {r["total"]} / 20</li>')
+            r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
+            tb = f' <span class="tb">(TB 🔥 {r["tiebreak_total"]}/2)</span>' if r.get('tiebreak_total') else ''
+            body_parts.append(f'<li><strong>{_h(b.get("punter", pid))}</strong> — {r["total"]} / 22{tb}</li>')
         body_parts.append('</ol>')
 
     body_parts.append('<h2>All tickets</h2>')
@@ -437,11 +477,13 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
         body_parts.append('<div class="ticket">')
         head = f'<h3>{_h(b.get("punter", pid))}'
         if r:
-            head += f' <span class="score">{r["total"]} / 20</span>'
+            tb = f' <span class="tb">TB 🔥 {r["tiebreak_total"]}/2</span>' if r.get('tiebreak_total') else ''
+            head += f' <span class="score">{r["total"]} / 22</span>{tb}'
         head += '</h3>'
         body_parts.append(head)
         body_parts.append(f'<p class="ts">Submitted {_h(b.get("submittedAt", "?"))}</p>')
         body_parts.append('<table class="picks">')
+        exact_groups = (r or {}).get('r16_exact') or []
         for gi, picks in enumerate(b.get('r16') or []):
             row_cells = []
             actual = (truth['r16'][gi] if truth else [])
@@ -449,17 +491,20 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
                 hit = (rank < len(actual) and actual[rank] == pp) if truth else False
                 cls = ' class="hit"' if hit else ''
                 row_cells.append(f'<td{cls}>{rank+1}. {_h(n(pp))}</td>')
-            body_parts.append(f'<tr><th>R16 G{gi+1}</th>{"".join(row_cells)}</tr>')
+            bonus_th = 'R16 G' + str(gi+1)
+            if exact_groups[gi:gi+1] == [1]:
+                bonus_th += ' <span class="bonus">+1 🎯</span>'
+            body_parts.append(f'<tr><th>{bonus_th}</th>{"".join(row_cells)}</tr>')
 
         def _pickrow(label, pid_picked, truth_key):
             hit = bool(truth and truth.get(truth_key) == pid_picked)
             cls = ' class="hit"' if hit else ''
             return f'<tr><th>{label}</th><td colspan="4"{cls}>{_h(n(pid_picked))}</td></tr>'
 
-        body_parts.append(_pickrow('🔥 Fireball best',  b.get('fireballBest'),  'fireballBest'))
-        body_parts.append(_pickrow('🥄 Fireball worst', b.get('fireballWorst'), 'fireballWorst'))
         body_parts.append(_pickrow('🥇 Gold',           b.get('gold'),          'gold'))
         body_parts.append(_pickrow('🤡 Clown',          b.get('clown'),         'clown'))
+        body_parts.append(_pickrow('🔥 Fireball best <span class="tb">(TB)</span>',  b.get('fireballBest'),  'fireballBest'))
+        body_parts.append(_pickrow('🥄 Fireball worst <span class="tb">(TB)</span>', b.get('fireballWorst'), 'fireballWorst'))
         body_parts.append('</table></div>')
 
     return f"""<!DOCTYPE html>
@@ -480,6 +525,8 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
   .truth tr.award.clown td {{ background: #ffe2dd; }}
   .ticket {{ border: 1px solid #ddd; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; page-break-inside: avoid; }}
   td.hit {{ background: #cdf2d1; font-weight: 600; }}
+  .bonus {{ background: #fff4d0; color: #8a6a00; padding: 1px 6px; border-radius: 6px; font-size: 10px; margin-left: 4px; }}
+  .tb {{ color: #999; font-size: 11px; font-weight: 400; }}
   ol.punter-board li {{ margin: 4px 0; font-size: 14px; }}
   code {{ background: #f4f4f4; padding: 1px 5px; border-radius: 3px; font-size: 11px; }}
   @media print {{ body {{ max-width: 100% }} h2 {{ page-break-after: avoid }} }}
@@ -572,12 +619,14 @@ def main():
     print(f'  {base.with_suffix(".html")}')
     if args.results:
         print('\nFinal ranking:')
-        for rank, (pid, _b) in enumerate(
-            sorted(bets.items(), key=lambda kv: -(results.get(kv[0], {}).get('total', 0))), 1
-        ):
-            r = results.get(pid, {'total': 0})
+        def _sk(kv):
+            r = results.get(kv[0]) or {}
+            return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
+        for rank, (pid, _b) in enumerate(sorted(bets.items(), key=_sk), 1):
+            r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
             name = bets[pid].get('punter', pid)
-            print(f'  {rank:2}. {name:<22} {r["total"]:>2} / 20')
+            tb = f'  (TB {r["tiebreak_total"]}/2)' if r.get('tiebreak_total') else ''
+            print(f'  {rank:2}. {name:<22} {r["total"]:>2} / 22{tb}')
 
 
 if __name__ == '__main__':
