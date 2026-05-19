@@ -284,11 +284,46 @@ def truth_table(bundle, groups_scoring, bracket):
         ranked = sorted(fireball_pids, key=rank_key)
         truth['fireballBest']  = ranked[0]
         truth['fireballWorst'] = ranked[-1]
+        # Full ranking 1..N (1 = best Stableford) — feeds the closeness
+        # tiebreak so missing the #1 by one rank still scores something.
+        truth['_fireballRanking'] = {pid: i + 1 for i, pid in enumerate(ranked)}
+        truth['_fireballPoolSize'] = len(ranked)
     if playing_pids:
         ranked = sorted(playing_pids, key=rank_key)
         truth['gold']  = ranked[0]
         truth['clown'] = ranked[-1]
     return truth, scores
+
+
+def season_attendance_by_pid(bundle):
+    """Read ChubbsMobileApp_v5/season-4.json and return {playerId: events_count}.
+
+    Resolution: the season file stores names ("Matt D", "Ryan N", etc.) while
+    everything else in the codebase uses playerIds ("MATT", "RYANN"). Run
+    every season-4 name through the bundle's alias-aware name resolver so
+    e.g. "Mike H" -> "HANSON" via the Hanson alias entry.
+
+    Used as the final tiebreaker on the playoff pool — rewards punters who
+    show up to Chubbs events.
+    """
+    season_path = REPO_ROOT / 'ChubbsMobileApp_v5' / 'season-4.json'
+    if not season_path.exists():
+        return {}
+    s = json.load(open(season_path, 'r', encoding='utf-8'))
+    n2p = _name_to_pid(bundle)
+    counts = {}
+    for ev in (s.get('events') or []):
+        # Each event has a players[] of {name, gross[], hcp}. Presence in
+        # players[] counts as attendance (no scoring filter — a player who
+        # DNF'd still attended).
+        for p in (ev.get('players') or []):
+            name = p.get('name')
+            if not name:
+                continue
+            pid = n2p(name)
+            if pid:
+                counts[pid] = counts.get(pid, 0) + 1
+    return counts
 
 
 def score_punter(picks, truth):
@@ -300,21 +335,27 @@ def score_punter(picks, truth):
       Gold Jacket: 1pt
       Clown Jacket: 1pt
 
-    Tiebreaker (max 2 tiebreak pts):
-      Fireball best:  1pt
-      Fireball worst: 1pt
+    Tiebreaker — Fireball closeness (max 2 * pool_size):
+      Best pick:  pool_size + 1 - rank_of_picked_player
+      Worst pick: rank_of_picked_player
+      (Ranks are 1..N by Stableford within the Fireball pool, 1 = best.)
+      A perfect best pick scores pool_size; missing by 1 rank scores
+      pool_size - 1; missing by max rank still scores 1. Mirrors for worst.
 
-    Sort punters by (-total, -tiebreak_total) for the leaderboard.
+    Final tiebreak (computed in main, not here):
+      events_attended — punter's Season 4 attendance count
+
+    Sort punters by (-total, -tiebreak_total, -events_attended, name).
     """
     out = {
-        'r16': [],          # per-group placement pts (0..4)
-        'r16_exact': [],    # per-group bonus (0 or 1)
+        'r16': [],            # per-group placement pts (0..4)
+        'r16_exact': [],      # per-group bonus (0 or 1)
         'gold': 0,
         'clown': 0,
-        'fireballBest': 0,
-        'fireballWorst': 0,
-        'total': 0,         # base score, max 22
-        'tiebreak_total': 0 # fireball-based tiebreak, max 2
+        'fb_best_pts':  0,    # closeness pts on Fireball best pick
+        'fb_worst_pts': 0,    # closeness pts on Fireball worst pick
+        'total': 0,           # base score, max 22
+        'tiebreak_total': 0   # fb_best_pts + fb_worst_pts, max 2*pool_size
     }
     actual_r16 = truth.get('r16') or []
     picks_r16 = picks.get('r16') or []
@@ -333,11 +374,19 @@ def score_punter(picks, truth):
         out['gold'] = 1; out['total'] += 1
     if truth.get('clown') and picks.get('clown') == truth['clown']:
         out['clown'] = 1; out['total'] += 1
-    # Fireball picks are TIEBREAK only — do not add to total.
-    if truth.get('fireballBest') and picks.get('fireballBest') == truth['fireballBest']:
-        out['fireballBest'] = 1; out['tiebreak_total'] += 1
-    if truth.get('fireballWorst') and picks.get('fireballWorst') == truth['fireballWorst']:
-        out['fireballWorst'] = 1; out['tiebreak_total'] += 1
+    # Fireball closeness tiebreak — uses the full 1..N ranking, not just
+    # the binary best/worst-match check. Picking #2 for best in a 6-pool
+    # scores 5 (vs 6 for #1, 1 for #6).
+    fb_rank = truth.get('_fireballRanking') or {}
+    pool = truth.get('_fireballPoolSize') or 0
+    if pool > 0:
+        rank_best = fb_rank.get(picks.get('fireballBest'))
+        if rank_best:
+            out['fb_best_pts'] = pool + 1 - rank_best
+        rank_worst = fb_rank.get(picks.get('fireballWorst'))
+        if rank_worst:
+            out['fb_worst_pts'] = rank_worst
+        out['tiebreak_total'] = out['fb_best_pts'] + out['fb_worst_pts']
     return out
 
 
@@ -394,15 +443,25 @@ def render_text(eid, when, bundle, bets, results=None, truth=None):
     if results:
         def _sort_key(kv):
             r = results.get(kv[0]) or {}
-            return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
+            return (
+                -r.get('total', 0),
+                -r.get('tiebreak_total', 0),
+                -r.get('events_attended', 0),
+                kv[1].get('punter', '').upper(),
+            )
         paid_punters = sorted(paid_bets.items(), key=_sort_key)
         lines.append('── PUNTER LEADERBOARD (paid entries only) ──────────────')
         if not paid_punters:
             lines.append('(no paid entries yet)')
         for rank, (pid, b) in enumerate(paid_punters, 1):
-            r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
+            r = results.get(pid, {'total': 0, 'tiebreak_total': 0, 'events_attended': 0})
             marker = '🏆' if rank == 1 else f'{rank:2}.'
-            tb = f'  (TB: 🔥 {r["tiebreak_total"]}/2)' if r.get('tiebreak_total') else ''
+            tb_parts = []
+            if r.get('tiebreak_total'):
+                tb_parts.append(f'🔥 {r["tiebreak_total"]}')
+            if r.get('events_attended'):
+                tb_parts.append(f'attend {r["events_attended"]}')
+            tb = '  (' + ' · '.join(tb_parts) + ')' if tb_parts else ''
             lines.append(f'{marker} {b.get("punter", pid):<20} {r["total"]:>2} / 22{tb}')
         lines.append('')
 
@@ -427,6 +486,8 @@ def render_text(eid, when, bundle, bets, results=None, truth=None):
             score_tag = f'  [{r["total"]}/22{tb}]'
         lines.append('')
         lines.append(f'━━ {b.get("punter", pid)} ━━  submitted {submitted}{paid_tag}{score_tag}')
+        if r and r.get('events_attended') is not None:
+            lines.append(f'   Season 4 attendance (final TB): {r["events_attended"]}')
         for gi, picks in enumerate(b.get('r16') or []):
             placements = []
             for rank, pp in enumerate(picks):
@@ -487,14 +548,22 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
     if results:
         def _sort_key(kv):
             r = results.get(kv[0]) or {}
-            return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
+            return (
+                -r.get('total', 0),
+                -r.get('tiebreak_total', 0),
+                -r.get('events_attended', 0),
+                kv[1].get('punter', '').upper(),
+            )
         paid_punters = sorted(paid_bets.items(), key=_sort_key)
         body_parts.append('<h2>Punter leaderboard <span class="tb">(paid entries only)</span></h2><ol class="punter-board">')
         if not paid_punters:
             body_parts.append('<li class="tb">(no paid entries yet)</li>')
         for pid, b in paid_punters:
-            r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
-            tb = f' <span class="tb">(TB 🔥 {r["tiebreak_total"]}/2)</span>' if r.get('tiebreak_total') else ''
+            r = results.get(pid, {'total': 0, 'tiebreak_total': 0, 'events_attended': 0})
+            parts = []
+            if r.get('tiebreak_total'): parts.append(f'🔥 {r["tiebreak_total"]}')
+            if r.get('events_attended'): parts.append(f'attend {r["events_attended"]}')
+            tb = f' <span class="tb">({" · ".join(parts)})</span>' if parts else ''
             body_parts.append(f'<li><strong>{_h(b.get("punter", pid))}</strong> — {r["total"]} / 22{tb}</li>')
         body_parts.append('</ol>')
 
@@ -626,6 +695,16 @@ def main():
     bets = fb_get(f'bets/{eid}', auth=secret) or {}
     print(f'  -> {len(bets)} bet(s) found.')
 
+    # Resolve every punter's typed name -> Season 4 attendance count.
+    # Used as the L3 tiebreak; computed unconditionally so audit text can
+    # show the full sort hierarchy even in non-results mode.
+    attendance_map = season_attendance_by_pid(bundle)
+    n2p = _name_to_pid(bundle)
+    attendance_per_punter = {
+        pid: attendance_map.get(n2p(b.get('punter', '')), 0)
+        for pid, b in bets.items()
+    }
+
     truth = None
     results = None
     if args.results:
@@ -638,6 +717,10 @@ def main():
             for note in truth.get('_bracketNotes') or []:
                 print(f'    - {note}')
         results = {pid: score_punter(b, truth) for pid, b in bets.items()}
+        # Stamp each punter's row with their attendance so render functions
+        # and sort keys don't need an extra parameter.
+        for pid, r in results.items():
+            r['events_attended'] = attendance_per_punter.get(pid, 0)
 
     when = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     ts_slug = _dt.datetime.now().strftime('%Y%m%d-%H%M%S')
@@ -668,15 +751,19 @@ def main():
         print('\nFinal ranking (paid entries only):')
         def _sk(kv):
             r = results.get(kv[0]) or {}
-            return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
+            return (-r.get('total', 0), -r.get('tiebreak_total', 0),
+                    -r.get('events_attended', 0), kv[1].get('punter', '').upper())
         paid = {pid: b for pid, b in bets.items() if b.get('paid')}
         unpaid_count = len(bets) - len(paid)
         if not paid:
             print('  (no paid entries yet)')
         for rank, (pid, _b) in enumerate(sorted(paid.items(), key=_sk), 1):
-            r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
+            r = results.get(pid, {'total': 0, 'tiebreak_total': 0, 'events_attended': 0})
             name = paid[pid].get('punter', pid)
-            tb = f'  (TB {r["tiebreak_total"]}/2)' if r.get('tiebreak_total') else ''
+            tbs = []
+            if r.get('tiebreak_total'): tbs.append(f'🔥 {r["tiebreak_total"]}')
+            if r.get('events_attended'): tbs.append(f'attend {r["events_attended"]}')
+            tb = f'  ({" · ".join(tbs)})' if tbs else ''
             print(f'  {rank:2}. {name:<22} {r["total"]:>2} / 22{tb}')
         if unpaid_count:
             print(f'\n  ({unpaid_count} unpaid submission(s) excluded — see audit files)')
