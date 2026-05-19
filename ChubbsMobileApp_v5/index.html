@@ -165,6 +165,15 @@
     .mp-action{padding:6px 10px 8px 44px;border-top:1px dashed rgba(214,176,90,0.18);background:rgba(214,176,90,0.04)}
     .mp-save-btn{font-size:11px;padding:6px 12px}
     .mp-saved{font-size:11px;color:#9ad9a8;font-weight:700}
+    /* v6.2 — stale-save warning. Saved bracket disagrees with current
+       computed match status — surface prominently so the scorer notices
+       and re-saves. Yellow border + amber text so it's distinct from
+       both the normal "save" button and the green "saved" confirmation. */
+    .mp-stale{background:rgba(245,166,35,0.10);border-left:3px solid #f5a623;border-top:1px dashed rgba(245,166,35,0.4)}
+    .mp-stale-text{font-size:10px;color:#f5a623;margin-bottom:6px;font-weight:600;line-height:1.4}
+    .mp-stale .btn.warn{background:rgba(245,166,35,0.18);border:1px solid rgba(245,166,35,0.5);color:#f5a623;font-weight:800}
+    .mp-stale-view{background:rgba(245,166,35,0.06);border-left:3px solid rgba(245,166,35,0.4)}
+    .mp-stale-view span{font-size:10px;color:#f5a623;font-weight:600;line-height:1.4}
     .mp-hint{padding:4px 10px 6px 44px;font-size:10px;color:var(--muted);font-family:monospace;background:rgba(255,255,255,0.012);line-height:1.4}
     .mp-hint-win-a{color:#a5f0c5}
     .mp-hint-win-b{color:#ffb5ae}
@@ -4786,12 +4795,33 @@ function renderMatchPlayBanner(){
       status = `🏆 ${winner} · ${s.label}`; cls = 'mp-status mp-closed';
       const saved = savedArr[matchIdx] || {};
       const isSaved = saved.winner === winner && saved.result === s.label;
+      // v6.2 hotfix (SW v6.14) — stale-save detection.
+      // If there's a saved bracket entry but it disagrees with the current
+      // computed status, the scorer probably saved earlier then corrected
+      // a hole score that flipped the outcome. Without an explicit warning,
+      // the back-9 foursomes would form against the SAVED (stale) winner,
+      // not the current winner. Show a yellow re-save prompt so the scorer
+      // can refresh the lock with one tap.
+      const isStale = !isSaved && saved.winner && saved.winner !== winner;
       if(canSave){
-        actionHtml = isSaved
-          ? `<div class="mp-action"><span class="mp-saved">✓ Saved to bracket</span></div>`
-          : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winner)}, ${JSON.stringify(s.label)}, ${JSON.stringify(matchType)})'>📌 Save ${matchLabel} to bracket</button></div>`;
+        if(isSaved){
+          actionHtml = `<div class="mp-action"><span class="mp-saved">✓ Saved to bracket</span></div>`;
+        } else if(isStale){
+          actionHtml = `<div class="mp-action mp-stale">
+            <div class="mp-stale-text">⚠ Saved as <b>${saved.winner}</b> (${saved.result || '—'}) · current is <b>${winner}</b> (${s.label})</div>
+            <button class="btn slim warn mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winner)}, ${JSON.stringify(s.label)}, ${JSON.stringify(matchType)})'>🔁 Re-save ${matchLabel} with current</button>
+          </div>`;
+        } else {
+          actionHtml = `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winner)}, ${JSON.stringify(s.label)}, ${JSON.stringify(matchType)})'>📌 Save ${matchLabel} to bracket</button></div>`;
+        }
       } else if(saved.winner){
-        actionHtml = `<div class="mp-action"><span class="mp-saved">✓ ${saved.winner} ${saved.result}</span></div>`;
+        // Viewer sees what's locked in. Subtle hint when stale so the viewer
+        // can flag it to the scorer.
+        if(isStale){
+          actionHtml = `<div class="mp-action mp-stale-view"><span>⚠ Saved as <b>${saved.winner}</b> (${saved.result}) · current shows <b>${winner}</b> (${s.label}) — ask scorer to re-save</span></div>`;
+        } else {
+          actionHtml = `<div class="mp-action"><span class="mp-saved">✓ ${saved.winner} ${saved.result}</span></div>`;
+        }
       }
     } else if(s.dormie){
       const leader = s.leader === 'a' ? m.playerA : m.playerB;
@@ -4821,13 +4851,25 @@ function renderMatchPlayBanner(){
         resultLabel = null;
       }
       tiebreakHtml = `<div class="mp-tiebreak">⚖ ${detail}</div>`;
-      // Override the action area for the tiebreak winner
+      // Override the action area for the tiebreak winner.
+      // v6.2 hotfix (SW v6.14) — same stale-save detection as the closed path.
+      // Tiebreak case is particularly susceptible because the Stableford
+      // total depends on every hole's gross; a single corrected score can
+      // flip the SB tiebreak result.
       if(canSave && winnerName && resultLabel){
         const saved = savedArr[matchIdx] || {};
         const isSaved = saved.winner === winnerName && saved.result === resultLabel;
-        actionHtml = isSaved
-          ? `<div class="mp-action"><span class="mp-saved">✓ Saved to bracket (${resultLabel})</span></div>`
-          : `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winnerName)}, ${JSON.stringify(resultLabel)}, ${JSON.stringify(matchType)})'>📌 Save ${matchLabel} (Tiebreak)</button></div>`;
+        const isStale = !isSaved && saved.winner && saved.winner !== winnerName;
+        if(isSaved){
+          actionHtml = `<div class="mp-action"><span class="mp-saved">✓ Saved to bracket (${resultLabel})</span></div>`;
+        } else if(isStale){
+          actionHtml = `<div class="mp-action mp-stale">
+            <div class="mp-stale-text">⚠ Saved as <b>${saved.winner}</b> (${saved.result || '—'}) · tiebreak now shows <b>${winnerName}</b> (${resultLabel})</div>
+            <button class="btn slim warn mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winnerName)}, ${JSON.stringify(resultLabel)}, ${JSON.stringify(matchType)})'>🔁 Re-save ${matchLabel} with tiebreak</button>
+          </div>`;
+        } else {
+          actionHtml = `<div class="mp-action"><button class="btn slim gold mp-save-btn" onclick='pushMatchToBracket(${matchIdx}, ${JSON.stringify(winnerName)}, ${JSON.stringify(resultLabel)}, ${JSON.stringify(matchType)})'>📌 Save ${matchLabel} (Tiebreak)</button></div>`;
+        }
       }
     }
     // v5.63: per-hole stroke heads-up + outcome moved inline into the
