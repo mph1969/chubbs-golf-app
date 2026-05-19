@@ -502,7 +502,12 @@ async function onSubmit(){
       eventId: EVENT_ID,
       userAgent: navigator.userAgent.slice(0, 200)
     };
-    await db.ref(`events/${EVENT_ID}/bets/${punterId}`).set(payload);
+    // Bets live at /bets/{eventId}/{punterId} rather than nested under
+    // /events/{id}/bets — Firebase rules can't revoke a parent .read grant,
+    // and /events is publicly readable so the mobile app's bundle/index
+    // queries keep working. Separate top-level node is the cleanest way
+    // to make picks admin-only.
+    await db.ref(`bets/${EVENT_ID}/${punterId}`).set(payload);
     showSuccess(d);
   } catch(e){
     console.error(e);

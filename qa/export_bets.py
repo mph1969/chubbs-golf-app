@@ -527,7 +527,9 @@ def main():
         sys.exit(2)
 
     print('Fetching bets (auth required)...')
-    bets = fb_get(f'events/{eid}/bets', auth=secret) or {}
+    # Bets live at /bets/{eventId}/{punterId} (not under /events/...) so
+    # the .read:false rule can apply without cascading from /events.
+    bets = fb_get(f'bets/{eid}', auth=secret) or {}
     print(f'  -> {len(bets)} bet(s) found.')
 
     truth = None
