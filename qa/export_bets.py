@@ -380,32 +380,53 @@ def render_text(eid, when, bundle, bets, results=None, truth=None):
         lines.append(f'🤡 Clown Jacket:  {n(truth["clown"])}')
         lines.append('')
 
-    # If we have results, sort punters by their score (base total, then
-    # fireball tiebreak)
-    punters = sorted(bets.items(), key=lambda kv: kv[0])
+    # Split into paid (entered) and unpaid (submitted-but-not-entered) buckets.
+    # Per Diego's rule: "not marked paid, not entered — even if they submit
+    # a form." So unpaid tickets appear in the audit (for transparency) but
+    # are excluded from the scoring leaderboard.
+    paid_bets   = {pid: b for pid, b in bets.items() if b.get('paid')}
+    unpaid_bets = {pid: b for pid, b in bets.items() if not b.get('paid')}
+
+    # Default ordering when no results: alphabetical by punter id
+    paid_punters   = sorted(paid_bets.items(),   key=lambda kv: kv[0])
+    unpaid_punters = sorted(unpaid_bets.items(), key=lambda kv: kv[0])
+
     if results:
         def _sort_key(kv):
             r = results.get(kv[0]) or {}
             return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
-        punters = sorted(bets.items(), key=_sort_key)
-        lines.append('── PUNTER LEADERBOARD ──────────────────────────────────')
-        for rank, (pid, b) in enumerate(punters, 1):
+        paid_punters = sorted(paid_bets.items(), key=_sort_key)
+        lines.append('── PUNTER LEADERBOARD (paid entries only) ──────────────')
+        if not paid_punters:
+            lines.append('(no paid entries yet)')
+        for rank, (pid, b) in enumerate(paid_punters, 1):
             r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
             marker = '🏆' if rank == 1 else f'{rank:2}.'
             tb = f'  (TB: 🔥 {r["tiebreak_total"]}/2)' if r.get('tiebreak_total') else ''
             lines.append(f'{marker} {b.get("punter", pid):<20} {r["total"]:>2} / 22{tb}')
         lines.append('')
 
+    if unpaid_bets:
+        lines.append('── SUBMITTED BUT NOT PAID (excluded from pool) ─────────')
+        for pid, b in unpaid_punters:
+            lines.append(f'   {b.get("punter", pid):<20} submitted {b.get("submittedAt", "?")}')
+        lines.append('')
+
+    # The "all tickets" section below this still walks every submission
+    # so the paper trail shows both paid + unpaid.
+    punters = paid_punters + unpaid_punters
+
     lines.append('── ALL TICKETS ──────────────────────────────────────────')
     for pid, b in punters:
         r = results.get(pid) if results else None
         submitted = b.get('submittedAt', '?')
+        paid_tag = '  · ✓ PAID' if b.get('paid') else '  · ⚠ UNPAID (not entered)'
         score_tag = ''
-        if r:
+        if r and b.get('paid'):
             tb = f' · TB 🔥 {r["tiebreak_total"]}/2' if r.get('tiebreak_total') else ''
             score_tag = f'  [{r["total"]}/22{tb}]'
         lines.append('')
-        lines.append(f'━━ {b.get("punter", pid)} ━━  submitted {submitted}{score_tag}')
+        lines.append(f'━━ {b.get("punter", pid)} ━━  submitted {submitted}{paid_tag}{score_tag}')
         for gi, picks in enumerate(b.get('r16') or []):
             placements = []
             for rank, pp in enumerate(picks):
@@ -458,30 +479,48 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
         body_parts.append(f'<tr class="award clown"><th>Clown Jacket</th><td colspan="4">{_h(n(truth["clown"]))}</td></tr>')
         body_parts.append('</table>')
 
-    punters = sorted(bets.items(), key=lambda kv: kv[0])
+    paid_bets   = {pid: b for pid, b in bets.items() if b.get('paid')}
+    unpaid_bets = {pid: b for pid, b in bets.items() if not b.get('paid')}
+    paid_punters   = sorted(paid_bets.items(),   key=lambda kv: kv[0])
+    unpaid_punters = sorted(unpaid_bets.items(), key=lambda kv: kv[0])
+
     if results:
         def _sort_key(kv):
             r = results.get(kv[0]) or {}
             return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
-        punters = sorted(bets.items(), key=_sort_key)
-        body_parts.append('<h2>Punter leaderboard</h2><ol class="punter-board">')
-        for pid, b in punters:
+        paid_punters = sorted(paid_bets.items(), key=_sort_key)
+        body_parts.append('<h2>Punter leaderboard <span class="tb">(paid entries only)</span></h2><ol class="punter-board">')
+        if not paid_punters:
+            body_parts.append('<li class="tb">(no paid entries yet)</li>')
+        for pid, b in paid_punters:
             r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
             tb = f' <span class="tb">(TB 🔥 {r["tiebreak_total"]}/2)</span>' if r.get('tiebreak_total') else ''
             body_parts.append(f'<li><strong>{_h(b.get("punter", pid))}</strong> — {r["total"]} / 22{tb}</li>')
         body_parts.append('</ol>')
 
+    if unpaid_bets:
+        body_parts.append('<h2>Submitted but not paid <span class="tb">(excluded from pool)</span></h2><ul class="punter-board">')
+        for pid, b in unpaid_punters:
+            body_parts.append(f'<li class="tb">{_h(b.get("punter", pid))} — submitted {_h(b.get("submittedAt", "?"))}</li>')
+        body_parts.append('</ul>')
+
+    punters = paid_punters + unpaid_punters
     body_parts.append('<h2>All tickets</h2>')
     for pid, b in punters:
-        r = results.get(pid) if results else None
-        body_parts.append('<div class="ticket">')
+        r = results.get(pid) if results and b.get('paid') else None
+        body_parts.append(f'<div class="ticket{" unpaid" if not b.get("paid") else ""}">')
         head = f'<h3>{_h(b.get("punter", pid))}'
         if r:
             tb = f' <span class="tb">TB 🔥 {r["tiebreak_total"]}/2</span>' if r.get('tiebreak_total') else ''
             head += f' <span class="score">{r["total"]} / 22</span>{tb}'
+        elif not b.get('paid'):
+            head += ' <span class="score" style="color:#a04040">⚠ UNPAID</span>'
         head += '</h3>'
         body_parts.append(head)
-        body_parts.append(f'<p class="ts">Submitted {_h(b.get("submittedAt", "?"))}</p>')
+        paid_line = '✓ Paid' if b.get('paid') else '⚠ Not paid — excluded from pool'
+        paid_at = b.get('paidAt')
+        if paid_at: paid_line += f' ({_h(paid_at)})'
+        body_parts.append(f'<p class="ts">Submitted {_h(b.get("submittedAt", "?"))} · {paid_line}</p>')
         body_parts.append('<table class="picks">')
         exact_groups = (r or {}).get('r16_exact') or []
         for gi, picks in enumerate(b.get('r16') or []):
@@ -524,6 +563,7 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
   .truth tr.award.gold td {{ background: #fff4d0; }}
   .truth tr.award.clown td {{ background: #ffe2dd; }}
   .ticket {{ border: 1px solid #ddd; border-radius: 6px; padding: 10px 12px; margin-bottom: 14px; page-break-inside: avoid; }}
+  .ticket.unpaid {{ background: #fff7e6; border-color: #e5c47a; }}
   td.hit {{ background: #cdf2d1; font-weight: 600; }}
   .bonus {{ background: #fff4d0; color: #8a6a00; padding: 1px 6px; border-radius: 6px; font-size: 10px; margin-left: 4px; }}
   .tb {{ color: #999; font-size: 11px; font-weight: 400; }}
@@ -618,15 +658,21 @@ def main():
     print(f'  {base.with_suffix(".txt")}')
     print(f'  {base.with_suffix(".html")}')
     if args.results:
-        print('\nFinal ranking:')
+        print('\nFinal ranking (paid entries only):')
         def _sk(kv):
             r = results.get(kv[0]) or {}
             return (-r.get('total', 0), -r.get('tiebreak_total', 0), kv[1].get('punter', '').upper())
-        for rank, (pid, _b) in enumerate(sorted(bets.items(), key=_sk), 1):
+        paid = {pid: b for pid, b in bets.items() if b.get('paid')}
+        unpaid_count = len(bets) - len(paid)
+        if not paid:
+            print('  (no paid entries yet)')
+        for rank, (pid, _b) in enumerate(sorted(paid.items(), key=_sk), 1):
             r = results.get(pid, {'total': 0, 'tiebreak_total': 0})
-            name = bets[pid].get('punter', pid)
+            name = paid[pid].get('punter', pid)
             tb = f'  (TB {r["tiebreak_total"]}/2)' if r.get('tiebreak_total') else ''
             print(f'  {rank:2}. {name:<22} {r["total"]:>2} / 22{tb}')
+        if unpaid_count:
+            print(f'\n  ({unpaid_count} unpaid submission(s) excluded — see audit files)')
 
 
 if __name__ == '__main__':

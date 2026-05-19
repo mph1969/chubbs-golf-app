@@ -121,6 +121,7 @@ let BUNDLE = null;
 let R16_GROUPS = [];      // [{ name, players: [{playerId, displayName, handicap}] }]
 let FIREBALL_POOL = [];   // [{playerId, displayName}]
 let ALL_PLAYERS = [];     // [{playerId, displayName}]
+let FULL_ROSTER = [];     // [{playerId, displayName}] — full Chubbs roster (43)
 let LOCK_AT_MS = null;    // ms epoch when bets lock
 let MANUAL_LOCK = false;  // admin force-lock
 let DRAFT_KEY = null;     // localStorage key for in-progress draft
@@ -141,6 +142,12 @@ async function boot(){
       renderError("Couldn't load event " + EVENT_ID, "The event ID exists but the bundle is empty. Ask the organiser to re-publish.");
       return;
     }
+    // Roster fetch is best-effort — the datalist degrades gracefully to the
+    // bundle.players list if /chubbs/roster isn't populated yet.
+    try {
+      const rsnap = await db.ref('chubbs/roster/players').once('value');
+      FULL_ROSTER = rsnap.val() || [];
+    } catch(e){ FULL_ROSTER = []; }
     parseBundle();
     DRAFT_KEY = 'chubbs_bets_draft_' + EVENT_ID;
     renderForm();
@@ -273,7 +280,7 @@ function renderForm(){
     const opts = g.players.map(p => p.playerId);
     return `
       <div class="card group-card" data-r16="${gi}">
-        <div class="title">R16 Group ${gi + 1} <span class="pill">${escapeHtml(g.players.length)}-man</span></div>
+        <div class="title">R16 Group ${gi + 1}</div>
         <div class="group-meta">${escapeHtml(g.name || '')}${g.teeTime ? ' · tee ' + escapeHtml(g.teeTime) : ''}</div>
         ${[1,2,3,4].map(rank => `
           <div class="rank-row rank-${rank}">
@@ -337,11 +344,22 @@ function renderForm(){
       </div>
     </div>`;
 
+  // Datalist sources: prefer the full Chubbs roster (43 names) if it's
+  // been published to /chubbs/roster, otherwise fall back to just the
+  // event players (22). Free text-entry is always allowed — the list is
+  // a typeahead hint, not a validation gate.
+  const rosterForDatalist = (FULL_ROSTER && FULL_ROSTER.length)
+    ? FULL_ROSTER
+    : ALL_PLAYERS;
+  const rosterOptions = rosterForDatalist
+    .map(p => `<option value="${escapeHtml(p.displayName)}"></option>`)
+    .join('');
   const punterCard = `
     <div class="card">
       <div class="title">Your name</div>
-      <input type="text" id="punter-name" placeholder="e.g. Diego" value="${escapeHtml(punterName)}" ${locked ? 'disabled' : ''} />
-      <div class="hint" style="margin-top:6px">Use the same name you go by in the brain trust — it's how your picks show up on the results board.</div>
+      <input type="text" id="punter-name" list="roster-options" autocomplete="off" placeholder="Tap to pick from roster, or type" value="${escapeHtml(punterName)}" ${locked ? 'disabled' : ''} />
+      <datalist id="roster-options">${rosterOptions}</datalist>
+      <div class="hint" style="margin-top:6px">Tap the field to see the Chubbs roster, or type a name freely (wives, spectators welcome).</div>
     </div>
     <div class="card" style="background:rgba(214,176,90,0.06);border-color:rgba(214,176,90,0.3)">
       <div class="title">How scoring works</div>
