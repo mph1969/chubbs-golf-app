@@ -8036,9 +8036,17 @@ function renderResultsSummary(){
   const poker = pokerSummary();
   const currency = (state.eventBundle && state.eventBundle.event && state.eventBundle.event.currency) || 'RMB';
 
-  // Check if round is sufficiently complete
-  const anyScored = ranking.some(r => r.entered >= 9);
-  if(!anyScored) return '';
+  // v6.4: hide Weekend Results until ALL scores are in. Pre-v6.4 this
+  // surfaced as soon as one player crossed 9 holes, which leaked the
+  // gold/clown picks while the back-9 was still being scored. Now we
+  // require every player who started (entered > 0) to have all 18 holes
+  // logged, with at least one player at 18 — and scramble, if it was
+  // played at all, must also be complete.
+  const startedPlayers = ranking.filter(r => r.entered > 0);
+  const allStablefordDone = startedPlayers.length > 0 &&
+    startedPlayers.every(r => r.entered === 18);
+  const scrambleDone = scramble.entered === 0 || scramble.entered === 18;
+  if(!allStablefordDone || !scrambleDone) return '';
 
   const gold = ranking[0] || null;
   const clown = [...ranking].filter(r=>r.entered>0).sort((a,b) => a.points - b.points || a.back9 - b.back9)[0] || null;
@@ -9236,7 +9244,7 @@ function renderFooter(){
 // drift accumulated across 100+ deploys in the 5.x series; the reset realigned both counters.
 // Drift will naturally accumulate again — APP bumps on user-visible releases, CACHE bumps every
 // deploy. Do NOT lower CACHE_VERSION to "match" APP_VERSION — that would break cache invalidation.
-const APP_VERSION = '6.3';
+const APP_VERSION = '6.4';
 const BUILD_DATE  = '2026';
 
 function renderAbout(){
