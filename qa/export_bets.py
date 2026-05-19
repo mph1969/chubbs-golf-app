@@ -164,35 +164,128 @@ def parse_groups(bundle):
     return r16, fireball, playing
 
 
-def truth_table(bundle, groups_scoring):
-    """Compute the ACTUAL results from final Stableford (for --results mode).
-
-    Returns {
-        'r16': [[pid_1st, pid_2nd, pid_3rd, pid_4th] for each R16 group],
-        'fireballBest': pid,
-        'fireballWorst': pid,
-        'gold': pid,
-        'clown': pid,
-    }
+def _name_to_pid(bundle):
+    """Build a normalized-displayName -> playerId lookup. Bracket records
+    store the winner as displayName (e.g. "JAMIE", "JACK S"), so we need to
+    map back to playerId for cross-referencing against the bundle.players
+    + day2Groups data.
     """
-    r16, fireball, playing = parse_groups(bundle)
+    out = {}
+    def norm(s):
+        return re.sub(r"[.,'\"`\s]+", '', str(s or '').upper())
+    for p in (bundle.get('players') or []):
+        pid = p['playerId']
+        for k in ('displayName', 'fullName', 'shortName'):
+            if p.get(k):
+                out[norm(p[k])] = pid
+        for alias in (p.get('aliases') or []):
+            out[norm(alias)] = pid
+        out[norm(pid)] = pid  # self-map as fallback
+    return lambda name: out.get(norm(name)) if name else None
+
+
+def _bracket_array(bracket, key):
+    """Firebase returns dense arrays as lists, sparse as dict-with-string-keys."""
+    raw = (bracket or {}).get(key)
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        out = []
+        for k, v in raw.items():
+            try: out.append((int(k), v))
+            except (ValueError, TypeError): pass
+        out.sort(key=lambda kv: kv[0])
+        return [v for _, v in out]
+    return []
+
+
+def truth_table(bundle, groups_scoring, bracket):
+    """Compute the ACTUAL results.
+
+    R16 ranking (per Diego's spec): match-play cascade outcome.
+      1st = R16 winner + Cup QF winner   (cup_qf[i].winner)
+      2nd = R16 winner + Cup QF loser    (other r16 winner from this G)
+      3rd = R16 loser  + Plate QF winner (plate_qf[i].winner)
+      4th = R16 loser  + Plate QF loser  (other r16 loser from this G)
+
+    Fireball + Gold/Clown are Stableford-based (the only objective
+    measure for non-playoff and across-the-field rankings).
+
+    Returns the truth dict + the raw stableford scores (for debugging).
+    """
+    r16_groups, fireball_pids, playing_pids = parse_groups(bundle)
     scores = collect_player_scores(bundle, groups_scoring)
-    # Default tiebreak: higher Stableford wins; ties broken by lower handicap,
-    # then lower gross total. Matches handbook §11 hierarchy.
+    name_to_pid = _name_to_pid(bundle)
+
+    truth = {'r16': [], 'fireballBest': None, 'fireballWorst': None,
+             'gold': None, 'clown': None,
+             # Notes back to the caller so the audit report can flag missing
+             # bracket data explicitly instead of silently falling back.
+             '_bracketComplete': True, '_bracketNotes': []}
+
+    r16_matches    = _bracket_array(bracket, 'r16')
+    cupqf_matches  = _bracket_array(bracket, 'cup_qf')
+    plateqf_matches = _bracket_array(bracket, 'plate_qf')
+
+    # R16 group Gi (0..3) corresponds to matches r16[2i] + r16[2i+1] and
+    # bracket nodes cup_qf[i] + plate_qf[i] (each QF node pairs the two
+    # winners / two losers from that R16 group).
+    for gi, group in enumerate(r16_groups):
+        group_pids = set(group['players'])
+        m_top    = r16_matches[2*gi]   if 2*gi   < len(r16_matches) else None
+        m_bot    = r16_matches[2*gi+1] if 2*gi+1 < len(r16_matches) else None
+        cup_qf   = cupqf_matches[gi]   if gi     < len(cupqf_matches) else None
+        plate_qf = plateqf_matches[gi] if gi     < len(plateqf_matches) else None
+
+        w_top = name_to_pid((m_top or {}).get('winner')) if m_top else None
+        w_bot = name_to_pid((m_bot or {}).get('winner')) if m_bot else None
+        winners = [w for w in (w_top, w_bot) if w in group_pids]
+        losers  = [pid for pid in group['players'] if pid not in winners]
+
+        if len(winners) != 2 or len(losers) != 2:
+            # R16 not fully saved yet — fall back to Stableford ordering for
+            # this group so a partial round still produces *some* truth table.
+            truth['_bracketComplete'] = False
+            truth['_bracketNotes'].append(
+                f'R16 G{gi+1}: only {len(winners)} winners resolvable from bracket; falling back to Stableford.'
+            )
+            def rank_key(pid):
+                s = scores.get(pid) or {'pts': 0, 'hcp': 99, 'gross_total': 999}
+                return (-s['pts'], s['hcp'], s['gross_total'])
+            truth['r16'].append(sorted(group['players'], key=rank_key))
+            continue
+
+        cup_winner = name_to_pid((cup_qf or {}).get('winner'))
+        if cup_winner not in winners:
+            truth['_bracketComplete'] = False
+            truth['_bracketNotes'].append(f'R16 G{gi+1}: Cup QF not saved; 1st/2nd cannot be determined.')
+            # Still surface SOMETHING — winners in arbitrary order.
+            first, second = winners[0], winners[1]
+        else:
+            first  = cup_winner
+            second = next(w for w in winners if w != cup_winner)
+
+        plate_winner = name_to_pid((plate_qf or {}).get('winner'))
+        if plate_winner not in losers:
+            truth['_bracketComplete'] = False
+            truth['_bracketNotes'].append(f'R16 G{gi+1}: Plate QF not saved; 3rd/4th cannot be determined.')
+            third, fourth = losers[0], losers[1]
+        else:
+            third  = plate_winner
+            fourth = next(l for l in losers if l != plate_winner)
+
+        truth['r16'].append([first, second, third, fourth])
+
+    # Fireball + Gold/Clown stay Stableford-based.
     def rank_key(pid):
         s = scores.get(pid) or {'pts': 0, 'hcp': 99, 'gross_total': 999}
         return (-s['pts'], s['hcp'], s['gross_total'])
-
-    truth = {'r16': [], 'fireballBest': None, 'fireballWorst': None, 'gold': None, 'clown': None}
-    for g in r16:
-        ranked = sorted(g['players'], key=rank_key)
-        truth['r16'].append(ranked)
-    if fireball:
-        ranked = sorted(fireball, key=rank_key)
-        truth['fireballBest']  = ranked[0] if ranked else None
-        truth['fireballWorst'] = ranked[-1] if ranked else None
-    if playing:
-        ranked = sorted(playing, key=rank_key)
+    if fireball_pids:
+        ranked = sorted(fireball_pids, key=rank_key)
+        truth['fireballBest']  = ranked[0]
+        truth['fireballWorst'] = ranked[-1]
+    if playing_pids:
+        ranked = sorted(playing_pids, key=rank_key)
         truth['gold']  = ranked[0]
         truth['clown'] = ranked[-1]
     return truth, scores
@@ -248,6 +341,11 @@ def render_text(eid, when, bundle, bets, results=None, truth=None):
     if truth:
         lines.append('')
         lines.append('── ACTUAL RESULTS ──────────────────────────────────────')
+        if not truth.get('_bracketComplete'):
+            lines.append('⚠ Bracket incomplete — some positions fell back to Stableford:')
+            for note in (truth.get('_bracketNotes') or []):
+                lines.append(f'   · {note}')
+            lines.append('')
         for gi, ranked in enumerate(truth['r16']):
             names = ' · '.join(f'{rank+1}. {n(pid)}' for rank, pid in enumerate(ranked[:4]))
             lines.append(f'R16 G{gi+1}: {names}')
@@ -305,7 +403,16 @@ def render_html(eid, when, bundle, bets, results=None, truth=None):
     body_parts.append(f'<p class="meta">Snapshot: {_h(when)} · Event ID: <code>{_h(eid)}</code> · {len(bets)} punter(s)</p>')
 
     if truth:
-        body_parts.append('<h2>Actual results</h2><table class="truth">')
+        body_parts.append('<h2>Actual results</h2>')
+        if not truth.get('_bracketComplete'):
+            notes = ''.join(f'<li>{_h(n)}</li>' for n in (truth.get('_bracketNotes') or []))
+            body_parts.append(
+                f'<div style="background:#fff4d0;border:1px solid #d6c47a;border-radius:6px;'
+                f'padding:8px 12px;margin-bottom:10px;font-size:11px">'
+                f'<strong>Bracket incomplete</strong> — some positions fell back to Stableford:'
+                f'<ul style="margin:4px 0 0;padding-left:20px">{notes}</ul></div>'
+            )
+        body_parts.append('<table class="truth">')
         for gi, ranked in enumerate(truth['r16']):
             cells = ''.join(f'<td>{rank+1}. {_h(n(pid))}</td>' for rank, pid in enumerate(ranked[:4]))
             body_parts.append(f'<tr><th>R16 G{gi+1}</th>{cells}</tr>')
@@ -426,9 +533,14 @@ def main():
     truth = None
     results = None
     if args.results:
-        print('Fetching live group scores...')
-        groups = fb_get(f'events/{eid}/groups') or {}
-        truth, _scores = truth_table(bundle, groups)
+        print('Fetching live group scores + bracket...')
+        groups  = fb_get(f'events/{eid}/groups') or {}
+        bracket = fb_get(f'events/{eid}/bracket') or {}
+        truth, _scores = truth_table(bundle, groups, bracket)
+        if not truth.get('_bracketComplete'):
+            print('  WARNING: bracket incomplete:')
+            for note in truth.get('_bracketNotes') or []:
+                print(f'    - {note}')
         results = {pid: score_punter(b, truth) for pid, b in bets.items()}
 
     when = _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')

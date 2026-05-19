@@ -54,11 +54,12 @@
       background-repeat:no-repeat;background-position:right 12px center;padding-right:34px;
     }
     select:focus,input:focus{outline:2px solid var(--gold);outline-offset:1px}
-    .rank-row{display:grid;grid-template-columns:46px 1fr;gap:8px;align-items:center;margin-bottom:6px}
+    .rank-row{display:grid;grid-template-columns:46px 1fr;gap:8px;align-items:start;margin-bottom:10px}
     .rank-badge{height:42px;border-radius:10px;display:flex;align-items:center;justify-content:center;
       font-family:Georgia,serif;font-weight:700;font-size:15px;color:var(--gold2);
       background:var(--card2);border:1px solid var(--line2)}
     .rank-1 .rank-badge{background:linear-gradient(180deg,#3a2e0b,#1a1606);color:var(--gold2)}
+    .rank-hint{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.02em;line-height:1.4}
     .pair-row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
     @media (max-width:380px){.pair-row{grid-template-columns:1fr}}
     .btn{display:block;width:100%;padding:14px 16px;border-radius:14px;border:none;
@@ -262,6 +263,12 @@ function renderForm(){
   const draft = loadDraft();
   const punterName = draft.punter || '';
 
+  const rankHint = {
+    1: 'Wins R16 + wins Cup QF · advances to Cup SF',
+    2: 'Wins R16 + loses Cup QF',
+    3: 'Loses R16 + wins Plate QF · advances to Plate SF',
+    4: 'Loses R16 + loses Plate QF'
+  };
   const groupCards = R16_GROUPS.map((g, gi) => {
     const opts = g.players.map(p => p.playerId);
     return `
@@ -271,13 +278,16 @@ function renderForm(){
         ${[1,2,3,4].map(rank => `
           <div class="rank-row rank-${rank}">
             <div class="rank-badge">${ordinal(rank)}</div>
-            <select data-r16-rank="${gi}-${rank}" ${locked ? 'disabled' : ''} class="r16-pick">
-              <option value="">— Pick player —</option>
-              ${g.players.map(p => `
-                <option value="${escapeHtml(p.playerId)}" ${draft.r16 && draft.r16[gi] && draft.r16[gi][rank-1] === p.playerId ? 'selected' : ''}>
-                  ${escapeHtml(p.displayName)} (hcp ${p.handicap})
-                </option>`).join('')}
-            </select>
+            <div>
+              <select data-r16-rank="${gi}-${rank}" ${locked ? 'disabled' : ''} class="r16-pick">
+                <option value="">— Pick player —</option>
+                ${g.players.map(p => `
+                  <option value="${escapeHtml(p.playerId)}" ${draft.r16 && draft.r16[gi] && draft.r16[gi][rank-1] === p.playerId ? 'selected' : ''}>
+                    ${escapeHtml(p.displayName)} (hcp ${p.handicap})
+                  </option>`).join('')}
+              </select>
+              <div class="rank-hint">${rankHint[rank]}</div>
+            </div>
           </div>`).join('')}
       </div>`;
   }).join('');
@@ -332,6 +342,20 @@ function renderForm(){
       <div class="title">Your name</div>
       <input type="text" id="punter-name" placeholder="e.g. Diego" value="${escapeHtml(punterName)}" ${locked ? 'disabled' : ''} />
       <div class="hint" style="margin-top:6px">Use the same name you go by in the brain trust — it's how your picks show up on the results board.</div>
+    </div>
+    <div class="card" style="background:rgba(214,176,90,0.06);border-color:rgba(214,176,90,0.3)">
+      <div class="title">How scoring works</div>
+      <div class="hint" style="margin:0">
+        Each of your 20 picks is worth 1 point.<br/><br/>
+        <strong>R16 groups (16 pts):</strong> rank each foursome by their
+        match-play results — 1st = won R16 + won Cup QF, 2nd = won R16 + lost
+        Cup QF, 3rd = lost R16 + won Plate QF, 4th = lost R16 + lost Plate QF.
+        Exact position matters.<br/><br/>
+        <strong>Fireball Cup (2 pts):</strong> best + worst Stableford among
+        the non-playoff players.<br/><br/>
+        <strong>🥇 Gold &amp; 🤡 Clown (2 pts):</strong> top + bottom
+        Stableford across the whole field.
+      </div>
     </div>`;
 
   const submitArea = locked
