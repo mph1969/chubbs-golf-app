@@ -2839,7 +2839,21 @@ function _buildBackNineGroups(season, bundle){
   const seeds = Array.isArray(season.playoffs.seeds) ? season.playoffs.seeds : null;
   if(!seeds || seeds.length < 16) return null;
   const r16 = season.playoffs.r16 || [];
-  if(r16.length < 8 || r16.some(m => !m || !m.winner)) return null;
+  if(r16.length < 8) return null;
+
+  // v6.2 hotfix (SW v6.13) — half-by-half swap activation.
+  // Previously this function returned null until ALL 8 R16 results were
+  // saved, forcing every group to wait on the slowest. But the bracket
+  // structure cleanly splits into independent halves:
+  //   Half A = Cup A + Plate A = M1-M4 winners/losers (players from G1+G2)
+  //   Half B = Cup B + Plate B = M5-M8 winners/losers (players from G3+G4)
+  // Each half can fire independently when its 4 matches are saved.
+  // G1+G2 finishing first don't have to wait for G3+G4 and vice versa.
+  // Found 2026-05-19 — user correctly noted that requiring all 16 players
+  // to finish before any swap fires would stall fast groups indefinitely.
+  const halfAReady = r16.slice(0, 4).every(m => m && m.winner);
+  const halfBReady = r16.slice(4, 8).every(m => m && m.winner);
+  if(!halfAReady && !halfBReady) return null;
 
   const PAIRS = [[0,15],[7,8],[3,12],[4,11],[1,14],[6,9],[2,13],[5,10]];
   const matchPlayers = i => [seeds[PAIRS[i][0]], seeds[PAIRS[i][1]]];
@@ -2883,36 +2897,49 @@ function _buildBackNineGroups(season, bundle){
     };
   };
 
-  return [
-    build('cup-a', 'Cup A', '🏆',
+  // Build only the foursomes whose half is ready. Each half is independent:
+  // Half A foursomes (cup-a, plate-a) only need r16[0..3]; Half B foursomes
+  // (cup-b, plate-b) only need r16[4..7]. Always returns in the canonical
+  // order (cup-a, cup-b, plate-a, plate-b) so downstream renderers + tests
+  // can rely on slot positions when both halves are present.
+  const out = [];
+  if(halfAReady){
+    out.push(build('cup-a', 'Cup A', '🏆',
       [winnerOf(0), winnerOf(1), winnerOf(2), winnerOf(3)],
       [
         { type: 'cup_qf', index: 0, p1: winnerOf(0), p2: winnerOf(1) },
         { type: 'cup_qf', index: 1, p1: winnerOf(2), p2: winnerOf(3) }
       ]
-    ),
-    build('cup-b', 'Cup B', '🏆',
+    ));
+  }
+  if(halfBReady){
+    out.push(build('cup-b', 'Cup B', '🏆',
       [winnerOf(4), winnerOf(5), winnerOf(6), winnerOf(7)],
       [
         { type: 'cup_qf', index: 2, p1: winnerOf(4), p2: winnerOf(5) },
         { type: 'cup_qf', index: 3, p1: winnerOf(6), p2: winnerOf(7) }
       ]
-    ),
-    build('plate-a', 'Plate A', '🍽️',
+    ));
+  }
+  if(halfAReady){
+    out.push(build('plate-a', 'Plate A', '🍽️',
       [loserOf(0), loserOf(1), loserOf(2), loserOf(3)],
       [
         { type: 'plate_qf', index: 0, p1: loserOf(0), p2: loserOf(1) },
         { type: 'plate_qf', index: 1, p1: loserOf(2), p2: loserOf(3) }
       ]
-    ),
-    build('plate-b', 'Plate B', '🍽️',
+    ));
+  }
+  if(halfBReady){
+    out.push(build('plate-b', 'Plate B', '🍽️',
       [loserOf(4), loserOf(5), loserOf(6), loserOf(7)],
       [
         { type: 'plate_qf', index: 2, p1: loserOf(4), p2: loserOf(5) },
         { type: 'plate_qf', index: 3, p1: loserOf(6), p2: loserOf(7) }
       ]
-    )
-  ];
+    ));
+  }
+  return out.length ? out : null;
 }
 
 // Renders the Back-9 Foursomes card. Returns '' when R16 isn't done.
