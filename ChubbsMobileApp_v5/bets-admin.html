@@ -115,7 +115,14 @@ let PLAYER_NAMES = {}; // pid -> displayName
 const params = new URLSearchParams(location.search);
 
 async function boot(){
-  EVENT_ID = params.get('event') || (await fb_get_public('chubbs/currentEvent'));
+  // Admin writes /chubbs/currentEvent as { eventId, displayName, ts,
+  // publishedBy } rather than a bare string. Unwrap to get the id.
+  EVENT_ID = params.get('event');
+  if(!EVENT_ID){
+    const cur = await fb_get_public('chubbs/currentEvent');
+    if(cur && typeof cur === 'object' && cur.eventId) EVENT_ID = cur.eventId;
+    else if(typeof cur === 'string') EVENT_ID = cur;
+  }
   if(!EVENT_ID){
     showError("No event ID — pass ?event=YOUR-EVENT-ID or set /chubbs/currentEvent.");
     return;

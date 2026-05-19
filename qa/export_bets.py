@@ -602,7 +602,14 @@ def main():
 
     eid = args.event_id
     if not eid:
-        eid = fb_get('chubbs/currentEvent')
+        # Admin writes /chubbs/currentEvent as
+        # { eventId, displayName, ts, publishedBy } rather than a bare
+        # string. Unwrap it but stay tolerant of both shapes.
+        cur = fb_get('chubbs/currentEvent')
+        if isinstance(cur, dict) and cur.get('eventId'):
+            eid = cur['eventId']
+        elif isinstance(cur, str):
+            eid = cur
         if not eid:
             print('ERROR: no event ID supplied and /chubbs/currentEvent is empty.')
             sys.exit(2)

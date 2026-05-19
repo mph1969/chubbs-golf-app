@@ -161,10 +161,14 @@ async function resolveEventId(){
   // 1) explicit query param wins
   const urlParam = new URLSearchParams(location.search).get('event');
   if(urlParam) return urlParam;
-  // 2) currentEvent pointer
+  // 2) currentEvent pointer — Admin writes an OBJECT
+  //    { eventId, displayName, ts, publishedBy } rather than a bare
+  //    string, so unwrap it. Tolerant of both shapes for forward-compat.
   const snap = await db.ref('chubbs/currentEvent').once('value');
   const val = snap.val();
-  return val || null;
+  if(val && typeof val === 'object' && val.eventId) return val.eventId;
+  if(typeof val === 'string') return val;
+  return null;
 }
 
 async function fetchBundle(eid){
