@@ -64,9 +64,9 @@
       border-radius:24px;font-size:13px;color:var(--gold2);
       box-shadow:var(--shadow);opacity:0;transition:opacity 0.3s;pointer-events:none;z-index:99}
     .toast.show{opacity:1}
-    .toolbar{display:flex;gap:8px;margin-bottom:12px}
-    .toolbar button{flex:1;padding:10px;border-radius:10px;background:var(--card2);
-      border:1px solid var(--line);color:var(--text);font-weight:700;font-size:12px;cursor:pointer}
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+    .toolbar button{flex:1 1 calc(50% - 4px);min-width:0;padding:10px;border-radius:10px;background:var(--card2);
+      border:1px solid var(--line);color:var(--text);font-weight:700;font-size:12px;cursor:pointer;white-space:nowrap}
     .empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:13px;line-height:1.6}
     details{background:var(--card2);border:1px solid var(--line);border-radius:10px;
       padding:8px 12px;margin-top:8px;font-size:11px}
@@ -239,9 +239,93 @@ function renderBets(bets){
   document.getElementById('content').innerHTML = `
     <div class="toolbar">
       <button onclick="loadBets()">↻ Refresh</button>
+      <button onclick="copyWeChatSummary()">📋 Copy WeChat</button>
+      <button onclick="downloadSnapshot()">💾 JSON</button>
       <button onclick="logoutSecret()">🔒 Lock</button>
     </div>
     ${rows}`;
+  // Cache the parsed entries so the export buttons can read them without
+  // an extra Firebase round-trip.
+  window.__betsCache = bets;
+}
+
+// ── Phone-friendly export buttons ────────────────────────────────────────
+async function copyWeChatSummary(){
+  const bets = window.__betsCache || {};
+  const text = buildWeChatSummary(bets);
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('Summary copied — paste into WeChat');
+  } catch(e){
+    // Fallback: render in a textarea the user can select manually (some
+    // mobile browsers don't grant clipboard write without a gesture chain).
+    showFallbackText(text);
+  }
+}
+
+function buildWeChatSummary(bets){
+  const entries = Object.entries(bets).filter(([k]) => !k.startsWith('_'));
+  entries.sort((a,b) => (b[1].submittedAtMs||0) - (a[1].submittedAtMs||0));
+  const paid   = entries.filter(([_,v]) =>  v.paid);
+  const unpaid = entries.filter(([_,v]) => !v.paid);
+  const lines = [];
+  lines.push(`🎰 Chubbs Pool · ${EVENT_ID}`);
+  lines.push(`Snapshot: ${new Date().toLocaleString()}`);
+  lines.push(`${entries.length} submitted · ${paid.length} paid · ${unpaid.length} unpaid`);
+  lines.push('');
+  if(paid.length){
+    lines.push('✅ PAID (entered):');
+    paid.forEach(([_, b]) => {
+      const ts = b.submittedAt ? new Date(b.submittedAt).toLocaleString() : '?';
+      lines.push(`  • ${b.punter || '?'}  (submitted ${ts})`);
+    });
+  } else {
+    lines.push('(no paid entries yet)');
+  }
+  if(unpaid.length){
+    lines.push('');
+    lines.push('⚠️ SUBMITTED, NOT YET PAID:');
+    unpaid.forEach(([_, b]) => {
+      const ts = b.submittedAt ? new Date(b.submittedAt).toLocaleString() : '?';
+      lines.push(`  • ${b.punter || '?'}  (submitted ${ts})`);
+    });
+  }
+  lines.push('');
+  lines.push('Picks lock Fri 6pm HKT · 100 RMB to enter (WeChat → Hanson)');
+  return lines.join('\n');
+}
+
+function showFallbackText(text){
+  // Clipboard API blocked — present the text in a textarea the user can
+  // select + long-press copy themselves. Mobile Safari does this sometimes.
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;padding:20px;display:flex;flex-direction:column;gap:10px';
+  overlay.innerHTML = `
+    <div style="color:var(--gold2);font-weight:700;font-size:14px">Long-press to select all → Copy</div>
+    <textarea readonly style="flex:1;width:100%;padding:12px;border-radius:10px;background:var(--card);color:var(--text);border:1px solid var(--line2);font-family:monospace;font-size:12px;white-space:pre">${escapeHtml(text)}</textarea>
+    <button class="btn paid" style="width:100%" onclick="this.parentElement.remove()">Close</button>
+  `;
+  document.body.appendChild(overlay);
+}
+
+function downloadSnapshot(){
+  const bets = window.__betsCache || {};
+  const payload = {
+    eventId: EVENT_ID,
+    capturedAt: new Date().toISOString(),
+    capturedFrom: 'bets-admin.html',
+    bets,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  a.href = url;
+  a.download = `chubbs-bets-${EVENT_ID}-${ts}.json`;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 500);
+  toast('Snapshot downloaded to your device');
 }
 
 function renderPicksDetail(b){
